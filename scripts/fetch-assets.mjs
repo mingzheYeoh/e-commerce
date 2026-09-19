@@ -75,11 +75,11 @@ const PRODUCTS = [
   // Anker
   { slug: 'prime-powerbank', query: 'power bank portable charger', wiki: 'Anker power bank', must: ['power bank', 'charger', 'battery'] },
   { slug: 'soundcore-liberty', query: 'earbuds case product dark', wiki: 'Anker Soundcore earbuds', must: ['earbud', 'earphone'] },
-  { slug: 'gan-charger', query: 'usb charger adapter cable', wiki: 'Anker charger', must: ['charger', 'adapter', 'cable', 'usb'] },
+  { slug: 'gan-charger', query: 'usb c charger plug dark', wiki: 'USB charger', must: ['charger', 'adapter', 'plug'] },
   // Nothing
-  { slug: 'phone-3a', query: 'smartphone dark minimal', wiki: 'Nothing Phone', must: ['phone'] },
+  { slug: 'phone-3a', query: 'smartphone product photography', wiki: 'Nothing Phone (2)', must: ['phone', 'smartphone'], allowBrands: ['nothing'], targetLuma: 45 },
   { slug: 'ear-open', query: 'wireless earbuds charging case', wiki: 'Nothing Ear', must: ['earbud', 'airpod', 'earphone'] },
-  { slug: 'cmf-buds', query: 'earbuds product photography', wiki: 'CMF by Nothing', must: ['earbud', 'earphone'] },
+  { slug: 'cmf-buds', query: 'wireless earbuds white background', wiki: 'wireless earbuds', must: ['earbud', 'earphone', 'bud'] },
   // Keychron
   { slug: 'q3-max', query: 'mechanical keyboard rgb dark', wiki: 'Keychron keyboard', must: ['keyboard'] },
   { slug: 'switch-set', query: 'keyboard switches macro', wiki: 'mechanical keyboard switches', must: ['keyboard', 'key'] },
@@ -87,7 +87,7 @@ const PRODUCTS = [
   // Teenage Engineering
   { slug: 'op1-field', query: 'synthesizer close up knobs', wiki: 'Teenage Engineering OP-1', must: ['synth', 'keyboard', 'knob'] },
   { slug: 'tp7-recorder', query: 'portable audio recorder microphone', wiki: 'Teenage Engineering TP-7', must: ['recorder', 'microphone', 'audio'] },
-  { slug: 'ob4-speaker', query: 'speaker audio black', wiki: 'Teenage Engineering OB-4', must: ['speaker'] },
+  { slug: 'ob4-speaker', query: 'bluetooth speaker product studio', wiki: 'portable speaker', must: ['speaker'] },
 ]
 
 /** Brand hover previews: <id>.webp */
@@ -178,7 +178,10 @@ const BRAND_WORDS = [
   'sony', 'bose', 'sennheiser', 'dji', 'logitech', 'razer', 'anker', 'keychron',
   'jbl', 'beats', 'marshall', 'bang olufsen', 'sonos', 'huawei', 'xiaomi',
   'google pixel', 'gopro', 'canon', 'nikon', 'fujifilm', 'panasonic', 'dell',
-  'hp ', 'lenovo', 'asus', 'acer', 'microsoft', 'nintendo',
+  'hp ', 'lenovo', 'asus', 'acer', 'microsoft', 'nintendo', 'yamaha', 'jabra',
+  'skullcandy', 'audio-technica', 'audio technica', 'akg', 'shure', 'philips',
+  'oneplus', 'oppo', 'vivo', 'realme', 'motorola', 'nokia', 'steelseries',
+  'corsair', 'hyperx', 'jvc', 'sennheiser', 'bang & olufsen',
 ]
 
 function rejectsForeignBrands(results, allow = []) {
@@ -271,7 +274,7 @@ async function rankByLuma(results, target = null, sampleSize = 8) {
  * CC BY-SA requires attribution, so licence and author are captured per file
  * and surfaced on the product page.
  */
-async function searchCommons(query, limit = 12) {
+async function searchCommons(query, limit = 3) {
   const url =
     'https://commons.wikimedia.org/w/api.php?action=query&generator=search' +
     `&gsrsearch=${encodeURIComponent(query + ' filetype:bitmap')}` +
@@ -315,7 +318,7 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
  * and a 429 backs off rather than failing the asset.
  */
 let wikimediaGate = Promise.resolve()
-const WIKIMEDIA_DELAY_MS = 400
+const WIKIMEDIA_DELAY_MS = 1200
 
 function isWikimedia(url) {
   return /wikimedia\.org|wikipedia\.org/.test(url)
@@ -334,7 +337,7 @@ async function fetchBuffer(url, attempt = 0) {
     headers: { 'User-Agent': 'nexus-asset-pipeline/1.0 (portfolio demo; contact via repo)' },
   })
 
-  if (res.status === 429 && attempt < 4) {
+  if (res.status === 429 && attempt < 1) {
     const backoff = 1500 * 2 ** attempt
     process.stdout.write(`  … rate limited, waiting ${backoff}ms\n`)
     await sleep(backoff)
@@ -428,6 +431,26 @@ async function runImageJob(job, dir, variants) {
   if (job.wiki) {
     try {
       commons = await searchCommons(job.wiki)
+
+      // Commons filenames describe the subject, so the same must-words that
+      // filter stock captions apply here too. Without this, "Samsung Odyssey
+      // monitor" happily returns a photograph of a building with an Odyssey
+      // billboard on the side of it.
+      if (job.must?.length) {
+        commons = commons.filter((c) =>
+          job.must.some((word) => c.title.toLowerCase().includes(word)),
+        )
+      }
+
+      // Commons filenames name the manufacturer far more reliably than stock
+      // captions do, so the brand filter is worth more here, not less.
+      commons = commons.filter((c) => {
+        const title = c.title.toLowerCase()
+        const allowed = (job.allowBrands ?? []).map((a) => a.toLowerCase())
+        return !BRAND_WORDS.some(
+          (w) => title.includes(w) && !allowed.some((a) => w.includes(a) || a.includes(w)),
+        )
+      })
     } catch (err) {
       process.stdout.write(`  ~ ${job.slug}: commons unavailable (${err.message})
 `)
@@ -455,15 +478,28 @@ async function runImageJob(job, dir, variants) {
     const settled = chosen.get(v.slot)
     if (settled) {
       // Same photo, different size: bypass the uniqueness walk entirely.
-      await writeSized(settled, dest, v.width)
-      continue
+      try {
+        await writeSized(settled, dest, v.width)
+        continue
+      } catch {
+        /* fall through and pick a fresh candidate for this file */
+      }
     }
 
     // Walk down the ranking until a candidate yields an image nothing else in
     // the catalogue already uses.
+    //
+    // A candidate that fails to download drops out and the walk continues. One
+    // unreachable file — Commons rate-limits hard after a burst — must not cost
+    // the product its photograph when an Unsplash candidate sits right behind
+    // it in the same list.
     let picked = null
     for (let i = v.index; i < results.length && !picked; i++) {
-      if (await writePhoto(results[i], dest, v.width)) picked = results[i]
+      try {
+        if (await writePhoto(results[i], dest, v.width)) picked = results[i]
+      } catch {
+        /* next candidate */
+      }
     }
 
     if (picked) {
