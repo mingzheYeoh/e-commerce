@@ -93,6 +93,7 @@ const labelOpacity = (part: FlagshipPart) =>
           alt="SPEC_01 Planar Reference headphones, shown disassembled"
           width="480"
           height="360"
+          loading="lazy"
           class="h-full w-full object-cover"
         />
         <div class="absolute inset-0 bg-scanlines bg-scan-4 opacity-40" aria-hidden="true" />

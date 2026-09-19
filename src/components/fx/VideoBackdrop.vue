@@ -42,6 +42,10 @@ onMounted(() => {
       v-else
       :src="poster"
       alt=""
+      width="1280"
+      height="720"
+      loading="eager"
+      fetchpriority="high"
       class="h-full w-full object-cover opacity-[0.45] contrast-125 saturate-150 brightness-[0.7]"
     />
 

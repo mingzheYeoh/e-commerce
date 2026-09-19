@@ -89,6 +89,7 @@ onUnmounted(() => window.clearInterval(timer))
           :alt="featuredDrop.title"
           width="56"
           height="56"
+          loading="eager"
           class="h-14 w-14 shrink-0 border border-border-hairline bg-surface-2 object-cover transition-transform duration-500 group-hover:scale-105"
         />
 
