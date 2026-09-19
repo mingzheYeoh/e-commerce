@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
-import { Search, ShoppingBag, Tag } from 'lucide-vue-next'
+import { Search, ShoppingBag, Tag, Sparkles } from 'lucide-vue-next'
 import MegaMenu from './MegaMenu.vue'
 import { useCartStore } from '@/stores/cart'
 import { useUiStore, type CurrencyCode } from '@/stores/ui'
@@ -45,6 +45,13 @@ watch(
         >
           <Tag class="h-3.5 w-3.5" aria-hidden="true" />
           Deals
+        </RouterLink>
+        <RouterLink
+          to="/ask"
+          class="flex h-10 items-center gap-1.5 rounded px-3 text-sm font-medium text-text-secondary transition-colors hover:bg-surface-2 hover:text-text-primary"
+        >
+          <Sparkles class="h-3.5 w-3.5" aria-hidden="true" />
+          Ask
         </RouterLink>
       </nav>
 

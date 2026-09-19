@@ -39,11 +39,25 @@ export interface Passage {
   text: string
 }
 
+/** The exact sentence the model is told to use when the context falls short. */
+const REFUSAL = "I don't have that in the catalogue."
+
 export interface Answer {
   answer: string
-  /** Product ids the answer is built from. Empty means it refused. */
+  /** Product ids the answer is built from, after discarding invented ones. */
   citations: string[]
+  /** An answer with at least one verifiable citation behind it. */
   grounded: boolean
+  /**
+   * The model declined because the catalogue does not cover the question.
+   *
+   * Reported separately from `grounded` because they mean opposite things to a
+   * reader: a refusal is the system working, while an ungrounded answer is one
+   * to distrust. Collapsing them would label correct behaviour as a failure.
+   * Decided here rather than by matching the sentence in the UI, so changing
+   * the prompt cannot silently break the distinction.
+   */
+  refused: boolean
 }
 
 /**
@@ -123,9 +137,10 @@ Rules:
 - Use ONLY the facts in CONTEXT. Never use knowledge from your training about
   these or any other products, even if you are confident it is correct.
 - Cite every product you mention as [id], using the exact id from CONTEXT.
-- If CONTEXT does not contain the answer, reply exactly: I don't have that in
-  the catalogue. Do not guess, and do not offer a related product as if it
-  answered the question.
+- If CONTEXT does not contain the answer, reply with exactly this sentence and
+  nothing else: I don't have that in the catalogue.
+  Do not guess, and do not offer a related product as if it answered the
+  question.
 - Be brief. Two or three sentences.`
 
 /**
@@ -143,7 +158,7 @@ function verifyCitations(text: string, passages: Passage[]): string[] {
 
 export async function ask(env: Env, question: string): Promise<Answer> {
   const q = question.trim().slice(0, 500)
-  if (!q) return { answer: "I don't have that in the catalogue.", citations: [], grounded: false }
+  if (!q) return { answer: REFUSAL, citations: [], grounded: false, refused: true }
 
   const [vector, graph] = await Promise.all([vectorPassages(env, q), graphPassages(env, q)])
   // Graph rows first: when a question has a numeric constraint, that is the
@@ -151,7 +166,7 @@ export async function ask(env: Env, question: string): Promise<Answer> {
   const passages = [...graph, ...vector].slice(0, 8)
 
   if (!passages.length) {
-    return { answer: "I don't have that in the catalogue.", citations: [], grounded: false }
+    return { answer: REFUSAL, citations: [], grounded: false, refused: true }
   }
 
   const context = passages.map((p) => `[${p.id}] ${p.title}\n${p.text}`).join('\n\n')
@@ -165,14 +180,18 @@ export async function ask(env: Env, question: string): Promise<Answer> {
     max_tokens: 300,
   })) as { response?: string }
 
-  const answer = (result.response ?? '').trim()
+  const answer = (result.response ?? '').trim() || REFUSAL
   const citations = verifyCitations(answer, passages)
+  // Compared loosely: the model reproduces the sentence reliably but not always
+  // its punctuation.
+  const refused = answer.replace(/[.\s]+$/, '').toLowerCase() === REFUSAL.replace(/\.$/, '').toLowerCase()
 
   return {
-    answer: answer || "I don't have that in the catalogue.",
+    answer,
     citations,
     // An answer that cites nothing verifiable is reported as ungrounded rather
     // than presented with the same confidence as one that does.
     grounded: citations.length > 0,
+    refused,
   }
 }
