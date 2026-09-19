@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
+import { RouterLink } from 'vue-router'
 import { Search, ShoppingBag } from 'lucide-vue-next'
 import { useCartStore } from '@/stores/cart'
 import { useUiStore, type CurrencyCode } from '@/stores/ui'
@@ -10,10 +11,10 @@ const ui = useUiStore()
 const { format } = useCurrency()
 
 const links = [
-  { label: 'Brands', href: '#brands' },
-  { label: 'Categories', href: '#categories' },
-  { label: 'Featured', href: '#flagship' },
-  { label: 'Shop all', href: '#drops' },
+  { label: 'Shop all', to: { path: '/shop' } },
+  { label: 'Audio', to: { path: '/shop', query: { category: 'audio' } } },
+  { label: 'Cameras & drones', to: { path: '/shop', query: { category: 'imaging' } } },
+  { label: 'Keyboards & mice', to: { path: '/shop', query: { category: 'peripherals' } } },
 ]
 
 const currencies: CurrencyCode[] = ['USD', 'EUR', 'GBP']
@@ -36,19 +37,19 @@ watch(
     class="fixed inset-x-0 top-0 z-50 h-16 border-b border-border-hairline bg-void/85 backdrop-blur-xl"
   >
     <nav class="mx-auto flex h-full max-w-[1600px] items-center justify-between px-4 md:px-8">
-      <a href="#top" class="flex shrink-0 items-center gap-2" aria-label="NEXUS home">
+      <RouterLink to="/" class="flex shrink-0 items-center gap-2" aria-label="NEXUS home">
         <span class="font-display text-lg font-extrabold tracking-tight md:text-xl">NEXUS</span>
         <span class="hidden text-xs text-text-muted lg:inline">Consumer Electronics</span>
-      </a>
+      </RouterLink>
 
       <ul class="hidden items-center gap-1 lg:flex">
         <li v-for="link in links" :key="link.label">
-          <a
-            :href="link.href"
+          <RouterLink
+            :to="link.to"
             class="rounded px-3 py-2 text-sm font-medium text-text-secondary transition-colors hover:bg-surface-2 hover:text-text-primary"
           >
             {{ link.label }}
-          </a>
+          </RouterLink>
         </li>
       </ul>
 

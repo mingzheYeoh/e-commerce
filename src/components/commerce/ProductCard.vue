@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
+import { RouterLink } from 'vue-router'
 import { Check, Star } from 'lucide-vue-next'
 import StockBadge from './StockBadge.vue'
 import PriceTag from './PriceTag.vue'
@@ -26,7 +27,8 @@ function addToCart() {
 </script>
 
 <template>
-  <article
+  <RouterLink
+    :to="`/product/${product.id}`"
     class="card group flex flex-col overflow-hidden transition-colors hover:border-border-strong"
   >
     <div class="relative aspect-[4/3] overflow-hidden bg-surface-2">
@@ -93,7 +95,7 @@ function addToCart() {
           "
           :disabled="!product.inStock"
           :aria-label="product.inStock ? `Add ${product.title} to cart` : `${product.title} is sold out`"
-          @click="addToCart"
+          @click.stop.prevent="addToCart"
         >
           <span v-if="!product.inStock">Sold out</span>
           <span v-else-if="added" class="flex items-center gap-1.5">
@@ -104,5 +106,5 @@ function addToCart() {
         </button>
       </div>
     </div>
-  </article>
+  </RouterLink>
 </template>

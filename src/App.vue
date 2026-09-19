@@ -3,11 +3,6 @@ import NavBar from '@/components/layout/NavBar.vue'
 import CartDrawer from '@/components/layout/CartDrawer.vue'
 import SearchPalette from '@/components/layout/SearchPalette.vue'
 import SiteFooter from '@/components/layout/SiteFooter.vue'
-import HeroViewport from '@/components/sections/HeroViewport.vue'
-import BrandMatrix from '@/components/sections/BrandMatrix.vue'
-import CategoryLaunchpad from '@/components/sections/CategoryLaunchpad.vue'
-import DeconstructedFlagship from '@/components/sections/DeconstructedFlagship.vue'
-import ProductDropGrid from '@/components/sections/ProductDropGrid.vue'
 import { useLenis } from '@/composables/useLenis'
 import { useReducedMotion } from '@/composables/useReducedMotion'
 
@@ -18,7 +13,7 @@ useLenis()
 <template>
   <a
     href="#main"
-    class="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[100] focus:border focus:border-accent focus:bg-void focus:rounded focus:px-4 focus:py-2 focus:text-sm focus:font-medium"
+    class="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[100] focus:rounded focus:border focus:border-accent focus:bg-void focus:px-4 focus:py-2 focus:text-sm focus:font-medium"
   >
     Skip to content
   </a>
@@ -27,12 +22,8 @@ useLenis()
   <SearchPalette />
   <CartDrawer />
 
-  <main id="main" class="bg-void">
-    <HeroViewport />
-    <BrandMatrix />
-    <CategoryLaunchpad />
-    <DeconstructedFlagship />
-    <ProductDropGrid />
+  <main id="main" class="min-h-screen bg-void">
+    <RouterView />
   </main>
 
   <SiteFooter />

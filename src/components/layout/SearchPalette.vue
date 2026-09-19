@@ -2,12 +2,14 @@
 import { computed, onMounted, onUnmounted, ref, toRef, watch } from 'vue'
 import { Search, CornerDownLeft } from 'lucide-vue-next'
 import { products } from '@/data/products'
+import { useRouter } from 'vue-router'
 import { useCartStore } from '@/stores/cart'
 import { useUiStore } from '@/stores/ui'
 import { useCurrency } from '@/composables/useCurrency'
 import { useFocusTrap } from '@/composables/useFocusTrap'
 import { brandName } from '@/data/brands'
 
+const router = useRouter()
 const ui = useUiStore()
 const cart = useCartStore()
 const { formatPrice } = useCurrency()
@@ -71,10 +73,14 @@ function onKeydown(event: KeyboardEvent) {
     const picked = results.value[cursor.value]
     if (picked) {
       event.preventDefault()
-      cart.add(picked)
-      ui.closeSearch()
+      open(picked.id)
     }
   }
+}
+
+function open(id: string) {
+  router.push(`/product/${id}`)
+  ui.closeSearch()
 }
 
 onMounted(() => document.addEventListener('keydown', onKeydown))
@@ -122,12 +128,7 @@ onUnmounted(() => document.removeEventListener('keydown', onKeydown))
                 class="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors"
                 :class="index === cursor ? 'bg-surface-2' : 'hover:bg-surface-2/60'"
                 @mouseenter="cursor = index"
-                @click="
-                  () => {
-                    cart.add(item)
-                    ui.closeSearch()
-                  }
-                "
+                @click="open(item.id)"
               >
                 <img
                   :src="item.media.thumb"
@@ -146,6 +147,14 @@ onUnmounted(() => document.removeEventListener('keydown', onKeydown))
                 <span class="nums shrink-0 text-sm font-medium">
                   {{ formatPrice(item.price) }}
                 </span>
+                <button
+                  type="button"
+                  class="shrink-0 rounded bg-surface-2 px-2.5 py-1.5 text-xs font-medium text-text-secondary transition-colors hover:bg-accent hover:text-white"
+                  :aria-label="`Add ${item.title} to cart`"
+                  @click.stop="cart.add(item)"
+                >
+                  Add
+                </button>
                 <CornerDownLeft
                   v-if="index === cursor"
                   class="h-3.5 w-3.5 shrink-0 text-accent"
@@ -163,7 +172,7 @@ onUnmounted(() => document.removeEventListener('keydown', onKeydown))
             class="flex items-center gap-4 border-t border-border-hairline px-4 py-2.5 text-xs text-text-muted"
           >
             <span>↑↓ to navigate</span>
-            <span>↵ to add</span>
+            <span>↵ to open</span>
             <span class="nums ml-auto">{{ results.length }} results</span>
           </footer>
         </div>

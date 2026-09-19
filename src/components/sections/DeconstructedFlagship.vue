@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { brandName } from '@/data/brands'
 import LayeredRenderer from './flagship/LayeredRenderer.vue'
@@ -19,7 +19,7 @@ const added = ref(false)
 
 let trigger: ScrollTrigger | null = null
 
-onMounted(() => {
+onMounted(async () => {
   // Static fallback: show the fully exploded state with every callout visible,
   // so a reduced-motion visitor gets the information, just not the choreography.
   if (prefersReducedMotion()) {
@@ -38,9 +38,11 @@ onMounted(() => {
     },
   })
 
-  // Pin geometry is measured from laid-out heights; images finishing late would
-  // otherwise leave the pin spacer the wrong size.
-  window.addEventListener('load', () => ScrollTrigger.refresh())
+  // Pin geometry is measured after layout settles. A 'load' listener would not
+  // do: on a client-side route change that event has already fired and never
+  // fires again, so the spacer would keep the previous page's measurements.
+  await nextTick()
+  ScrollTrigger.refresh()
 })
 
 onUnmounted(() => {

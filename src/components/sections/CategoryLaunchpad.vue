@@ -1,11 +1,10 @@
 <script setup lang="ts">
 import { ArrowUpRight } from 'lucide-vue-next'
+import { RouterLink } from 'vue-router'
 import { categories } from '@/data/categories'
-import { useCatalogStore } from '@/stores/catalog'
 import { useCurrency } from '@/composables/useCurrency'
 import type { Category } from '@/types'
 
-const catalog = useCatalogStore()
 const { formatPrice } = useCurrency()
 
 // Bento placement. Explicit per span so the asymmetry is deliberate rather than
@@ -16,10 +15,6 @@ const spanClass: Record<Category['span'], string> = {
   wide: 'md:col-span-4 md:row-span-1 min-h-[240px]',
 }
 
-function jumpToCategory(category: Category) {
-  catalog.setFilter(category.id)
-  document.getElementById('drops')?.scrollIntoView({ behavior: 'smooth' })
-}
 </script>
 
 <template>
@@ -36,13 +31,12 @@ function jumpToCategory(category: Category) {
       </div>
 
       <div class="grid grid-cols-1 gap-3 md:grid-cols-4">
-        <button
+        <RouterLink
           v-for="category in categories"
           :key="category.id"
-          type="button"
+          :to="{ path: '/shop', query: { category: category.id } }"
           class="group relative overflow-hidden rounded-card border border-border-hairline bg-surface-1 text-left transition-colors hover:border-border-strong"
           :class="spanClass[category.span]"
-          @click="jumpToCategory(category)"
         >
           <!-- Ken Burns drift: slow, single-direction, disabled for reduced motion -->
           <img
@@ -87,7 +81,7 @@ function jumpToCategory(category: Category) {
               </span>
             </div>
           </div>
-        </button>
+        </RouterLink>
       </div>
     </div>
   </section>

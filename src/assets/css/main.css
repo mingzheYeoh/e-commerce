@@ -7,7 +7,9 @@
     background-color: #0b0b0d;
     color-scheme: dark;
     -webkit-font-smoothing: antialiased;
-    scroll-behavior: smooth;
+    /* Must stay auto: Lenis sets scroll position every frame, and the browser
+       animating on top of that is a feedback loop that locks the main thread. */
+    scroll-behavior: auto;
   }
 
   body {
