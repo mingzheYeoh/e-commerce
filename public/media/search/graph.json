@@ -1,0 +1,3202 @@
+{
+ "nodes": {
+  "Product": [
+   {
+    "id": "iphone-18-pro",
+    "title": "iPhone 18 Pro",
+    "price": 1199,
+    "rating": 4.8,
+    "inStock": true,
+    "batteryHours": 36,
+    "screenInches": 6.3,
+    "refreshHz": 120,
+    "megapixels": 48,
+    "storageGb": 1024
+   },
+   {
+    "id": "iphone-18-pro-max",
+    "title": "iPhone 18 Pro Max",
+    "price": 1299,
+    "rating": 4.9,
+    "inStock": true,
+    "batteryHours": 45,
+    "screenInches": 6.9,
+    "refreshHz": 120,
+    "megapixels": 48,
+    "storageGb": 1024
+   },
+   {
+    "id": "galaxy-s26-ultra",
+    "title": "Galaxy S26 Ultra",
+    "price": 1299.99,
+    "rating": 4.7,
+    "inStock": true,
+    "batteryMah": 5000,
+    "chargeWatts": 60,
+    "screenInches": 6.9,
+    "megapixels": 200,
+    "storageGb": 1024
+   },
+   {
+    "id": "pixel-11-pro",
+    "title": "Pixel 11 Pro",
+    "price": 1099,
+    "rating": 4.6,
+    "inStock": true,
+    "batteryMah": 4850,
+    "screenInches": 6.3,
+    "refreshHz": 120,
+    "megapixels": 50,
+    "storageGb": 256,
+    "memoryGb": 12
+   },
+   {
+    "id": "oneplus-15",
+    "title": "OnePlus 15",
+    "price": 899.99,
+    "rating": 4.5,
+    "inStock": true,
+    "batteryMah": 7300,
+    "chargeWatts": 120,
+    "screenInches": 78,
+    "refreshHz": 165,
+    "megapixels": 50,
+    "memoryGb": 12
+   },
+   {
+    "id": "xiaomi-17-ultra",
+    "title": "Xiaomi 17 Ultra",
+    "price": 1299,
+    "rating": 4.6,
+    "inStock": true,
+    "batteryMah": 6000,
+    "chargeWatts": 90,
+    "screenInches": 1,
+    "refreshHz": 120,
+    "megapixels": 200
+   },
+   {
+    "id": "xps-16",
+    "title": "XPS 16 (2026)",
+    "price": 1749,
+    "rating": 4.5,
+    "inStock": true,
+    "screenInches": 16,
+    "storageGb": 4096,
+    "memoryGb": 16
+   },
+   {
+    "id": "thinkpad-x1-carbon",
+    "title": "ThinkPad X1 Carbon Gen 14",
+    "price": 1999,
+    "rating": 4.7,
+    "inStock": true,
+    "batteryHours": 24,
+    "chargeWatts": 65,
+    "screenInches": 14,
+    "storageGb": 2048
+   },
+   {
+    "id": "zenbook-s14",
+    "title": "Zenbook S14 (2026)",
+    "price": 1899,
+    "rating": 4.6,
+    "inStock": true,
+    "screenInches": 14,
+    "storageGb": 1024,
+    "memoryGb": 32
+   },
+   {
+    "id": "zenbook-duo",
+    "title": "Zenbook Duo (2026)",
+    "price": 2499.99,
+    "rating": 4.4,
+    "inStock": true
+   },
+   {
+    "id": "airpods-max",
+    "title": "AirPods Max (2nd gen)",
+    "price": 549,
+    "rating": 4.7,
+    "inStock": true,
+    "batteryHours": 20
+   },
+   {
+    "id": "macbook-pro",
+    "title": "MacBook Pro 16\" M5 Pro",
+    "price": 2499,
+    "rating": 4.9,
+    "inStock": true,
+    "batteryHours": 24,
+    "screenInches": 16.2,
+    "refreshHz": 120,
+    "storageGb": 8192,
+    "memoryGb": 24
+   },
+   {
+    "id": "watch-ultra",
+    "title": "Apple Watch Ultra 3",
+    "price": 799,
+    "rating": 4.8,
+    "inStock": true,
+    "batteryHours": 36
+   },
+   {
+    "id": "galaxy-s26",
+    "title": "Galaxy S26",
+    "price": 899.99,
+    "rating": 4.6,
+    "inStock": true,
+    "batteryMah": 5000,
+    "chargeWatts": 45,
+    "screenInches": 6.9,
+    "refreshHz": 120,
+    "megapixels": 200,
+    "storageGb": 1024,
+    "memoryGb": 12
+   },
+   {
+    "id": "galaxy-buds",
+    "title": "Galaxy Buds4 Pro",
+    "price": 249,
+    "rating": 4.4,
+    "inStock": true
+   },
+   {
+    "id": "odyssey-oled",
+    "title": "Odyssey OLED G9 49\"",
+    "price": 1599,
+    "rating": 4.7,
+    "inStock": true,
+    "screenInches": 49,
+    "refreshHz": 240
+   },
+   {
+    "id": "wh1000xm6",
+    "title": "WH-1000XM6 Wireless",
+    "price": 449,
+    "rating": 4.8,
+    "inStock": true,
+    "batteryHours": 30
+   },
+   {
+    "id": "alpha-7cr",
+    "title": "Alpha 7CR Full-Frame",
+    "price": 2899,
+    "rating": 4.8,
+    "inStock": true,
+    "megapixels": 61
+   },
+   {
+    "id": "fx3-cinema",
+    "title": "FX3 Cinema Line",
+    "price": 3899,
+    "rating": 4.9,
+    "inStock": true,
+    "megapixels": 2
+   },
+   {
+    "id": "qc-ultra",
+    "title": "QuietComfort Ultra",
+    "price": 429,
+    "rating": 4.6,
+    "inStock": true,
+    "batteryHours": 24
+   },
+   {
+    "id": "open-earbuds",
+    "title": "Ultra Open Earbuds",
+    "price": 299,
+    "rating": 4.3,
+    "inStock": true,
+    "batteryHours": 5
+   },
+   {
+    "id": "soundlink-max",
+    "title": "SoundLink Max Portable",
+    "price": 399,
+    "rating": 4.7,
+    "inStock": true,
+    "batteryHours": 20
+   },
+   {
+    "id": "hd900s",
+    "title": "HD 900 S Reference",
+    "price": 649,
+    "rating": 4.9,
+    "inStock": true
+   },
+   {
+    "id": "momentum-4",
+    "title": "Momentum 4 Wireless",
+    "price": 349.95,
+    "rating": 4.5,
+    "inStock": true,
+    "batteryHours": 60
+   },
+   {
+    "id": "mavic-4-pro",
+    "title": "Mavic 4 Pro Cine",
+    "price": 2699,
+    "rating": 4.9,
+    "inStock": true,
+    "megapixels": 100
+   },
+   {
+    "id": "osmo-pocket",
+    "title": "Osmo Pocket 3 Creator",
+    "price": 799,
+    "rating": 4.7,
+    "inStock": true,
+    "screenInches": 1
+   },
+   {
+    "id": "rs4-gimbal",
+    "title": "RS 4 Pro Gimbal",
+    "price": 869,
+    "rating": 4.6,
+    "inStock": true,
+    "batteryHours": 29,
+    "screenInches": 1.8
+   },
+   {
+    "id": "mx-master",
+    "title": "MX Master 4",
+    "price": 119,
+    "rating": 4.8,
+    "inStock": true,
+    "batteryHours": 3
+   },
+   {
+    "id": "mx-mechanical",
+    "title": "MX Mechanical Keyboard",
+    "price": 169,
+    "rating": 4.6,
+    "inStock": true
+   },
+   {
+    "id": "brio-webcam",
+    "title": "Brio 4K Pro Webcam",
+    "price": 199,
+    "rating": 4.4,
+    "inStock": true
+   },
+   {
+    "id": "blackwidow",
+    "title": "BlackWidow V4 Pro",
+    "price": 229,
+    "rating": 4.5,
+    "inStock": true
+   },
+   {
+    "id": "viper-v3",
+    "title": "Viper V3 Pro",
+    "price": 159,
+    "rating": 4.7,
+    "inStock": true,
+    "batteryHours": 95
+   },
+   {
+    "id": "blade-16",
+    "title": "Blade 16 Creator",
+    "price": 3299,
+    "rating": 4.4,
+    "inStock": true,
+    "screenInches": 16,
+    "refreshHz": 240,
+    "storageGb": 2048
+   },
+   {
+    "id": "prime-powerbank",
+    "title": "Prime 27,650mAh Bank",
+    "price": 179,
+    "rating": 4.6,
+    "inStock": true,
+    "batteryMah": 27650,
+    "chargeWatts": 250
+   },
+   {
+    "id": "soundcore-liberty",
+    "title": "Soundcore Liberty 5",
+    "price": 129.99,
+    "rating": 4.3,
+    "inStock": true,
+    "batteryHours": 48
+   },
+   {
+    "id": "gan-charger",
+    "title": "Prime 250W GaN Charger",
+    "price": 149,
+    "rating": 4.7,
+    "inStock": true,
+    "chargeWatts": 250
+   },
+   {
+    "id": "phone-3a",
+    "title": "Phone (3a) Pro",
+    "price": 479,
+    "rating": 4.5,
+    "inStock": true,
+    "batteryMah": 5000,
+    "chargeWatts": 50,
+    "screenInches": 6.7,
+    "refreshHz": 120,
+    "megapixels": 50,
+    "storageGb": 256,
+    "memoryGb": 12
+   },
+   {
+    "id": "ear-open",
+    "title": "Ear (Open)",
+    "price": 149,
+    "rating": 4.4,
+    "inStock": true,
+    "batteryHours": 38
+   },
+   {
+    "id": "cmf-buds",
+    "title": "CMF Buds Pro 3",
+    "price": 69,
+    "rating": 4.1,
+    "inStock": false,
+    "batteryHours": 43
+   },
+   {
+    "id": "q3-max",
+    "title": "Q3 Max QMK Custom",
+    "price": 219,
+    "rating": 4.8,
+    "inStock": true,
+    "batteryHours": 100,
+    "batteryMah": 4000
+   },
+   {
+    "id": "switch-set",
+    "title": "Nebula Switch Set ×110",
+    "price": 69,
+    "rating": 4.5,
+    "inStock": true
+   },
+   {
+    "id": "k-pro-mouse",
+    "title": "M6 Wireless Mouse",
+    "price": 89,
+    "rating": 4.2,
+    "inStock": true,
+    "batteryHours": 70,
+    "batteryMah": 500
+   },
+   {
+    "id": "op1-field",
+    "title": "OP-1 Field Synthesizer",
+    "price": 1999,
+    "rating": 4.9,
+    "inStock": true,
+    "batteryHours": 16
+   },
+   {
+    "id": "tp7-recorder",
+    "title": "TP-7 Field Recorder",
+    "price": 1499,
+    "rating": 4.7,
+    "inStock": true,
+    "batteryHours": 7,
+    "storageGb": 128
+   },
+   {
+    "id": "ob4-speaker",
+    "title": "OB-4 Magic Radio",
+    "price": 649,
+    "rating": 4.6,
+    "inStock": true,
+    "batteryHours": 20,
+    "screenInches": 4
+   }
+  ],
+  "Brand": [
+   {
+    "id": "APPLE",
+    "name": "Apple"
+   },
+   {
+    "id": "SAMSUNG",
+    "name": "Samsung"
+   },
+   {
+    "id": "SONY",
+    "name": "Sony"
+   },
+   {
+    "id": "BOSE",
+    "name": "Bose"
+   },
+   {
+    "id": "SENNHEISER",
+    "name": "Sennheiser"
+   },
+   {
+    "id": "DJI",
+    "name": "DJI"
+   },
+   {
+    "id": "LOGITECH",
+    "name": "Logitech"
+   },
+   {
+    "id": "RAZER",
+    "name": "Razer"
+   },
+   {
+    "id": "ANKER",
+    "name": "Anker"
+   },
+   {
+    "id": "NOTHING",
+    "name": "Nothing"
+   },
+   {
+    "id": "GOOGLE",
+    "name": "Google"
+   },
+   {
+    "id": "ONEPLUS",
+    "name": "OnePlus"
+   },
+   {
+    "id": "XIAOMI",
+    "name": "Xiaomi"
+   },
+   {
+    "id": "DELL",
+    "name": "Dell"
+   },
+   {
+    "id": "LENOVO",
+    "name": "Lenovo"
+   },
+   {
+    "id": "ASUS",
+    "name": "ASUS"
+   },
+   {
+    "id": "KEYCHRON",
+    "name": "Keychron"
+   },
+   {
+    "id": "TEENAGE_ENGINEERING",
+    "name": "Teenage Engineering"
+   }
+  ],
+  "Category": [
+   {
+    "id": "phones"
+   },
+   {
+    "id": "computing"
+   },
+   {
+    "id": "audio"
+   },
+   {
+    "id": "peripherals"
+   },
+   {
+    "id": "imaging"
+   }
+  ],
+  "Port": [
+   {
+    "id": "USB-C"
+   },
+   {
+    "id": "Thunderbolt"
+   },
+   {
+    "id": "3.5mm"
+   },
+   {
+    "id": "HDMI"
+   },
+   {
+    "id": "SD card"
+   }
+  ],
+  "Feature": [
+   {
+    "id": "On-device AI accelerator"
+   },
+   {
+    "id": "eSIM"
+   },
+   {
+    "id": "Fast charging"
+   },
+   {
+    "id": "Water resistant"
+   },
+   {
+    "id": "OLED display"
+   },
+   {
+    "id": "Optical zoom"
+   },
+   {
+    "id": "Active noise cancellation"
+   },
+   {
+    "id": "Hear-through"
+   },
+   {
+    "id": "Spatial audio"
+   },
+   {
+    "id": "Wireless charging"
+   },
+   {
+    "id": "Stabilisation"
+   },
+   {
+    "id": "Mechanical switches"
+   }
+  ]
+ },
+ "edges": [
+  {
+   "from": "iphone-18-pro",
+   "type": "MADE_BY",
+   "to": "APPLE"
+  },
+  {
+   "from": "iphone-18-pro",
+   "type": "IN_CATEGORY",
+   "to": "phones"
+  },
+  {
+   "from": "iphone-18-pro",
+   "type": "HAS_FEATURE",
+   "to": "On-device AI accelerator"
+  },
+  {
+   "from": "iphone-18-pro",
+   "type": "HAS_FEATURE",
+   "to": "eSIM"
+  },
+  {
+   "from": "iphone-18-pro-max",
+   "type": "MADE_BY",
+   "to": "APPLE"
+  },
+  {
+   "from": "iphone-18-pro-max",
+   "type": "IN_CATEGORY",
+   "to": "phones"
+  },
+  {
+   "from": "iphone-18-pro-max",
+   "type": "HAS_FEATURE",
+   "to": "On-device AI accelerator"
+  },
+  {
+   "from": "iphone-18-pro-max",
+   "type": "HAS_FEATURE",
+   "to": "eSIM"
+  },
+  {
+   "from": "galaxy-s26-ultra",
+   "type": "MADE_BY",
+   "to": "SAMSUNG"
+  },
+  {
+   "from": "galaxy-s26-ultra",
+   "type": "IN_CATEGORY",
+   "to": "phones"
+  },
+  {
+   "from": "galaxy-s26-ultra",
+   "type": "HAS_FEATURE",
+   "to": "Fast charging"
+  },
+  {
+   "from": "pixel-11-pro",
+   "type": "MADE_BY",
+   "to": "GOOGLE"
+  },
+  {
+   "from": "pixel-11-pro",
+   "type": "IN_CATEGORY",
+   "to": "phones"
+  },
+  {
+   "from": "pixel-11-pro",
+   "type": "HAS_FEATURE",
+   "to": "Water resistant"
+  },
+  {
+   "from": "pixel-11-pro",
+   "type": "HAS_FEATURE",
+   "to": "OLED display"
+  },
+  {
+   "from": "pixel-11-pro",
+   "type": "HAS_FEATURE",
+   "to": "Optical zoom"
+  },
+  {
+   "from": "oneplus-15",
+   "type": "MADE_BY",
+   "to": "ONEPLUS"
+  },
+  {
+   "from": "oneplus-15",
+   "type": "IN_CATEGORY",
+   "to": "phones"
+  },
+  {
+   "from": "oneplus-15",
+   "type": "HAS_FEATURE",
+   "to": "Water resistant"
+  },
+  {
+   "from": "oneplus-15",
+   "type": "HAS_FEATURE",
+   "to": "OLED display"
+  },
+  {
+   "from": "oneplus-15",
+   "type": "HAS_FEATURE",
+   "to": "Fast charging"
+  },
+  {
+   "from": "xiaomi-17-ultra",
+   "type": "MADE_BY",
+   "to": "XIAOMI"
+  },
+  {
+   "from": "xiaomi-17-ultra",
+   "type": "IN_CATEGORY",
+   "to": "phones"
+  },
+  {
+   "from": "xiaomi-17-ultra",
+   "type": "HAS_FEATURE",
+   "to": "OLED display"
+  },
+  {
+   "from": "xiaomi-17-ultra",
+   "type": "HAS_FEATURE",
+   "to": "Optical zoom"
+  },
+  {
+   "from": "xiaomi-17-ultra",
+   "type": "HAS_FEATURE",
+   "to": "Fast charging"
+  },
+  {
+   "from": "xps-16",
+   "type": "MADE_BY",
+   "to": "DELL"
+  },
+  {
+   "from": "xps-16",
+   "type": "IN_CATEGORY",
+   "to": "computing"
+  },
+  {
+   "from": "xps-16",
+   "type": "HAS_PORT",
+   "to": "USB-C"
+  },
+  {
+   "from": "xps-16",
+   "type": "HAS_PORT",
+   "to": "Thunderbolt"
+  },
+  {
+   "from": "xps-16",
+   "type": "HAS_PORT",
+   "to": "3.5mm"
+  },
+  {
+   "from": "xps-16",
+   "type": "HAS_FEATURE",
+   "to": "OLED display"
+  },
+  {
+   "from": "thinkpad-x1-carbon",
+   "type": "MADE_BY",
+   "to": "LENOVO"
+  },
+  {
+   "from": "thinkpad-x1-carbon",
+   "type": "IN_CATEGORY",
+   "to": "computing"
+  },
+  {
+   "from": "thinkpad-x1-carbon",
+   "type": "HAS_PORT",
+   "to": "USB-C"
+  },
+  {
+   "from": "thinkpad-x1-carbon",
+   "type": "HAS_PORT",
+   "to": "Thunderbolt"
+  },
+  {
+   "from": "thinkpad-x1-carbon",
+   "type": "HAS_PORT",
+   "to": "HDMI"
+  },
+  {
+   "from": "thinkpad-x1-carbon",
+   "type": "HAS_PORT",
+   "to": "3.5mm"
+  },
+  {
+   "from": "thinkpad-x1-carbon",
+   "type": "HAS_FEATURE",
+   "to": "OLED display"
+  },
+  {
+   "from": "zenbook-s14",
+   "type": "MADE_BY",
+   "to": "ASUS"
+  },
+  {
+   "from": "zenbook-s14",
+   "type": "IN_CATEGORY",
+   "to": "computing"
+  },
+  {
+   "from": "zenbook-s14",
+   "type": "HAS_FEATURE",
+   "to": "OLED display"
+  },
+  {
+   "from": "zenbook-s14",
+   "type": "HAS_FEATURE",
+   "to": "On-device AI accelerator"
+  },
+  {
+   "from": "zenbook-duo",
+   "type": "MADE_BY",
+   "to": "ASUS"
+  },
+  {
+   "from": "zenbook-duo",
+   "type": "IN_CATEGORY",
+   "to": "computing"
+  },
+  {
+   "from": "zenbook-duo",
+   "type": "HAS_FEATURE",
+   "to": "OLED display"
+  },
+  {
+   "from": "zenbook-duo",
+   "type": "HAS_FEATURE",
+   "to": "On-device AI accelerator"
+  },
+  {
+   "from": "airpods-max",
+   "type": "MADE_BY",
+   "to": "APPLE"
+  },
+  {
+   "from": "airpods-max",
+   "type": "IN_CATEGORY",
+   "to": "audio"
+  },
+  {
+   "from": "airpods-max",
+   "type": "HAS_PORT",
+   "to": "USB-C"
+  },
+  {
+   "from": "airpods-max",
+   "type": "HAS_FEATURE",
+   "to": "Active noise cancellation"
+  },
+  {
+   "from": "airpods-max",
+   "type": "HAS_FEATURE",
+   "to": "Hear-through"
+  },
+  {
+   "from": "airpods-max",
+   "type": "HAS_FEATURE",
+   "to": "Spatial audio"
+  },
+  {
+   "from": "macbook-pro",
+   "type": "MADE_BY",
+   "to": "APPLE"
+  },
+  {
+   "from": "macbook-pro",
+   "type": "IN_CATEGORY",
+   "to": "computing"
+  },
+  {
+   "from": "macbook-pro",
+   "type": "HAS_PORT",
+   "to": "Thunderbolt"
+  },
+  {
+   "from": "macbook-pro",
+   "type": "HAS_PORT",
+   "to": "HDMI"
+  },
+  {
+   "from": "macbook-pro",
+   "type": "HAS_PORT",
+   "to": "SD card"
+  },
+  {
+   "from": "macbook-pro",
+   "type": "HAS_PORT",
+   "to": "USB-C"
+  },
+  {
+   "from": "macbook-pro",
+   "type": "HAS_FEATURE",
+   "to": "Wireless charging"
+  },
+  {
+   "from": "watch-ultra",
+   "type": "MADE_BY",
+   "to": "APPLE"
+  },
+  {
+   "from": "watch-ultra",
+   "type": "IN_CATEGORY",
+   "to": "computing"
+  },
+  {
+   "from": "watch-ultra",
+   "type": "HAS_FEATURE",
+   "to": "Water resistant"
+  },
+  {
+   "from": "watch-ultra",
+   "type": "HAS_FEATURE",
+   "to": "OLED display"
+  },
+  {
+   "from": "galaxy-s26",
+   "type": "MADE_BY",
+   "to": "SAMSUNG"
+  },
+  {
+   "from": "galaxy-s26",
+   "type": "IN_CATEGORY",
+   "to": "phones"
+  },
+  {
+   "from": "galaxy-s26",
+   "type": "HAS_FEATURE",
+   "to": "Water resistant"
+  },
+  {
+   "from": "galaxy-s26",
+   "type": "HAS_FEATURE",
+   "to": "OLED display"
+  },
+  {
+   "from": "galaxy-s26",
+   "type": "HAS_FEATURE",
+   "to": "Optical zoom"
+  },
+  {
+   "from": "galaxy-s26",
+   "type": "HAS_FEATURE",
+   "to": "Fast charging"
+  },
+  {
+   "from": "galaxy-buds",
+   "type": "MADE_BY",
+   "to": "SAMSUNG"
+  },
+  {
+   "from": "galaxy-buds",
+   "type": "IN_CATEGORY",
+   "to": "audio"
+  },
+  {
+   "from": "galaxy-buds",
+   "type": "HAS_PORT",
+   "to": "USB-C"
+  },
+  {
+   "from": "galaxy-buds",
+   "type": "HAS_FEATURE",
+   "to": "Active noise cancellation"
+  },
+  {
+   "from": "galaxy-buds",
+   "type": "HAS_FEATURE",
+   "to": "Wireless charging"
+  },
+  {
+   "from": "galaxy-buds",
+   "type": "HAS_FEATURE",
+   "to": "Water resistant"
+  },
+  {
+   "from": "odyssey-oled",
+   "type": "MADE_BY",
+   "to": "SAMSUNG"
+  },
+  {
+   "from": "odyssey-oled",
+   "type": "IN_CATEGORY",
+   "to": "peripherals"
+  },
+  {
+   "from": "odyssey-oled",
+   "type": "HAS_PORT",
+   "to": "HDMI"
+  },
+  {
+   "from": "odyssey-oled",
+   "type": "HAS_FEATURE",
+   "to": "OLED display"
+  },
+  {
+   "from": "wh1000xm6",
+   "type": "MADE_BY",
+   "to": "SONY"
+  },
+  {
+   "from": "wh1000xm6",
+   "type": "IN_CATEGORY",
+   "to": "audio"
+  },
+  {
+   "from": "wh1000xm6",
+   "type": "HAS_FEATURE",
+   "to": "Active noise cancellation"
+  },
+  {
+   "from": "alpha-7cr",
+   "type": "MADE_BY",
+   "to": "SONY"
+  },
+  {
+   "from": "alpha-7cr",
+   "type": "IN_CATEGORY",
+   "to": "imaging"
+  },
+  {
+   "from": "alpha-7cr",
+   "type": "HAS_FEATURE",
+   "to": "OLED display"
+  },
+  {
+   "from": "alpha-7cr",
+   "type": "HAS_FEATURE",
+   "to": "Stabilisation"
+  },
+  {
+   "from": "fx3-cinema",
+   "type": "MADE_BY",
+   "to": "SONY"
+  },
+  {
+   "from": "fx3-cinema",
+   "type": "IN_CATEGORY",
+   "to": "imaging"
+  },
+  {
+   "from": "qc-ultra",
+   "type": "MADE_BY",
+   "to": "BOSE"
+  },
+  {
+   "from": "qc-ultra",
+   "type": "IN_CATEGORY",
+   "to": "audio"
+  },
+  {
+   "from": "qc-ultra",
+   "type": "HAS_FEATURE",
+   "to": "Active noise cancellation"
+  },
+  {
+   "from": "open-earbuds",
+   "type": "MADE_BY",
+   "to": "BOSE"
+  },
+  {
+   "from": "open-earbuds",
+   "type": "IN_CATEGORY",
+   "to": "audio"
+  },
+  {
+   "from": "open-earbuds",
+   "type": "HAS_FEATURE",
+   "to": "Hear-through"
+  },
+  {
+   "from": "open-earbuds",
+   "type": "HAS_FEATURE",
+   "to": "Water resistant"
+  },
+  {
+   "from": "soundlink-max",
+   "type": "MADE_BY",
+   "to": "BOSE"
+  },
+  {
+   "from": "soundlink-max",
+   "type": "IN_CATEGORY",
+   "to": "audio"
+  },
+  {
+   "from": "soundlink-max",
+   "type": "HAS_PORT",
+   "to": "USB-C"
+  },
+  {
+   "from": "soundlink-max",
+   "type": "HAS_PORT",
+   "to": "3.5mm"
+  },
+  {
+   "from": "soundlink-max",
+   "type": "HAS_FEATURE",
+   "to": "Water resistant"
+  },
+  {
+   "from": "hd900s",
+   "type": "MADE_BY",
+   "to": "SENNHEISER"
+  },
+  {
+   "from": "hd900s",
+   "type": "IN_CATEGORY",
+   "to": "audio"
+  },
+  {
+   "from": "momentum-4",
+   "type": "MADE_BY",
+   "to": "SENNHEISER"
+  },
+  {
+   "from": "momentum-4",
+   "type": "IN_CATEGORY",
+   "to": "audio"
+  },
+  {
+   "from": "momentum-4",
+   "type": "HAS_FEATURE",
+   "to": "Active noise cancellation"
+  },
+  {
+   "from": "mavic-4-pro",
+   "type": "MADE_BY",
+   "to": "DJI"
+  },
+  {
+   "from": "mavic-4-pro",
+   "type": "IN_CATEGORY",
+   "to": "imaging"
+  },
+  {
+   "from": "mavic-4-pro",
+   "type": "HAS_PORT",
+   "to": "SD card"
+  },
+  {
+   "from": "mavic-4-pro",
+   "type": "HAS_FEATURE",
+   "to": "Stabilisation"
+  },
+  {
+   "from": "osmo-pocket",
+   "type": "MADE_BY",
+   "to": "DJI"
+  },
+  {
+   "from": "osmo-pocket",
+   "type": "IN_CATEGORY",
+   "to": "imaging"
+  },
+  {
+   "from": "osmo-pocket",
+   "type": "HAS_FEATURE",
+   "to": "OLED display"
+  },
+  {
+   "from": "osmo-pocket",
+   "type": "HAS_FEATURE",
+   "to": "Mechanical switches"
+  },
+  {
+   "from": "osmo-pocket",
+   "type": "HAS_FEATURE",
+   "to": "Stabilisation"
+  },
+  {
+   "from": "rs4-gimbal",
+   "type": "MADE_BY",
+   "to": "DJI"
+  },
+  {
+   "from": "rs4-gimbal",
+   "type": "IN_CATEGORY",
+   "to": "imaging"
+  },
+  {
+   "from": "mx-master",
+   "type": "MADE_BY",
+   "to": "LOGITECH"
+  },
+  {
+   "from": "mx-master",
+   "type": "IN_CATEGORY",
+   "to": "peripherals"
+  },
+  {
+   "from": "mx-mechanical",
+   "type": "MADE_BY",
+   "to": "LOGITECH"
+  },
+  {
+   "from": "mx-mechanical",
+   "type": "IN_CATEGORY",
+   "to": "peripherals"
+  },
+  {
+   "from": "brio-webcam",
+   "type": "MADE_BY",
+   "to": "LOGITECH"
+  },
+  {
+   "from": "brio-webcam",
+   "type": "IN_CATEGORY",
+   "to": "imaging"
+  },
+  {
+   "from": "blackwidow",
+   "type": "MADE_BY",
+   "to": "RAZER"
+  },
+  {
+   "from": "blackwidow",
+   "type": "IN_CATEGORY",
+   "to": "peripherals"
+  },
+  {
+   "from": "blackwidow",
+   "type": "HAS_FEATURE",
+   "to": "Mechanical switches"
+  },
+  {
+   "from": "viper-v3",
+   "type": "MADE_BY",
+   "to": "RAZER"
+  },
+  {
+   "from": "viper-v3",
+   "type": "IN_CATEGORY",
+   "to": "peripherals"
+  },
+  {
+   "from": "blade-16",
+   "type": "MADE_BY",
+   "to": "RAZER"
+  },
+  {
+   "from": "blade-16",
+   "type": "IN_CATEGORY",
+   "to": "computing"
+  },
+  {
+   "from": "blade-16",
+   "type": "HAS_FEATURE",
+   "to": "OLED display"
+  },
+  {
+   "from": "prime-powerbank",
+   "type": "MADE_BY",
+   "to": "ANKER"
+  },
+  {
+   "from": "prime-powerbank",
+   "type": "IN_CATEGORY",
+   "to": "computing"
+  },
+  {
+   "from": "prime-powerbank",
+   "type": "HAS_PORT",
+   "to": "USB-C"
+  },
+  {
+   "from": "soundcore-liberty",
+   "type": "MADE_BY",
+   "to": "ANKER"
+  },
+  {
+   "from": "soundcore-liberty",
+   "type": "IN_CATEGORY",
+   "to": "audio"
+  },
+  {
+   "from": "soundcore-liberty",
+   "type": "HAS_PORT",
+   "to": "USB-C"
+  },
+  {
+   "from": "soundcore-liberty",
+   "type": "HAS_FEATURE",
+   "to": "Active noise cancellation"
+  },
+  {
+   "from": "soundcore-liberty",
+   "type": "HAS_FEATURE",
+   "to": "Water resistant"
+  },
+  {
+   "from": "gan-charger",
+   "type": "MADE_BY",
+   "to": "ANKER"
+  },
+  {
+   "from": "gan-charger",
+   "type": "IN_CATEGORY",
+   "to": "computing"
+  },
+  {
+   "from": "gan-charger",
+   "type": "HAS_PORT",
+   "to": "USB-C"
+  },
+  {
+   "from": "gan-charger",
+   "type": "HAS_FEATURE",
+   "to": "Fast charging"
+  },
+  {
+   "from": "phone-3a",
+   "type": "MADE_BY",
+   "to": "NOTHING"
+  },
+  {
+   "from": "phone-3a",
+   "type": "IN_CATEGORY",
+   "to": "phones"
+  },
+  {
+   "from": "phone-3a",
+   "type": "HAS_FEATURE",
+   "to": "OLED display"
+  },
+  {
+   "from": "phone-3a",
+   "type": "HAS_FEATURE",
+   "to": "Optical zoom"
+  },
+  {
+   "from": "phone-3a",
+   "type": "HAS_FEATURE",
+   "to": "Fast charging"
+  },
+  {
+   "from": "ear-open",
+   "type": "MADE_BY",
+   "to": "NOTHING"
+  },
+  {
+   "from": "ear-open",
+   "type": "IN_CATEGORY",
+   "to": "audio"
+  },
+  {
+   "from": "ear-open",
+   "type": "HAS_FEATURE",
+   "to": "Hear-through"
+  },
+  {
+   "from": "ear-open",
+   "type": "HAS_FEATURE",
+   "to": "Water resistant"
+  },
+  {
+   "from": "cmf-buds",
+   "type": "MADE_BY",
+   "to": "NOTHING"
+  },
+  {
+   "from": "cmf-buds",
+   "type": "IN_CATEGORY",
+   "to": "audio"
+  },
+  {
+   "from": "cmf-buds",
+   "type": "HAS_FEATURE",
+   "to": "Active noise cancellation"
+  },
+  {
+   "from": "cmf-buds",
+   "type": "HAS_FEATURE",
+   "to": "Water resistant"
+  },
+  {
+   "from": "q3-max",
+   "type": "MADE_BY",
+   "to": "KEYCHRON"
+  },
+  {
+   "from": "q3-max",
+   "type": "IN_CATEGORY",
+   "to": "peripherals"
+  },
+  {
+   "from": "q3-max",
+   "type": "HAS_PORT",
+   "to": "USB-C"
+  },
+  {
+   "from": "q3-max",
+   "type": "HAS_FEATURE",
+   "to": "Mechanical switches"
+  },
+  {
+   "from": "switch-set",
+   "type": "MADE_BY",
+   "to": "KEYCHRON"
+  },
+  {
+   "from": "switch-set",
+   "type": "IN_CATEGORY",
+   "to": "peripherals"
+  },
+  {
+   "from": "switch-set",
+   "type": "HAS_PORT",
+   "to": "3.5mm"
+  },
+  {
+   "from": "k-pro-mouse",
+   "type": "MADE_BY",
+   "to": "KEYCHRON"
+  },
+  {
+   "from": "k-pro-mouse",
+   "type": "IN_CATEGORY",
+   "to": "peripherals"
+  },
+  {
+   "from": "k-pro-mouse",
+   "type": "HAS_PORT",
+   "to": "USB-C"
+  },
+  {
+   "from": "op1-field",
+   "type": "MADE_BY",
+   "to": "TEENAGE_ENGINEERING"
+  },
+  {
+   "from": "op1-field",
+   "type": "IN_CATEGORY",
+   "to": "audio"
+  },
+  {
+   "from": "op1-field",
+   "type": "HAS_PORT",
+   "to": "USB-C"
+  },
+  {
+   "from": "tp7-recorder",
+   "type": "MADE_BY",
+   "to": "TEENAGE_ENGINEERING"
+  },
+  {
+   "from": "tp7-recorder",
+   "type": "IN_CATEGORY",
+   "to": "audio"
+  },
+  {
+   "from": "tp7-recorder",
+   "type": "HAS_PORT",
+   "to": "USB-C"
+  },
+  {
+   "from": "tp7-recorder",
+   "type": "HAS_PORT",
+   "to": "3.5mm"
+  },
+  {
+   "from": "ob4-speaker",
+   "type": "MADE_BY",
+   "to": "TEENAGE_ENGINEERING"
+  },
+  {
+   "from": "ob4-speaker",
+   "type": "IN_CATEGORY",
+   "to": "audio"
+  },
+  {
+   "from": "iphone-18-pro",
+   "type": "COMPETES_WITH",
+   "to": "iphone-18-pro-max",
+   "priceRatio": 0.923
+  },
+  {
+   "from": "iphone-18-pro",
+   "type": "COMPETES_WITH",
+   "to": "pixel-11-pro",
+   "priceRatio": 0.917
+  },
+  {
+   "from": "iphone-18-pro",
+   "type": "COMPETES_WITH",
+   "to": "oneplus-15",
+   "priceRatio": 0.751
+  },
+  {
+   "from": "iphone-18-pro",
+   "type": "COMPETES_WITH",
+   "to": "xiaomi-17-ultra",
+   "priceRatio": 0.923
+  },
+  {
+   "from": "iphone-18-pro-max",
+   "type": "COMPETES_WITH",
+   "to": "pixel-11-pro",
+   "priceRatio": 0.846
+  },
+  {
+   "from": "iphone-18-pro-max",
+   "type": "COMPETES_WITH",
+   "to": "oneplus-15",
+   "priceRatio": 0.693
+  },
+  {
+   "from": "iphone-18-pro-max",
+   "type": "COMPETES_WITH",
+   "to": "xiaomi-17-ultra",
+   "priceRatio": 1
+  },
+  {
+   "from": "galaxy-s26-ultra",
+   "type": "COMPETES_WITH",
+   "to": "iphone-18-pro",
+   "priceRatio": 0.922
+  },
+  {
+   "from": "galaxy-s26-ultra",
+   "type": "COMPETES_WITH",
+   "to": "iphone-18-pro-max",
+   "priceRatio": 0.999
+  },
+  {
+   "from": "galaxy-s26-ultra",
+   "type": "COMPETES_WITH",
+   "to": "pixel-11-pro",
+   "priceRatio": 0.845
+  },
+  {
+   "from": "galaxy-s26-ultra",
+   "type": "COMPETES_WITH",
+   "to": "oneplus-15",
+   "priceRatio": 0.692
+  },
+  {
+   "from": "galaxy-s26-ultra",
+   "type": "COMPETES_WITH",
+   "to": "xiaomi-17-ultra",
+   "priceRatio": 0.999
+  },
+  {
+   "from": "pixel-11-pro",
+   "type": "COMPETES_WITH",
+   "to": "xiaomi-17-ultra",
+   "priceRatio": 0.846
+  },
+  {
+   "from": "oneplus-15",
+   "type": "COMPETES_WITH",
+   "to": "pixel-11-pro",
+   "priceRatio": 0.819
+  },
+  {
+   "from": "oneplus-15",
+   "type": "COMPETES_WITH",
+   "to": "xiaomi-17-ultra",
+   "priceRatio": 0.693
+  },
+  {
+   "from": "xps-16",
+   "type": "COMPETES_WITH",
+   "to": "zenbook-s14",
+   "priceRatio": 0.921
+  },
+  {
+   "from": "xps-16",
+   "type": "COMPETES_WITH",
+   "to": "zenbook-duo",
+   "priceRatio": 0.7
+  },
+  {
+   "from": "thinkpad-x1-carbon",
+   "type": "COMPETES_WITH",
+   "to": "xps-16",
+   "priceRatio": 0.875
+  },
+  {
+   "from": "thinkpad-x1-carbon",
+   "type": "COMPETES_WITH",
+   "to": "zenbook-s14",
+   "priceRatio": 0.95
+  },
+  {
+   "from": "thinkpad-x1-carbon",
+   "type": "COMPETES_WITH",
+   "to": "zenbook-duo",
+   "priceRatio": 0.8
+  },
+  {
+   "from": "zenbook-duo",
+   "type": "COMPETES_WITH",
+   "to": "zenbook-s14",
+   "priceRatio": 0.76
+  },
+  {
+   "from": "airpods-max",
+   "type": "COMPETES_WITH",
+   "to": "wh1000xm6",
+   "priceRatio": 0.818
+  },
+  {
+   "from": "airpods-max",
+   "type": "COMPETES_WITH",
+   "to": "qc-ultra",
+   "priceRatio": 0.781
+  },
+  {
+   "from": "airpods-max",
+   "type": "COMPETES_WITH",
+   "to": "soundlink-max",
+   "priceRatio": 0.727
+  },
+  {
+   "from": "airpods-max",
+   "type": "COMPETES_WITH",
+   "to": "hd900s",
+   "priceRatio": 0.846
+  },
+  {
+   "from": "airpods-max",
+   "type": "COMPETES_WITH",
+   "to": "momentum-4",
+   "priceRatio": 0.637
+  },
+  {
+   "from": "airpods-max",
+   "type": "COMPETES_WITH",
+   "to": "ob4-speaker",
+   "priceRatio": 0.846
+  },
+  {
+   "from": "macbook-pro",
+   "type": "COMPETES_WITH",
+   "to": "xps-16",
+   "priceRatio": 0.7
+  },
+  {
+   "from": "macbook-pro",
+   "type": "COMPETES_WITH",
+   "to": "thinkpad-x1-carbon",
+   "priceRatio": 0.8
+  },
+  {
+   "from": "macbook-pro",
+   "type": "COMPETES_WITH",
+   "to": "zenbook-s14",
+   "priceRatio": 0.76
+  },
+  {
+   "from": "macbook-pro",
+   "type": "COMPETES_WITH",
+   "to": "zenbook-duo",
+   "priceRatio": 1
+  },
+  {
+   "from": "galaxy-s26",
+   "type": "COMPETES_WITH",
+   "to": "iphone-18-pro",
+   "priceRatio": 0.751
+  },
+  {
+   "from": "galaxy-s26",
+   "type": "COMPETES_WITH",
+   "to": "iphone-18-pro-max",
+   "priceRatio": 0.693
+  },
+  {
+   "from": "galaxy-s26",
+   "type": "COMPETES_WITH",
+   "to": "galaxy-s26-ultra",
+   "priceRatio": 0.692
+  },
+  {
+   "from": "galaxy-s26",
+   "type": "COMPETES_WITH",
+   "to": "pixel-11-pro",
+   "priceRatio": 0.819
+  },
+  {
+   "from": "galaxy-s26",
+   "type": "COMPETES_WITH",
+   "to": "oneplus-15",
+   "priceRatio": 1
+  },
+  {
+   "from": "galaxy-s26",
+   "type": "COMPETES_WITH",
+   "to": "xiaomi-17-ultra",
+   "priceRatio": 0.693
+  },
+  {
+   "from": "galaxy-buds",
+   "type": "COMPETES_WITH",
+   "to": "open-earbuds",
+   "priceRatio": 0.833
+  },
+  {
+   "from": "galaxy-buds",
+   "type": "COMPETES_WITH",
+   "to": "soundlink-max",
+   "priceRatio": 0.624
+  },
+  {
+   "from": "galaxy-buds",
+   "type": "COMPETES_WITH",
+   "to": "momentum-4",
+   "priceRatio": 0.712
+  },
+  {
+   "from": "alpha-7cr",
+   "type": "COMPETES_WITH",
+   "to": "fx3-cinema",
+   "priceRatio": 0.744
+  },
+  {
+   "from": "alpha-7cr",
+   "type": "COMPETES_WITH",
+   "to": "mavic-4-pro",
+   "priceRatio": 0.931
+  },
+  {
+   "from": "fx3-cinema",
+   "type": "COMPETES_WITH",
+   "to": "mavic-4-pro",
+   "priceRatio": 0.692
+  },
+  {
+   "from": "qc-ultra",
+   "type": "COMPETES_WITH",
+   "to": "wh1000xm6",
+   "priceRatio": 0.955
+  },
+  {
+   "from": "qc-ultra",
+   "type": "COMPETES_WITH",
+   "to": "soundlink-max",
+   "priceRatio": 0.93
+  },
+  {
+   "from": "open-earbuds",
+   "type": "COMPETES_WITH",
+   "to": "wh1000xm6",
+   "priceRatio": 0.666
+  },
+  {
+   "from": "open-earbuds",
+   "type": "COMPETES_WITH",
+   "to": "qc-ultra",
+   "priceRatio": 0.697
+  },
+  {
+   "from": "open-earbuds",
+   "type": "COMPETES_WITH",
+   "to": "soundlink-max",
+   "priceRatio": 0.749
+  },
+  {
+   "from": "soundlink-max",
+   "type": "COMPETES_WITH",
+   "to": "wh1000xm6",
+   "priceRatio": 0.889
+  },
+  {
+   "from": "hd900s",
+   "type": "COMPETES_WITH",
+   "to": "wh1000xm6",
+   "priceRatio": 0.692
+  },
+  {
+   "from": "hd900s",
+   "type": "COMPETES_WITH",
+   "to": "qc-ultra",
+   "priceRatio": 0.661
+  },
+  {
+   "from": "hd900s",
+   "type": "COMPETES_WITH",
+   "to": "soundlink-max",
+   "priceRatio": 0.615
+  },
+  {
+   "from": "hd900s",
+   "type": "COMPETES_WITH",
+   "to": "ob4-speaker",
+   "priceRatio": 1
+  },
+  {
+   "from": "momentum-4",
+   "type": "COMPETES_WITH",
+   "to": "wh1000xm6",
+   "priceRatio": 0.779
+  },
+  {
+   "from": "momentum-4",
+   "type": "COMPETES_WITH",
+   "to": "qc-ultra",
+   "priceRatio": 0.816
+  },
+  {
+   "from": "momentum-4",
+   "type": "COMPETES_WITH",
+   "to": "open-earbuds",
+   "priceRatio": 0.854
+  },
+  {
+   "from": "momentum-4",
+   "type": "COMPETES_WITH",
+   "to": "soundlink-max",
+   "priceRatio": 0.877
+  },
+  {
+   "from": "osmo-pocket",
+   "type": "COMPETES_WITH",
+   "to": "rs4-gimbal",
+   "priceRatio": 0.919
+  },
+  {
+   "from": "mx-master",
+   "type": "COMPETES_WITH",
+   "to": "mx-mechanical",
+   "priceRatio": 0.704
+  },
+  {
+   "from": "mx-master",
+   "type": "COMPETES_WITH",
+   "to": "viper-v3",
+   "priceRatio": 0.748
+  },
+  {
+   "from": "mx-mechanical",
+   "type": "COMPETES_WITH",
+   "to": "viper-v3",
+   "priceRatio": 0.941
+  },
+  {
+   "from": "mx-mechanical",
+   "type": "COMPETES_WITH",
+   "to": "q3-max",
+   "priceRatio": 0.772
+  },
+  {
+   "from": "blackwidow",
+   "type": "COMPETES_WITH",
+   "to": "mx-mechanical",
+   "priceRatio": 0.738
+  },
+  {
+   "from": "blackwidow",
+   "type": "COMPETES_WITH",
+   "to": "viper-v3",
+   "priceRatio": 0.694
+  },
+  {
+   "from": "blackwidow",
+   "type": "COMPETES_WITH",
+   "to": "q3-max",
+   "priceRatio": 0.956
+  },
+  {
+   "from": "blade-16",
+   "type": "COMPETES_WITH",
+   "to": "thinkpad-x1-carbon",
+   "priceRatio": 0.606
+  },
+  {
+   "from": "blade-16",
+   "type": "COMPETES_WITH",
+   "to": "zenbook-duo",
+   "priceRatio": 0.758
+  },
+  {
+   "from": "blade-16",
+   "type": "COMPETES_WITH",
+   "to": "macbook-pro",
+   "priceRatio": 0.758
+  },
+  {
+   "from": "gan-charger",
+   "type": "COMPETES_WITH",
+   "to": "prime-powerbank",
+   "priceRatio": 0.832
+  },
+  {
+   "from": "ear-open",
+   "type": "COMPETES_WITH",
+   "to": "soundcore-liberty",
+   "priceRatio": 0.872
+  },
+  {
+   "from": "q3-max",
+   "type": "COMPETES_WITH",
+   "to": "viper-v3",
+   "priceRatio": 0.726
+  },
+  {
+   "from": "k-pro-mouse",
+   "type": "COMPETES_WITH",
+   "to": "mx-master",
+   "priceRatio": 0.748
+  },
+  {
+   "from": "k-pro-mouse",
+   "type": "COMPETES_WITH",
+   "to": "switch-set",
+   "priceRatio": 0.775
+  },
+  {
+   "from": "op1-field",
+   "type": "COMPETES_WITH",
+   "to": "tp7-recorder",
+   "priceRatio": 0.75
+  },
+  {
+   "from": "ob4-speaker",
+   "type": "COMPETES_WITH",
+   "to": "wh1000xm6",
+   "priceRatio": 0.692
+  },
+  {
+   "from": "ob4-speaker",
+   "type": "COMPETES_WITH",
+   "to": "qc-ultra",
+   "priceRatio": 0.661
+  },
+  {
+   "from": "ob4-speaker",
+   "type": "COMPETES_WITH",
+   "to": "soundlink-max",
+   "priceRatio": 0.615
+  },
+  {
+   "from": "airpods-max",
+   "type": "PAIRS_WITH",
+   "to": "iphone-18-pro"
+  },
+  {
+   "from": "airpods-max",
+   "type": "PAIRS_WITH",
+   "to": "iphone-18-pro-max"
+  },
+  {
+   "from": "airpods-max",
+   "type": "PAIRS_WITH",
+   "to": "galaxy-s26-ultra"
+  },
+  {
+   "from": "airpods-max",
+   "type": "PAIRS_WITH",
+   "to": "pixel-11-pro"
+  },
+  {
+   "from": "airpods-max",
+   "type": "PAIRS_WITH",
+   "to": "oneplus-15"
+  },
+  {
+   "from": "airpods-max",
+   "type": "PAIRS_WITH",
+   "to": "xiaomi-17-ultra"
+  },
+  {
+   "from": "airpods-max",
+   "type": "PAIRS_WITH",
+   "to": "xps-16"
+  },
+  {
+   "from": "airpods-max",
+   "type": "PAIRS_WITH",
+   "to": "thinkpad-x1-carbon"
+  },
+  {
+   "from": "airpods-max",
+   "type": "PAIRS_WITH",
+   "to": "zenbook-s14"
+  },
+  {
+   "from": "airpods-max",
+   "type": "PAIRS_WITH",
+   "to": "zenbook-duo"
+  },
+  {
+   "from": "airpods-max",
+   "type": "PAIRS_WITH",
+   "to": "macbook-pro"
+  },
+  {
+   "from": "airpods-max",
+   "type": "PAIRS_WITH",
+   "to": "galaxy-s26"
+  },
+  {
+   "from": "airpods-max",
+   "type": "PAIRS_WITH",
+   "to": "blade-16"
+  },
+  {
+   "from": "airpods-max",
+   "type": "PAIRS_WITH",
+   "to": "phone-3a"
+  },
+  {
+   "from": "galaxy-buds",
+   "type": "PAIRS_WITH",
+   "to": "iphone-18-pro"
+  },
+  {
+   "from": "galaxy-buds",
+   "type": "PAIRS_WITH",
+   "to": "iphone-18-pro-max"
+  },
+  {
+   "from": "galaxy-buds",
+   "type": "PAIRS_WITH",
+   "to": "galaxy-s26-ultra"
+  },
+  {
+   "from": "galaxy-buds",
+   "type": "PAIRS_WITH",
+   "to": "pixel-11-pro"
+  },
+  {
+   "from": "galaxy-buds",
+   "type": "PAIRS_WITH",
+   "to": "oneplus-15"
+  },
+  {
+   "from": "galaxy-buds",
+   "type": "PAIRS_WITH",
+   "to": "xiaomi-17-ultra"
+  },
+  {
+   "from": "galaxy-buds",
+   "type": "PAIRS_WITH",
+   "to": "xps-16"
+  },
+  {
+   "from": "galaxy-buds",
+   "type": "PAIRS_WITH",
+   "to": "thinkpad-x1-carbon"
+  },
+  {
+   "from": "galaxy-buds",
+   "type": "PAIRS_WITH",
+   "to": "zenbook-s14"
+  },
+  {
+   "from": "galaxy-buds",
+   "type": "PAIRS_WITH",
+   "to": "zenbook-duo"
+  },
+  {
+   "from": "galaxy-buds",
+   "type": "PAIRS_WITH",
+   "to": "macbook-pro"
+  },
+  {
+   "from": "galaxy-buds",
+   "type": "PAIRS_WITH",
+   "to": "galaxy-s26"
+  },
+  {
+   "from": "galaxy-buds",
+   "type": "PAIRS_WITH",
+   "to": "blade-16"
+  },
+  {
+   "from": "galaxy-buds",
+   "type": "PAIRS_WITH",
+   "to": "phone-3a"
+  },
+  {
+   "from": "wh1000xm6",
+   "type": "PAIRS_WITH",
+   "to": "iphone-18-pro"
+  },
+  {
+   "from": "wh1000xm6",
+   "type": "PAIRS_WITH",
+   "to": "iphone-18-pro-max"
+  },
+  {
+   "from": "wh1000xm6",
+   "type": "PAIRS_WITH",
+   "to": "galaxy-s26-ultra"
+  },
+  {
+   "from": "wh1000xm6",
+   "type": "PAIRS_WITH",
+   "to": "pixel-11-pro"
+  },
+  {
+   "from": "wh1000xm6",
+   "type": "PAIRS_WITH",
+   "to": "oneplus-15"
+  },
+  {
+   "from": "wh1000xm6",
+   "type": "PAIRS_WITH",
+   "to": "xiaomi-17-ultra"
+  },
+  {
+   "from": "wh1000xm6",
+   "type": "PAIRS_WITH",
+   "to": "xps-16"
+  },
+  {
+   "from": "wh1000xm6",
+   "type": "PAIRS_WITH",
+   "to": "thinkpad-x1-carbon"
+  },
+  {
+   "from": "wh1000xm6",
+   "type": "PAIRS_WITH",
+   "to": "zenbook-s14"
+  },
+  {
+   "from": "wh1000xm6",
+   "type": "PAIRS_WITH",
+   "to": "zenbook-duo"
+  },
+  {
+   "from": "wh1000xm6",
+   "type": "PAIRS_WITH",
+   "to": "macbook-pro"
+  },
+  {
+   "from": "wh1000xm6",
+   "type": "PAIRS_WITH",
+   "to": "galaxy-s26"
+  },
+  {
+   "from": "wh1000xm6",
+   "type": "PAIRS_WITH",
+   "to": "blade-16"
+  },
+  {
+   "from": "wh1000xm6",
+   "type": "PAIRS_WITH",
+   "to": "phone-3a"
+  },
+  {
+   "from": "qc-ultra",
+   "type": "PAIRS_WITH",
+   "to": "iphone-18-pro"
+  },
+  {
+   "from": "qc-ultra",
+   "type": "PAIRS_WITH",
+   "to": "iphone-18-pro-max"
+  },
+  {
+   "from": "qc-ultra",
+   "type": "PAIRS_WITH",
+   "to": "galaxy-s26-ultra"
+  },
+  {
+   "from": "qc-ultra",
+   "type": "PAIRS_WITH",
+   "to": "pixel-11-pro"
+  },
+  {
+   "from": "qc-ultra",
+   "type": "PAIRS_WITH",
+   "to": "oneplus-15"
+  },
+  {
+   "from": "qc-ultra",
+   "type": "PAIRS_WITH",
+   "to": "xiaomi-17-ultra"
+  },
+  {
+   "from": "qc-ultra",
+   "type": "PAIRS_WITH",
+   "to": "xps-16"
+  },
+  {
+   "from": "qc-ultra",
+   "type": "PAIRS_WITH",
+   "to": "thinkpad-x1-carbon"
+  },
+  {
+   "from": "qc-ultra",
+   "type": "PAIRS_WITH",
+   "to": "zenbook-s14"
+  },
+  {
+   "from": "qc-ultra",
+   "type": "PAIRS_WITH",
+   "to": "zenbook-duo"
+  },
+  {
+   "from": "qc-ultra",
+   "type": "PAIRS_WITH",
+   "to": "macbook-pro"
+  },
+  {
+   "from": "qc-ultra",
+   "type": "PAIRS_WITH",
+   "to": "galaxy-s26"
+  },
+  {
+   "from": "qc-ultra",
+   "type": "PAIRS_WITH",
+   "to": "blade-16"
+  },
+  {
+   "from": "qc-ultra",
+   "type": "PAIRS_WITH",
+   "to": "phone-3a"
+  },
+  {
+   "from": "open-earbuds",
+   "type": "PAIRS_WITH",
+   "to": "iphone-18-pro"
+  },
+  {
+   "from": "open-earbuds",
+   "type": "PAIRS_WITH",
+   "to": "iphone-18-pro-max"
+  },
+  {
+   "from": "open-earbuds",
+   "type": "PAIRS_WITH",
+   "to": "galaxy-s26-ultra"
+  },
+  {
+   "from": "open-earbuds",
+   "type": "PAIRS_WITH",
+   "to": "pixel-11-pro"
+  },
+  {
+   "from": "open-earbuds",
+   "type": "PAIRS_WITH",
+   "to": "oneplus-15"
+  },
+  {
+   "from": "open-earbuds",
+   "type": "PAIRS_WITH",
+   "to": "xiaomi-17-ultra"
+  },
+  {
+   "from": "open-earbuds",
+   "type": "PAIRS_WITH",
+   "to": "xps-16"
+  },
+  {
+   "from": "open-earbuds",
+   "type": "PAIRS_WITH",
+   "to": "thinkpad-x1-carbon"
+  },
+  {
+   "from": "open-earbuds",
+   "type": "PAIRS_WITH",
+   "to": "zenbook-s14"
+  },
+  {
+   "from": "open-earbuds",
+   "type": "PAIRS_WITH",
+   "to": "zenbook-duo"
+  },
+  {
+   "from": "open-earbuds",
+   "type": "PAIRS_WITH",
+   "to": "macbook-pro"
+  },
+  {
+   "from": "open-earbuds",
+   "type": "PAIRS_WITH",
+   "to": "galaxy-s26"
+  },
+  {
+   "from": "open-earbuds",
+   "type": "PAIRS_WITH",
+   "to": "blade-16"
+  },
+  {
+   "from": "open-earbuds",
+   "type": "PAIRS_WITH",
+   "to": "phone-3a"
+  },
+  {
+   "from": "soundlink-max",
+   "type": "PAIRS_WITH",
+   "to": "iphone-18-pro"
+  },
+  {
+   "from": "soundlink-max",
+   "type": "PAIRS_WITH",
+   "to": "iphone-18-pro-max"
+  },
+  {
+   "from": "soundlink-max",
+   "type": "PAIRS_WITH",
+   "to": "galaxy-s26-ultra"
+  },
+  {
+   "from": "soundlink-max",
+   "type": "PAIRS_WITH",
+   "to": "pixel-11-pro"
+  },
+  {
+   "from": "soundlink-max",
+   "type": "PAIRS_WITH",
+   "to": "oneplus-15"
+  },
+  {
+   "from": "soundlink-max",
+   "type": "PAIRS_WITH",
+   "to": "xiaomi-17-ultra"
+  },
+  {
+   "from": "soundlink-max",
+   "type": "PAIRS_WITH",
+   "to": "xps-16"
+  },
+  {
+   "from": "soundlink-max",
+   "type": "PAIRS_WITH",
+   "to": "thinkpad-x1-carbon"
+  },
+  {
+   "from": "soundlink-max",
+   "type": "PAIRS_WITH",
+   "to": "zenbook-s14"
+  },
+  {
+   "from": "soundlink-max",
+   "type": "PAIRS_WITH",
+   "to": "zenbook-duo"
+  },
+  {
+   "from": "soundlink-max",
+   "type": "PAIRS_WITH",
+   "to": "macbook-pro"
+  },
+  {
+   "from": "soundlink-max",
+   "type": "PAIRS_WITH",
+   "to": "galaxy-s26"
+  },
+  {
+   "from": "soundlink-max",
+   "type": "PAIRS_WITH",
+   "to": "blade-16"
+  },
+  {
+   "from": "soundlink-max",
+   "type": "PAIRS_WITH",
+   "to": "phone-3a"
+  },
+  {
+   "from": "hd900s",
+   "type": "PAIRS_WITH",
+   "to": "iphone-18-pro"
+  },
+  {
+   "from": "hd900s",
+   "type": "PAIRS_WITH",
+   "to": "iphone-18-pro-max"
+  },
+  {
+   "from": "hd900s",
+   "type": "PAIRS_WITH",
+   "to": "galaxy-s26-ultra"
+  },
+  {
+   "from": "hd900s",
+   "type": "PAIRS_WITH",
+   "to": "pixel-11-pro"
+  },
+  {
+   "from": "hd900s",
+   "type": "PAIRS_WITH",
+   "to": "oneplus-15"
+  },
+  {
+   "from": "hd900s",
+   "type": "PAIRS_WITH",
+   "to": "xiaomi-17-ultra"
+  },
+  {
+   "from": "hd900s",
+   "type": "PAIRS_WITH",
+   "to": "xps-16"
+  },
+  {
+   "from": "hd900s",
+   "type": "PAIRS_WITH",
+   "to": "thinkpad-x1-carbon"
+  },
+  {
+   "from": "hd900s",
+   "type": "PAIRS_WITH",
+   "to": "zenbook-s14"
+  },
+  {
+   "from": "hd900s",
+   "type": "PAIRS_WITH",
+   "to": "zenbook-duo"
+  },
+  {
+   "from": "hd900s",
+   "type": "PAIRS_WITH",
+   "to": "macbook-pro"
+  },
+  {
+   "from": "hd900s",
+   "type": "PAIRS_WITH",
+   "to": "galaxy-s26"
+  },
+  {
+   "from": "hd900s",
+   "type": "PAIRS_WITH",
+   "to": "blade-16"
+  },
+  {
+   "from": "hd900s",
+   "type": "PAIRS_WITH",
+   "to": "phone-3a"
+  },
+  {
+   "from": "momentum-4",
+   "type": "PAIRS_WITH",
+   "to": "iphone-18-pro"
+  },
+  {
+   "from": "momentum-4",
+   "type": "PAIRS_WITH",
+   "to": "iphone-18-pro-max"
+  },
+  {
+   "from": "momentum-4",
+   "type": "PAIRS_WITH",
+   "to": "galaxy-s26-ultra"
+  },
+  {
+   "from": "momentum-4",
+   "type": "PAIRS_WITH",
+   "to": "pixel-11-pro"
+  },
+  {
+   "from": "momentum-4",
+   "type": "PAIRS_WITH",
+   "to": "oneplus-15"
+  },
+  {
+   "from": "momentum-4",
+   "type": "PAIRS_WITH",
+   "to": "xiaomi-17-ultra"
+  },
+  {
+   "from": "momentum-4",
+   "type": "PAIRS_WITH",
+   "to": "xps-16"
+  },
+  {
+   "from": "momentum-4",
+   "type": "PAIRS_WITH",
+   "to": "thinkpad-x1-carbon"
+  },
+  {
+   "from": "momentum-4",
+   "type": "PAIRS_WITH",
+   "to": "zenbook-s14"
+  },
+  {
+   "from": "momentum-4",
+   "type": "PAIRS_WITH",
+   "to": "zenbook-duo"
+  },
+  {
+   "from": "momentum-4",
+   "type": "PAIRS_WITH",
+   "to": "macbook-pro"
+  },
+  {
+   "from": "momentum-4",
+   "type": "PAIRS_WITH",
+   "to": "galaxy-s26"
+  },
+  {
+   "from": "momentum-4",
+   "type": "PAIRS_WITH",
+   "to": "blade-16"
+  },
+  {
+   "from": "momentum-4",
+   "type": "PAIRS_WITH",
+   "to": "phone-3a"
+  },
+  {
+   "from": "mx-master",
+   "type": "PAIRS_WITH",
+   "to": "xps-16"
+  },
+  {
+   "from": "mx-master",
+   "type": "PAIRS_WITH",
+   "to": "thinkpad-x1-carbon"
+  },
+  {
+   "from": "mx-master",
+   "type": "PAIRS_WITH",
+   "to": "zenbook-s14"
+  },
+  {
+   "from": "mx-master",
+   "type": "PAIRS_WITH",
+   "to": "zenbook-duo"
+  },
+  {
+   "from": "mx-master",
+   "type": "PAIRS_WITH",
+   "to": "macbook-pro"
+  },
+  {
+   "from": "mx-master",
+   "type": "PAIRS_WITH",
+   "to": "blade-16"
+  },
+  {
+   "from": "mx-mechanical",
+   "type": "PAIRS_WITH",
+   "to": "xps-16"
+  },
+  {
+   "from": "mx-mechanical",
+   "type": "PAIRS_WITH",
+   "to": "thinkpad-x1-carbon"
+  },
+  {
+   "from": "mx-mechanical",
+   "type": "PAIRS_WITH",
+   "to": "zenbook-s14"
+  },
+  {
+   "from": "mx-mechanical",
+   "type": "PAIRS_WITH",
+   "to": "zenbook-duo"
+  },
+  {
+   "from": "mx-mechanical",
+   "type": "PAIRS_WITH",
+   "to": "macbook-pro"
+  },
+  {
+   "from": "mx-mechanical",
+   "type": "PAIRS_WITH",
+   "to": "blade-16"
+  },
+  {
+   "from": "blackwidow",
+   "type": "PAIRS_WITH",
+   "to": "xps-16"
+  },
+  {
+   "from": "blackwidow",
+   "type": "PAIRS_WITH",
+   "to": "thinkpad-x1-carbon"
+  },
+  {
+   "from": "blackwidow",
+   "type": "PAIRS_WITH",
+   "to": "zenbook-s14"
+  },
+  {
+   "from": "blackwidow",
+   "type": "PAIRS_WITH",
+   "to": "zenbook-duo"
+  },
+  {
+   "from": "blackwidow",
+   "type": "PAIRS_WITH",
+   "to": "macbook-pro"
+  },
+  {
+   "from": "blackwidow",
+   "type": "PAIRS_WITH",
+   "to": "blade-16"
+  },
+  {
+   "from": "viper-v3",
+   "type": "PAIRS_WITH",
+   "to": "xps-16"
+  },
+  {
+   "from": "viper-v3",
+   "type": "PAIRS_WITH",
+   "to": "thinkpad-x1-carbon"
+  },
+  {
+   "from": "viper-v3",
+   "type": "PAIRS_WITH",
+   "to": "zenbook-s14"
+  },
+  {
+   "from": "viper-v3",
+   "type": "PAIRS_WITH",
+   "to": "zenbook-duo"
+  },
+  {
+   "from": "viper-v3",
+   "type": "PAIRS_WITH",
+   "to": "macbook-pro"
+  },
+  {
+   "from": "viper-v3",
+   "type": "PAIRS_WITH",
+   "to": "blade-16"
+  },
+  {
+   "from": "prime-powerbank",
+   "type": "POWERS",
+   "to": "xps-16"
+  },
+  {
+   "from": "prime-powerbank",
+   "type": "POWERS",
+   "to": "thinkpad-x1-carbon"
+  },
+  {
+   "from": "prime-powerbank",
+   "type": "POWERS",
+   "to": "airpods-max"
+  },
+  {
+   "from": "prime-powerbank",
+   "type": "POWERS",
+   "to": "macbook-pro"
+  },
+  {
+   "from": "prime-powerbank",
+   "type": "POWERS",
+   "to": "galaxy-buds"
+  },
+  {
+   "from": "prime-powerbank",
+   "type": "POWERS",
+   "to": "soundlink-max"
+  },
+  {
+   "from": "prime-powerbank",
+   "type": "POWERS",
+   "to": "soundcore-liberty"
+  },
+  {
+   "from": "prime-powerbank",
+   "type": "POWERS",
+   "to": "q3-max"
+  },
+  {
+   "from": "prime-powerbank",
+   "type": "POWERS",
+   "to": "k-pro-mouse"
+  },
+  {
+   "from": "prime-powerbank",
+   "type": "POWERS",
+   "to": "op1-field"
+  },
+  {
+   "from": "prime-powerbank",
+   "type": "POWERS",
+   "to": "tp7-recorder"
+  },
+  {
+   "from": "soundcore-liberty",
+   "type": "PAIRS_WITH",
+   "to": "iphone-18-pro"
+  },
+  {
+   "from": "soundcore-liberty",
+   "type": "PAIRS_WITH",
+   "to": "iphone-18-pro-max"
+  },
+  {
+   "from": "soundcore-liberty",
+   "type": "PAIRS_WITH",
+   "to": "galaxy-s26-ultra"
+  },
+  {
+   "from": "soundcore-liberty",
+   "type": "PAIRS_WITH",
+   "to": "pixel-11-pro"
+  },
+  {
+   "from": "soundcore-liberty",
+   "type": "PAIRS_WITH",
+   "to": "oneplus-15"
+  },
+  {
+   "from": "soundcore-liberty",
+   "type": "PAIRS_WITH",
+   "to": "xiaomi-17-ultra"
+  },
+  {
+   "from": "soundcore-liberty",
+   "type": "PAIRS_WITH",
+   "to": "xps-16"
+  },
+  {
+   "from": "soundcore-liberty",
+   "type": "PAIRS_WITH",
+   "to": "thinkpad-x1-carbon"
+  },
+  {
+   "from": "soundcore-liberty",
+   "type": "PAIRS_WITH",
+   "to": "zenbook-s14"
+  },
+  {
+   "from": "soundcore-liberty",
+   "type": "PAIRS_WITH",
+   "to": "zenbook-duo"
+  },
+  {
+   "from": "soundcore-liberty",
+   "type": "PAIRS_WITH",
+   "to": "macbook-pro"
+  },
+  {
+   "from": "soundcore-liberty",
+   "type": "PAIRS_WITH",
+   "to": "galaxy-s26"
+  },
+  {
+   "from": "soundcore-liberty",
+   "type": "PAIRS_WITH",
+   "to": "blade-16"
+  },
+  {
+   "from": "soundcore-liberty",
+   "type": "PAIRS_WITH",
+   "to": "phone-3a"
+  },
+  {
+   "from": "gan-charger",
+   "type": "POWERS",
+   "to": "xps-16"
+  },
+  {
+   "from": "gan-charger",
+   "type": "POWERS",
+   "to": "thinkpad-x1-carbon"
+  },
+  {
+   "from": "gan-charger",
+   "type": "POWERS",
+   "to": "airpods-max"
+  },
+  {
+   "from": "gan-charger",
+   "type": "POWERS",
+   "to": "macbook-pro"
+  },
+  {
+   "from": "gan-charger",
+   "type": "POWERS",
+   "to": "galaxy-buds"
+  },
+  {
+   "from": "gan-charger",
+   "type": "POWERS",
+   "to": "soundlink-max"
+  },
+  {
+   "from": "gan-charger",
+   "type": "POWERS",
+   "to": "soundcore-liberty"
+  },
+  {
+   "from": "gan-charger",
+   "type": "POWERS",
+   "to": "q3-max"
+  },
+  {
+   "from": "gan-charger",
+   "type": "POWERS",
+   "to": "k-pro-mouse"
+  },
+  {
+   "from": "gan-charger",
+   "type": "POWERS",
+   "to": "op1-field"
+  },
+  {
+   "from": "gan-charger",
+   "type": "POWERS",
+   "to": "tp7-recorder"
+  },
+  {
+   "from": "ear-open",
+   "type": "PAIRS_WITH",
+   "to": "iphone-18-pro"
+  },
+  {
+   "from": "ear-open",
+   "type": "PAIRS_WITH",
+   "to": "iphone-18-pro-max"
+  },
+  {
+   "from": "ear-open",
+   "type": "PAIRS_WITH",
+   "to": "galaxy-s26-ultra"
+  },
+  {
+   "from": "ear-open",
+   "type": "PAIRS_WITH",
+   "to": "pixel-11-pro"
+  },
+  {
+   "from": "ear-open",
+   "type": "PAIRS_WITH",
+   "to": "oneplus-15"
+  },
+  {
+   "from": "ear-open",
+   "type": "PAIRS_WITH",
+   "to": "xiaomi-17-ultra"
+  },
+  {
+   "from": "ear-open",
+   "type": "PAIRS_WITH",
+   "to": "xps-16"
+  },
+  {
+   "from": "ear-open",
+   "type": "PAIRS_WITH",
+   "to": "thinkpad-x1-carbon"
+  },
+  {
+   "from": "ear-open",
+   "type": "PAIRS_WITH",
+   "to": "zenbook-s14"
+  },
+  {
+   "from": "ear-open",
+   "type": "PAIRS_WITH",
+   "to": "zenbook-duo"
+  },
+  {
+   "from": "ear-open",
+   "type": "PAIRS_WITH",
+   "to": "macbook-pro"
+  },
+  {
+   "from": "ear-open",
+   "type": "PAIRS_WITH",
+   "to": "galaxy-s26"
+  },
+  {
+   "from": "ear-open",
+   "type": "PAIRS_WITH",
+   "to": "blade-16"
+  },
+  {
+   "from": "ear-open",
+   "type": "PAIRS_WITH",
+   "to": "phone-3a"
+  },
+  {
+   "from": "cmf-buds",
+   "type": "PAIRS_WITH",
+   "to": "iphone-18-pro"
+  },
+  {
+   "from": "cmf-buds",
+   "type": "PAIRS_WITH",
+   "to": "iphone-18-pro-max"
+  },
+  {
+   "from": "cmf-buds",
+   "type": "PAIRS_WITH",
+   "to": "galaxy-s26-ultra"
+  },
+  {
+   "from": "cmf-buds",
+   "type": "PAIRS_WITH",
+   "to": "pixel-11-pro"
+  },
+  {
+   "from": "cmf-buds",
+   "type": "PAIRS_WITH",
+   "to": "oneplus-15"
+  },
+  {
+   "from": "cmf-buds",
+   "type": "PAIRS_WITH",
+   "to": "xiaomi-17-ultra"
+  },
+  {
+   "from": "cmf-buds",
+   "type": "PAIRS_WITH",
+   "to": "xps-16"
+  },
+  {
+   "from": "cmf-buds",
+   "type": "PAIRS_WITH",
+   "to": "thinkpad-x1-carbon"
+  },
+  {
+   "from": "cmf-buds",
+   "type": "PAIRS_WITH",
+   "to": "zenbook-s14"
+  },
+  {
+   "from": "cmf-buds",
+   "type": "PAIRS_WITH",
+   "to": "zenbook-duo"
+  },
+  {
+   "from": "cmf-buds",
+   "type": "PAIRS_WITH",
+   "to": "macbook-pro"
+  },
+  {
+   "from": "cmf-buds",
+   "type": "PAIRS_WITH",
+   "to": "galaxy-s26"
+  },
+  {
+   "from": "cmf-buds",
+   "type": "PAIRS_WITH",
+   "to": "blade-16"
+  },
+  {
+   "from": "cmf-buds",
+   "type": "PAIRS_WITH",
+   "to": "phone-3a"
+  },
+  {
+   "from": "q3-max",
+   "type": "PAIRS_WITH",
+   "to": "xps-16"
+  },
+  {
+   "from": "q3-max",
+   "type": "PAIRS_WITH",
+   "to": "thinkpad-x1-carbon"
+  },
+  {
+   "from": "q3-max",
+   "type": "PAIRS_WITH",
+   "to": "zenbook-s14"
+  },
+  {
+   "from": "q3-max",
+   "type": "PAIRS_WITH",
+   "to": "zenbook-duo"
+  },
+  {
+   "from": "q3-max",
+   "type": "PAIRS_WITH",
+   "to": "macbook-pro"
+  },
+  {
+   "from": "q3-max",
+   "type": "PAIRS_WITH",
+   "to": "blade-16"
+  },
+  {
+   "from": "switch-set",
+   "type": "PAIRS_WITH",
+   "to": "xps-16"
+  },
+  {
+   "from": "switch-set",
+   "type": "PAIRS_WITH",
+   "to": "thinkpad-x1-carbon"
+  },
+  {
+   "from": "switch-set",
+   "type": "PAIRS_WITH",
+   "to": "zenbook-s14"
+  },
+  {
+   "from": "switch-set",
+   "type": "PAIRS_WITH",
+   "to": "zenbook-duo"
+  },
+  {
+   "from": "switch-set",
+   "type": "PAIRS_WITH",
+   "to": "macbook-pro"
+  },
+  {
+   "from": "switch-set",
+   "type": "PAIRS_WITH",
+   "to": "blade-16"
+  },
+  {
+   "from": "k-pro-mouse",
+   "type": "PAIRS_WITH",
+   "to": "xps-16"
+  },
+  {
+   "from": "k-pro-mouse",
+   "type": "PAIRS_WITH",
+   "to": "thinkpad-x1-carbon"
+  },
+  {
+   "from": "k-pro-mouse",
+   "type": "PAIRS_WITH",
+   "to": "zenbook-s14"
+  },
+  {
+   "from": "k-pro-mouse",
+   "type": "PAIRS_WITH",
+   "to": "zenbook-duo"
+  },
+  {
+   "from": "k-pro-mouse",
+   "type": "PAIRS_WITH",
+   "to": "macbook-pro"
+  },
+  {
+   "from": "k-pro-mouse",
+   "type": "PAIRS_WITH",
+   "to": "blade-16"
+  },
+  {
+   "from": "op1-field",
+   "type": "PAIRS_WITH",
+   "to": "iphone-18-pro"
+  },
+  {
+   "from": "op1-field",
+   "type": "PAIRS_WITH",
+   "to": "iphone-18-pro-max"
+  },
+  {
+   "from": "op1-field",
+   "type": "PAIRS_WITH",
+   "to": "galaxy-s26-ultra"
+  },
+  {
+   "from": "op1-field",
+   "type": "PAIRS_WITH",
+   "to": "pixel-11-pro"
+  },
+  {
+   "from": "op1-field",
+   "type": "PAIRS_WITH",
+   "to": "oneplus-15"
+  },
+  {
+   "from": "op1-field",
+   "type": "PAIRS_WITH",
+   "to": "xiaomi-17-ultra"
+  },
+  {
+   "from": "op1-field",
+   "type": "PAIRS_WITH",
+   "to": "xps-16"
+  },
+  {
+   "from": "op1-field",
+   "type": "PAIRS_WITH",
+   "to": "thinkpad-x1-carbon"
+  },
+  {
+   "from": "op1-field",
+   "type": "PAIRS_WITH",
+   "to": "zenbook-s14"
+  },
+  {
+   "from": "op1-field",
+   "type": "PAIRS_WITH",
+   "to": "zenbook-duo"
+  },
+  {
+   "from": "op1-field",
+   "type": "PAIRS_WITH",
+   "to": "macbook-pro"
+  },
+  {
+   "from": "op1-field",
+   "type": "PAIRS_WITH",
+   "to": "galaxy-s26"
+  },
+  {
+   "from": "op1-field",
+   "type": "PAIRS_WITH",
+   "to": "blade-16"
+  },
+  {
+   "from": "op1-field",
+   "type": "PAIRS_WITH",
+   "to": "phone-3a"
+  },
+  {
+   "from": "tp7-recorder",
+   "type": "PAIRS_WITH",
+   "to": "iphone-18-pro"
+  },
+  {
+   "from": "tp7-recorder",
+   "type": "PAIRS_WITH",
+   "to": "iphone-18-pro-max"
+  },
+  {
+   "from": "tp7-recorder",
+   "type": "PAIRS_WITH",
+   "to": "galaxy-s26-ultra"
+  },
+  {
+   "from": "tp7-recorder",
+   "type": "PAIRS_WITH",
+   "to": "pixel-11-pro"
+  },
+  {
+   "from": "tp7-recorder",
+   "type": "PAIRS_WITH",
+   "to": "oneplus-15"
+  },
+  {
+   "from": "tp7-recorder",
+   "type": "PAIRS_WITH",
+   "to": "xiaomi-17-ultra"
+  },
+  {
+   "from": "tp7-recorder",
+   "type": "PAIRS_WITH",
+   "to": "xps-16"
+  },
+  {
+   "from": "tp7-recorder",
+   "type": "PAIRS_WITH",
+   "to": "thinkpad-x1-carbon"
+  },
+  {
+   "from": "tp7-recorder",
+   "type": "PAIRS_WITH",
+   "to": "zenbook-s14"
+  },
+  {
+   "from": "tp7-recorder",
+   "type": "PAIRS_WITH",
+   "to": "zenbook-duo"
+  },
+  {
+   "from": "tp7-recorder",
+   "type": "PAIRS_WITH",
+   "to": "macbook-pro"
+  },
+  {
+   "from": "tp7-recorder",
+   "type": "PAIRS_WITH",
+   "to": "galaxy-s26"
+  },
+  {
+   "from": "tp7-recorder",
+   "type": "PAIRS_WITH",
+   "to": "blade-16"
+  },
+  {
+   "from": "tp7-recorder",
+   "type": "PAIRS_WITH",
+   "to": "phone-3a"
+  },
+  {
+   "from": "ob4-speaker",
+   "type": "PAIRS_WITH",
+   "to": "iphone-18-pro"
+  },
+  {
+   "from": "ob4-speaker",
+   "type": "PAIRS_WITH",
+   "to": "iphone-18-pro-max"
+  },
+  {
+   "from": "ob4-speaker",
+   "type": "PAIRS_WITH",
+   "to": "galaxy-s26-ultra"
+  },
+  {
+   "from": "ob4-speaker",
+   "type": "PAIRS_WITH",
+   "to": "pixel-11-pro"
+  },
+  {
+   "from": "ob4-speaker",
+   "type": "PAIRS_WITH",
+   "to": "oneplus-15"
+  },
+  {
+   "from": "ob4-speaker",
+   "type": "PAIRS_WITH",
+   "to": "xiaomi-17-ultra"
+  },
+  {
+   "from": "ob4-speaker",
+   "type": "PAIRS_WITH",
+   "to": "xps-16"
+  },
+  {
+   "from": "ob4-speaker",
+   "type": "PAIRS_WITH",
+   "to": "thinkpad-x1-carbon"
+  },
+  {
+   "from": "ob4-speaker",
+   "type": "PAIRS_WITH",
+   "to": "zenbook-s14"
+  },
+  {
+   "from": "ob4-speaker",
+   "type": "PAIRS_WITH",
+   "to": "zenbook-duo"
+  },
+  {
+   "from": "ob4-speaker",
+   "type": "PAIRS_WITH",
+   "to": "macbook-pro"
+  },
+  {
+   "from": "ob4-speaker",
+   "type": "PAIRS_WITH",
+   "to": "galaxy-s26"
+  },
+  {
+   "from": "ob4-speaker",
+   "type": "PAIRS_WITH",
+   "to": "blade-16"
+  },
+  {
+   "from": "ob4-speaker",
+   "type": "PAIRS_WITH",
+   "to": "phone-3a"
+  }
+ ]
+}
