@@ -36,6 +36,10 @@
     {
       "match": "xiaomi-17-ultra/pc/83a48170",
       "reason": "cropped screen gradient, no product visible"
+    },
+    {
+      "match": "xiaomi-17-ultra/pc/9d34fe3d",
+      "reason": "same photograph as an earlier slot at a different crop; byte-level hashing cannot see it, only the eye can"
     }
   ],
   "_note_on_depth": "Galaxy S26 Ultra stops at three images on purpose. Its buy page has no fourth clean product shot -- every remaining candidate is marketing artwork. Three verified images beat four with one wrong in it, and ProductPage probes each path and renders only what resolves.",

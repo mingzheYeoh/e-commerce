@@ -1185,26 +1185,178 @@
   },
   {
     "file": "media/products/xiaomi-17-ultra-1.webp",
-    "photographer": "茅野ふたば",
-    "profileUrl": "https://commons.wikimedia.org/wiki/File:Xiaomi_15_(2).jpg",
-    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Xiaomi_15_(2).jpg",
-    "licence": "CC BY-SA 4.0",
-    "source": "Wikimedia Commons"
+    "photographer": "Xiaomi",
+    "profileUrl": "https://i02.appmifile.com",
+    "sourceUrl": "https://i02.appmifile.com/mi-com-product/fly-birds/xiaomi-17-ultra/pc/3daf9b115eb928eb378d9a0039d43176.png",
+    "source": "i02.appmifile.com",
+    "licence": "© Xiaomi, official product image — demonstration use, retrieved 2026-09-19"
   },
   {
     "file": "media/products/xiaomi-17-ultra-2.webp",
-    "photographer": "毕明明",
-    "profileUrl": "https://commons.wikimedia.org/wiki/File:Xiaomi_15_Ultra_001.jpg",
-    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Xiaomi_15_Ultra_001.jpg",
-    "licence": "CC BY-SA 4.0",
-    "source": "Wikimedia Commons"
+    "photographer": "Xiaomi",
+    "profileUrl": "https://i02.appmifile.com",
+    "sourceUrl": "https://i02.appmifile.com/mi-com-product/fly-birds/xiaomi-17-ultra/pc/f60ec798661b8c8a7f842b9d9205ad6d.jpg",
+    "source": "i02.appmifile.com",
+    "licence": "© Xiaomi, official product image — demonstration use, retrieved 2026-09-19"
   },
   {
-    "file": "media/products/xiaomi-17-ultra-4.webp",
-    "photographer": "He Junhui",
-    "profileUrl": "https://unsplash.com/photos/a-black-cell-phone-agE9Lf26h68",
-    "sourceUrl": "https://unsplash.com/photos/a-black-cell-phone-agE9Lf26h68",
-    "licence": "Unsplash Licence",
-    "source": "Unsplash"
+    "file": "media/products/pixel-11-pro-1.webp",
+    "photographer": "Google",
+    "profileUrl": "https://lh3.googleusercontent.com",
+    "sourceUrl": "https://lh3.googleusercontent.com/wDDDdufrDg1fmakvzbW6llGw-vcfA9BaVUO0BgnxrltoQdgkM_j3jF_GUhHwLsehRWjmcZAaE7q7m2R_36-ul3ZUF-_L3GgJg8E=rj-sc0xffffffff",
+    "source": "lh3.googleusercontent.com",
+    "licence": "© Google, official product image — demonstration use, retrieved 2026-09-19"
+  },
+  {
+    "file": "media/products/pixel-11-pro-2.webp",
+    "photographer": "Google",
+    "profileUrl": "https://lh3.googleusercontent.com",
+    "sourceUrl": "https://lh3.googleusercontent.com/4dEjogq4h8_ccdxzhUXrn64PjQiSzs7H9XnCorINX43_vCrNZXs5A-fBwaA-9Sn76ELbAja2dkhvP_xxumO1va8_dR-LMMTv8Q",
+    "source": "lh3.googleusercontent.com",
+    "licence": "© Google, official product image — demonstration use, retrieved 2026-09-19"
+  },
+  {
+    "file": "media/products/pixel-11-pro-3.webp",
+    "photographer": "Google",
+    "profileUrl": "https://lh3.googleusercontent.com",
+    "sourceUrl": "https://lh3.googleusercontent.com/xPLaVz23RNV25fbCxXjQRYnB1LlNyckvXnR8pcFmDcMAVIEFUrLK2SRu9J6UcNVKX070RiSVTA-e7P-q8gCKXqGBgBH1Cab_pH4",
+    "source": "lh3.googleusercontent.com",
+    "licence": "© Google, official product image — demonstration use, retrieved 2026-09-19"
+  },
+  {
+    "file": "media/products/pixel-11-pro-4.webp",
+    "photographer": "Google",
+    "profileUrl": "https://lh3.googleusercontent.com",
+    "sourceUrl": "https://lh3.googleusercontent.com/Lfbpbu4rDPsKWnKxijX_5qFssrVHIRSgjizeEj1RJs3jGf_UqV2QV_w3coQK-zsSY-5e8vkZ-ZWhsDfGjTzkimk4qcv9jngdU3Y",
+    "source": "lh3.googleusercontent.com",
+    "licence": "© Google, official product image — demonstration use, retrieved 2026-09-19"
+  },
+  {
+    "file": "media/products/xiaomi-17-ultra-3.webp",
+    "photographer": "Xiaomi",
+    "profileUrl": "https://i02.appmifile.com",
+    "sourceUrl": "https://i02.appmifile.com/mi-com-product/fly-birds/xiaomi-17-ultra/pc/5c2979dc05b84e39c56cd8ed8d82f4b6.png",
+    "source": "i02.appmifile.com",
+    "licence": "© Xiaomi, official product image — demonstration use, retrieved 2026-09-19"
+  },
+  {
+    "file": "media/products/galaxy-s26-ultra-1.webp",
+    "photographer": "Samsung",
+    "profileUrl": "https://image-us.samsung.com",
+    "sourceUrl": "https://image-us.samsung.com/us/smartphones/galaxy-s26-ultra/gallery/SCOMMRCL-207-M3-Global-Group-Image-800x600.jpg",
+    "source": "image-us.samsung.com",
+    "licence": "© Samsung, official product image — demonstration use, retrieved 2026-09-19"
+  },
+  {
+    "file": "media/products/galaxy-s26-ultra-2.webp",
+    "photographer": "Samsung",
+    "profileUrl": "https://images.samsung.com",
+    "sourceUrl": "https://images.samsung.com/is/image/samsung/assets/us/mobile/smartphones/galaxy-s26-ultra/S26UltraResize_SCOM-142961_SCOM_BuyPageGallery_800x600_V2.jpg",
+    "source": "images.samsung.com",
+    "licence": "© Samsung, official product image — demonstration use, retrieved 2026-09-19"
+  },
+  {
+    "file": "media/products/galaxy-s26-ultra-3.webp",
+    "photographer": "Samsung",
+    "profileUrl": "https://image-us.samsung.com",
+    "sourceUrl": "https://image-us.samsung.com/SamsungUS/shopapp/icon/360_icon.png",
+    "source": "image-us.samsung.com",
+    "licence": "© Samsung, official product image — demonstration use, retrieved 2026-09-19"
+  },
+  {
+    "file": "media/products/oneplus-15-1.webp",
+    "photographer": "OnePlus",
+    "profileUrl": "https://image01.oneplus.net",
+    "sourceUrl": "https://image01.oneplus.net/shop/202206/08/1-M00-3C-E9-rB8LB2KgDBOAZhxaAAA21x6SN2Q079.png",
+    "source": "image01.oneplus.net",
+    "licence": "© OnePlus, official product image — demonstration use, retrieved 2026-09-19"
+  },
+  {
+    "file": "media/products/oneplus-15-2.webp",
+    "photographer": "OnePlus",
+    "profileUrl": "https://image01.oneplus.net",
+    "sourceUrl": "https://image01.oneplus.net/media/202511/05/4fd767bdb010e0b78639871524cce2a5.png?x-amz-process=image/format,webp/quality,Q_80",
+    "source": "image01.oneplus.net",
+    "licence": "© OnePlus, official product image — demonstration use, retrieved 2026-09-19"
+  },
+  {
+    "file": "media/products/oneplus-15-3.webp",
+    "photographer": "OnePlus",
+    "profileUrl": "https://image01.oneplus.net",
+    "sourceUrl": "https://image01.oneplus.net/media/202510/31/338f5a8201e50d91d5d544ec1116ee18.png",
+    "source": "image01.oneplus.net",
+    "licence": "© OnePlus, official product image — demonstration use, retrieved 2026-09-19"
+  },
+  {
+    "file": "media/products/oneplus-15-4.webp",
+    "photographer": "OnePlus",
+    "profileUrl": "https://image01.oneplus.net",
+    "sourceUrl": "https://image01.oneplus.net/media/202510/31/dfa262e028b4ba29290ac0c2ae0fb320.png",
+    "source": "image01.oneplus.net",
+    "licence": "© OnePlus, official product image — demonstration use, retrieved 2026-09-19"
+  },
+  {
+    "file": "media/products/iphone-18-pro-1.webp",
+    "photographer": "Apple",
+    "profileUrl": "https://store.storeimages.cdn-apple.com",
+    "sourceUrl": "https://store.storeimages.cdn-apple.com/1/as-images.apple.com/is/iphone-18-pro-finish-select-202609-6-3inch-burgundy?wid=2000&hei=2000&fmt=png-alpha",
+    "source": "store.storeimages.cdn-apple.com",
+    "licence": "© Apple, official product image — demonstration use, retrieved 2026-09-19"
+  },
+  {
+    "file": "media/products/iphone-18-pro-2.webp",
+    "photographer": "Apple",
+    "profileUrl": "https://store.storeimages.cdn-apple.com",
+    "sourceUrl": "https://store.storeimages.cdn-apple.com/1/as-images.apple.com/is/iphone-18-pro-finish-select-202609-6-3inch-black?wid=2000&hei=2000&fmt=png-alpha",
+    "source": "store.storeimages.cdn-apple.com",
+    "licence": "© Apple, official product image — demonstration use, retrieved 2026-09-19"
+  },
+  {
+    "file": "media/products/iphone-18-pro-3.webp",
+    "photographer": "Apple",
+    "profileUrl": "https://store.storeimages.cdn-apple.com",
+    "sourceUrl": "https://store.storeimages.cdn-apple.com/1/as-images.apple.com/is/iphone-18-pro-finish-select-202609-6-3inch-silver?wid=2000&hei=2000&fmt=png-alpha",
+    "source": "store.storeimages.cdn-apple.com",
+    "licence": "© Apple, official product image — demonstration use, retrieved 2026-09-19"
+  },
+  {
+    "file": "media/products/iphone-18-pro-4.webp",
+    "photographer": "Apple",
+    "profileUrl": "https://store.storeimages.cdn-apple.com",
+    "sourceUrl": "https://store.storeimages.cdn-apple.com/1/as-images.apple.com/is/iphone-18-pro-finish-select-202609-6-3inch-glacier?wid=2000&hei=2000&fmt=png-alpha",
+    "source": "store.storeimages.cdn-apple.com",
+    "licence": "© Apple, official product image — demonstration use, retrieved 2026-09-19"
+  },
+  {
+    "file": "media/products/iphone-18-pro-max-1.webp",
+    "photographer": "Apple",
+    "profileUrl": "https://store.storeimages.cdn-apple.com",
+    "sourceUrl": "https://store.storeimages.cdn-apple.com/1/as-images.apple.com/is/iphone-18-pro-finish-select-202609-6-9inch-burgundy?wid=2000&hei=2000&fmt=png-alpha",
+    "source": "store.storeimages.cdn-apple.com",
+    "licence": "© Apple, official product image — demonstration use, retrieved 2026-09-19"
+  },
+  {
+    "file": "media/products/iphone-18-pro-max-2.webp",
+    "photographer": "Apple",
+    "profileUrl": "https://store.storeimages.cdn-apple.com",
+    "sourceUrl": "https://store.storeimages.cdn-apple.com/1/as-images.apple.com/is/iphone-18-pro-finish-select-202609-6-9inch-black?wid=2000&hei=2000&fmt=png-alpha",
+    "source": "store.storeimages.cdn-apple.com",
+    "licence": "© Apple, official product image — demonstration use, retrieved 2026-09-19"
+  },
+  {
+    "file": "media/products/iphone-18-pro-max-3.webp",
+    "photographer": "Apple",
+    "profileUrl": "https://store.storeimages.cdn-apple.com",
+    "sourceUrl": "https://store.storeimages.cdn-apple.com/1/as-images.apple.com/is/iphone-18-pro-finish-select-202609-6-9inch-silver?wid=2000&hei=2000&fmt=png-alpha",
+    "source": "store.storeimages.cdn-apple.com",
+    "licence": "© Apple, official product image — demonstration use, retrieved 2026-09-19"
+  },
+  {
+    "file": "media/products/iphone-18-pro-max-4.webp",
+    "photographer": "Apple",
+    "profileUrl": "https://store.storeimages.cdn-apple.com",
+    "sourceUrl": "https://store.storeimages.cdn-apple.com/1/as-images.apple.com/is/iphone-18-pro-finish-select-202609-6-9inch-glacier?wid=2000&hei=2000&fmt=png-alpha",
+    "source": "store.storeimages.cdn-apple.com",
+    "licence": "© Apple, official product image — demonstration use, retrieved 2026-09-19"
   }
 ]
