@@ -81,7 +81,17 @@ const CATEGORIES = [
 ]
 
 /** Module 4 hero product, shot large */
-const FLAGSHIP = [{ slug: 'flagship', query: 'headphones product studio black' }]
+const FLAGSHIP = [
+  {
+    slug: 'flagship',
+    query: 'black headphones product',
+    must: ['headphone'],
+    // The one image a visitor has to read in detail. Neither the darkest
+    // candidate (unreadable) nor the brightest (warm lifestyle shots that fight
+    // the palette) — aim for a mid-dark frame.
+    targetLuma: 30,
+  },
+]
 
 /**
  * Hero backdrop video. ID verified reachable and visually checked (cyan node
@@ -153,7 +163,7 @@ function preferSubject(results, must) {
  * Unsplash exposes an average colour per photo, but it is unreliable for
  * product shots on seamless backdrops, so this measures the actual pixels.
  */
-async function preferDark(results, sampleSize = 8) {
+async function rankByLuma(results, target = null, sampleSize = 8) {
   const candidates = results.slice(0, sampleSize)
   const scored = await Promise.all(
     candidates.map(async (photo) => {
@@ -169,7 +179,12 @@ async function preferDark(results, sampleSize = 8) {
       }
     }),
   )
-  scored.sort((a, b) => a.luma - b.luma)
+  // target === null: darkest first, for atmosphere.
+  // target set: closest to that luma first — dark enough to belong on #050505,
+  // bright enough that the subject is still readable.
+  scored.sort((a, b) =>
+    target === null ? a.luma - b.luma : Math.abs(a.luma - target) - Math.abs(b.luma - target),
+  )
   return [...scored.map((s) => s.photo), ...results.slice(sampleSize)]
 }
 
@@ -207,7 +222,7 @@ async function runImageJob(job, dir, variants) {
     process.stdout.write(`  = ${job.slug} (cached)\n`)
     return
   }
-  const results = await preferDark(preferSubject(await searchUnsplash(job.query), job.must))
+  const results = await rankByLuma(preferSubject(await searchUnsplash(job.query), job.must), job.targetLuma ?? null)
   for (const v of variants) {
     const photo = results[v.index] ?? results[0]
     const dest = path.join(dir, `${job.slug}${v.suffix}.webp`)

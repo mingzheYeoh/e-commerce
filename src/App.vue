@@ -5,6 +5,7 @@ import SearchPalette from '@/components/layout/SearchPalette.vue'
 import HeroViewport from '@/components/sections/HeroViewport.vue'
 import BrandMatrix from '@/components/sections/BrandMatrix.vue'
 import CategoryLaunchpad from '@/components/sections/CategoryLaunchpad.vue'
+import DeconstructedFlagship from '@/components/sections/DeconstructedFlagship.vue'
 import ProductDropGrid from '@/components/sections/ProductDropGrid.vue'
  import { useLenis } from '@/composables/useLenis'
 import { useReducedMotion } from '@/composables/useReducedMotion'
@@ -29,6 +30,7 @@ useLenis()
     <HeroViewport />
     <BrandMatrix />
     <CategoryLaunchpad />
+    <DeconstructedFlagship />
     <ProductDropGrid />
   </main>
 </template>
