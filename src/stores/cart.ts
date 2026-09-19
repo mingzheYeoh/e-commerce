@@ -50,7 +50,6 @@ export const useCartStore = defineStore('cart', {
           stockCount: product.stockCount,
         })
       }
-      this.isOpen = true
     },
 
     setQty(sku: string, qty: number) {

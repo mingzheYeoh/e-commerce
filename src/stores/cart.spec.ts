@@ -64,11 +64,13 @@ describe('cart store', () => {
     )
   })
 
-  it('opens the drawer when an item is added', () => {
+  it('leaves the drawer closed when an item is added', () => {
+    // Quick-add happens mid-browse. Slamming a full-height panel over the grid
+    // on every add means dismissing it on every add; the nav counter and the
+    // in-place ADDED confirmation carry the feedback instead.
     const cart = useCartStore()
-    expect(cart.isOpen).toBe(false)
     cart.add(anyProduct)
-    expect(cart.isOpen).toBe(true)
+    expect(cart.isOpen).toBe(false)
   })
 
   it('removes a line by sku', () => {
