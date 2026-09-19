@@ -7,7 +7,7 @@
  * that need a server, and nothing else.
  */
 import { ask, type Env as RagEnv } from './rag'
-import { facts } from './graph'
+import { facts, queryOrError } from './graph'
 
 export interface Env extends RagEnv {
   ORDERS: D1Database
@@ -64,15 +64,32 @@ export default {
         return json({ chargers: await facts.powerFor(env, id) }, { headers })
       }
 
-      /* Liveness, including which optional dependencies are actually wired. */
+      /*
+       * Liveness. The graph is checked by actually asking it something.
+       *
+       * Reporting `graph: true` because an environment variable exists was a
+       * half-truth: it stayed true while every query came back empty, which is
+       * indistinguishable from a database that is simply not loaded. One round
+       * trip costs a moment and removes the ambiguity.
+       */
       if (url.pathname === '/api/health') {
+        const probe = await queryOrError(env, 'MATCH (n) RETURN count(n) AS nodes')
         return json(
           {
             ok: true,
             ai: Boolean(env.AI),
             vectorize: Boolean(env.VECTORIZE),
-            graph: Boolean(env.NEO4J_URI),
             orders: Boolean(env.ORDERS),
+            graph: 'rows' in probe,
+            graphNodes: 'rows' in probe ? (probe.rows[0]?.nodes ?? 0) : null,
+            graphError: 'error' in probe ? probe.error : null,
+            // Presence only, never values. "credentials not configured" is
+            // otherwise three indistinguishable causes.
+            graphSecrets: {
+              uri: Boolean(env.NEO4J_URI),
+              user: Boolean(env.NEO4J_USER),
+              password: Boolean(env.NEO4J_PASSWORD),
+            },
           },
           { headers },
         )

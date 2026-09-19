@@ -90,14 +90,50 @@ The script begins with `MATCH (n) DETACH DELETE n`, so it is a full reload every
 time. That is deliberate: the static snapshot is the source of truth and the
 database is a projection of it, never the other way round.
 
+### Aura does not use "neo4j" for the user or the database
+
+The credentials file is the source of truth, and on a current instance it reads:
+
+```
+NEO4J_URI=neo4j+s://a70f8c71.databases.neo4j.io
+NEO4J_USERNAME=a70f8c71        <- the instance id, not "neo4j"
+NEO4J_DATABASE=a70f8c71        <- likewise
+```
+
+Assuming `neo4j` for either fails in a way that looks like something else:
+the wrong user returns `401 Invalid credential` as though the password were
+wrong, and the wrong database returns `404 DatabaseNotFound` from an endpoint
+that authenticated successfully. Read all four values from the file.
+
 ### Give the Worker its credentials
 
 ```bash
 cd worker
-npx wrangler secret put NEO4J_URI        # neo4j+s://<id>.databases.neo4j.io
-npx wrangler secret put NEO4J_USER       # neo4j
+npx wrangler secret put NEO4J_URI        # NEO4J_URI from the file
+npx wrangler secret put NEO4J_USER       # NEO4J_USERNAME from the file
+npx wrangler secret put NEO4J_DATABASE   # NEO4J_DATABASE from the file
 npx wrangler secret put NEO4J_PASSWORD
 ```
+
+`wrangler secret put` takes the **variable name**; the value is typed at the
+prompt that follows. Passing the value as the argument creates a secret named
+after it, and the `+` in a Neo4j URI then makes that secret undeletable from the
+CLI — wrangler decodes it to a space and reports the binding as not found.
+
+The prompt also needs a real terminal. Piped into a non-interactive shell it
+reads an empty string and still reports success, leaving a secret that exists
+and is blank. `/api/health` reports each credential's presence for exactly this
+reason.
+
+### Loading without pasting
+
+```bash
+node scripts/load-graph.mjs "~/Downloads/Neo4j-<id>-Created-<date>.txt"
+```
+
+Reads the credentials file, sends each statement over the HTTP Query API, and
+prints the resulting node and relationship counts. No password is typed, pasted
+or left in a shell history.
 
 Secrets are entered interactively and never written to `wrangler.toml`, which is
 committed.
