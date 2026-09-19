@@ -50,3 +50,33 @@ describe('toSegments', () => {
     expect(render(out)).toBe('Rated [4.8] out of five.')
   })
 })
+
+describe('toSegments — when the model cites nothing inline', () => {
+  const known = { 'oneplus-15': 'OnePlus 15', 'iphone-18-pro': 'iPhone 18 Pro', 'iphone-18-pro-max': 'iPhone 18 Pro Max' }
+  const lookup = (id: string) => (known as Record<string, string>)[id]
+
+  it('links product names it wrote as plain prose', () => {
+    // Observed: asked to cite as [id], the model sometimes just writes the name.
+    // The citation cards render either way, so the product appears twice with
+    // only one of them clickable.
+    const out = toSegments('The OnePlus 15 charges at 120W.', lookup, ['oneplus-15'])
+    expect(render(out)).toBe('The <OnePlus 15> charges at 120W.')
+  })
+
+  it('prefers the longer title when one name contains another', () => {
+    const out = toSegments('Get the iPhone 18 Pro Max.', lookup, ['iphone-18-pro', 'iphone-18-pro-max'])
+    expect(render(out)).toBe('Get the <iPhone 18 Pro Max>.')
+  })
+
+  it('never links a product the answer does not rest on', () => {
+    // The fallback may only link ids the tools actually returned; otherwise it
+    // would invent a reference the answer never made.
+    const out = toSegments('The OnePlus 15 is good.', lookup, ['iphone-18-pro'])
+    expect(render(out)).toBe('The OnePlus 15 is good.')
+  })
+
+  it('leaves inline citations in charge when there are any', () => {
+    const out = toSegments('Both [oneplus-15] and the iPhone 18 Pro.', lookup, ['oneplus-15', 'iphone-18-pro'])
+    expect(out.filter((s) => s.kind === 'cite')).toHaveLength(1)
+  })
+})

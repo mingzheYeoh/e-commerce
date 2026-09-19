@@ -36,7 +36,7 @@ const byId = new Map(products.map((p) => [p.id, p]))
 
 /** Answer text split into prose and linkable citations. See lib/citations.ts. */
 const segments = computed(() =>
-  toSegments(answer.value?.answer ?? '', (id) => byId.get(id)?.title),
+  toSegments(answer.value?.answer ?? '', (id) => byId.get(id)?.title, answer.value?.citations ?? []),
 )
 
 const sources = computed(() =>

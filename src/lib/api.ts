@@ -56,6 +56,57 @@ export async function ask(question: string, signal?: AbortSignal): Promise<AskRe
   }
 }
 
+export interface AgentStep {
+  tool: string
+  args: Record<string, unknown>
+  result: string
+}
+
+export interface ChatResponse {
+  answer: string
+  citations: string[]
+  /** The tool calls behind the answer, in order. */
+  steps: AgentStep[]
+  /** The loop hit its step limit and answered from what it had. */
+  truncated: boolean
+}
+
+export type ChatResult =
+  | { ok: true; data: ChatResponse }
+  | { ok: false; reason: 'timeout' | 'offline' | 'error' }
+
+/**
+ * The assistant may make several tool calls before answering, each a round trip
+ * to the graph or the vector index, so it gets a longer deadline than a single
+ * question does.
+ */
+const CHAT_TIMEOUT_MS = 60_000
+
+export async function chat(
+  question: string,
+  history: { role: 'user' | 'assistant'; content: string }[] = [],
+  signal?: AbortSignal,
+): Promise<ChatResult> {
+  const deadline = AbortSignal.timeout(CHAT_TIMEOUT_MS)
+  const combined = signal ? AbortSignal.any([signal, deadline]) : deadline
+
+  try {
+    const res = await fetch(`${BASE}/api/chat`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ question, history }),
+      signal: combined,
+    })
+    if (!res.ok) return { ok: false, reason: 'error' }
+    return { ok: true, data: (await res.json()) as ChatResponse }
+  } catch (err) {
+    if (signal?.aborted) return { ok: false, reason: 'error' }
+    if (deadline.aborted) return { ok: false, reason: 'timeout' }
+    if (err instanceof TypeError) return { ok: false, reason: 'offline' }
+    return { ok: false, reason: 'error' }
+  }
+}
+
 export interface HealthResponse {
   ok: boolean
   ai: boolean
