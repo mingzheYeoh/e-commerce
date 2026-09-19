@@ -1,8 +1,8 @@
-# NEXUS // TECH COLLECTIVE
+# NEXUS
 
-A single-page, multi-brand consumer-electronics storefront. Cinematic
-scrollytelling on top of a working commerce layer — cart drawer, live filtering,
-command-palette search, currency switching — built in Vue 3 and Tailwind.
+A three-page consumer-electronics storefront: home, shop listing and product
+detail. 12 brands, 35 products, real licensed photography, a working cart and
+filter state that lives in the URL.
 
 > Demo project. NEXUS is not a real retailer and nothing here takes payment.
 
@@ -27,6 +27,24 @@ npm run assets        # ~2 min, needs network
 | `npm run test` | Vitest — cart store logic |
 | `npm run typecheck` | `vue-tsc --noEmit` |
 | `npm run assets` | Download and re-encode all media |
+
+### Routes
+
+| Route | Page |
+|---|---|
+| `/` | Home — hero, categories, eight curated products, brand strip, one feature |
+| `/shop` | All products, with filters |
+| `/product/:id` | Product detail; the teardown showcase renders here for the flagship |
+
+**Filter state lives in the URL**, so any view can be shared or reloaded:
+
+    /shop?category=audio&sort=price-desc
+    /shop?brand=SONY
+    /shop?stock=in
+
+The route is the single source of truth — the shop page mirrors `route.query`
+into the catalog store and never the other way round, which is what keeps it
+from looping.
 
 ### Query flags
 
@@ -87,12 +105,23 @@ the script ranks candidates in three passes:
 1. **Subject** — keep results whose caption actually names the object. Ranking
    by popularity alone gives an aerial landscape for "drone" and a studio mood
    shot for "synthesizer".
-2. **Luma** — measure the real pixels of the top candidates and prefer dark
+2. **Foreign brands** — drop candidates whose caption names a brand this product
+   is not sold under, so a Sennheiser listing does not ship a photo captioned
+   "sony headphones". This only reads the caption; a logo visible in the pixels
+   but absent from the text still gets through, which is why the images have to
+   be looked at before shipping.
+3. **Uniqueness** — hash the encoded output and reject a photo already used
+   elsewhere in the catalogue. Hashing the bytes rather than tracking photo ids
+   is what makes this hold across incremental runs: ids otherwise have to be
+   parsed back out of URLs, and an Unsplash id can itself start with a dash.
+   Variants are grouped into slots so a product's thumbnail and hero are always
+   the same photograph.
+4. **Luma** — measure the real pixels of the top candidates and prefer dark
    frames, because a photo on a bright backdrop reads as a hole punched in a
    `#050505` page. Jobs can set `targetLuma` instead, which the flagship does:
    its image is the one a visitor has to read in detail, so neither the darkest
    (unreadable) nor the brightest (warm lifestyle shots that fight the palette).
-3. **Encode** — 1600w WebP plus a 400w thumbnail via sharp.
+5. **Encode** — 1600w WebP plus a 400w thumbnail via sharp.
 
 The script is idempotent (existing files are skipped) and fail-soft (a failed
 asset logs `SKIP` and the run still exits 0).
@@ -113,5 +142,6 @@ Photographers are credited in `src/data/credits.json` and listed in the footer.
 
 ## What is not here
 
-No router, no PDP, no checkout, no backend — this is one page. The catalog is
-16 typed fixtures in `src/data/`, not an API.
+No backend and no checkout. The catalogue is 35 typed fixtures in `src/data/`,
+not an API, and the checkout button is visibly disabled rather than pretending
+to work.

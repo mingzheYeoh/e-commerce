@@ -19,11 +19,12 @@
  */
 
 import fs from 'node:fs/promises'
-import { existsSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
+import { createHash } from 'node:crypto'
 import sharp from 'sharp'
 
 const execFileAsync = promisify(execFile)
@@ -41,30 +42,30 @@ const QUALITY = 82
 /** Products: each produces <slug>-main.webp, <slug>-alt.webp, <slug>-thumb.webp */
 const PRODUCTS = [
   // Apple
-  { slug: 'airpods-max', query: 'over ear headphones silver', must: ['headphone'] },
+  { slug: 'airpods-max', query: 'apple airpods max headphones', must: ['headphone'], allowBrands: ['apple', 'airpod'] },
   { slug: 'macbook-pro', query: 'macbook laptop dark desk', must: ['laptop', 'macbook', 'computer'] },
   { slug: 'watch-ultra', query: 'smartwatch titanium close up', must: ['watch'] },
   // Samsung
-  { slug: 'galaxy-s26', query: 'android smartphone dark', must: ['phone'] },
-  { slug: 'galaxy-buds', query: 'wireless earbuds charging case', must: ['earbud', 'earphone', 'airpod'] },
+  { slug: 'galaxy-s26', query: 'samsung galaxy phone', must: ['phone'], allowBrands: ['samsung', 'galaxy'] },
+  { slug: 'galaxy-buds', query: 'samsung galaxy buds earbuds', must: ['earbud', 'earphone', 'bud'], allowBrands: ['samsung', 'galaxy'] },
   { slug: 'odyssey-oled', query: 'ultrawide gaming monitor desk', must: ['monitor', 'screen', 'display'] },
   // Sony
-  { slug: 'wh1000xm6', query: 'black headphones product', must: ['headphone'] },
+  { slug: 'wh1000xm6', query: 'sony wireless headphones', must: ['headphone'], allowBrands: ['sony'] },
   { slug: 'alpha-7cr', query: 'mirrorless camera black background', must: ['mirrorless', 'sony', 'camera body'] },
   { slug: 'fx3-cinema', query: 'cinema camera rig video', must: ['camera'] },
   // Bose
   { slug: 'qc-ultra', query: 'noise cancelling headphones dark', must: ['headphone'] },
   { slug: 'open-earbuds', query: 'earbuds macro dark', must: ['earbud', 'earphone'] },
-  { slug: 'soundlink-max', query: 'portable bluetooth speaker', must: ['speaker'] },
+  { slug: 'soundlink-max', query: 'bose portable speaker', must: ['speaker'], allowBrands: ['bose'] },
   // Sennheiser
-  { slug: 'hd900s', query: 'studio headphones open back', must: ['headphone'] },
-  { slug: 'momentum-4', query: 'wireless headphones desk', must: ['headphone'] },
+  { slug: 'hd900s', query: 'sennheiser studio headphones', must: ['headphone'], allowBrands: ['sennheiser'] },
+  { slug: 'momentum-4', query: 'sennheiser momentum headphones', must: ['headphone'], allowBrands: ['sennheiser'] },
   // DJI
   { slug: 'mavic-4-pro', query: 'drone quadcopter close up', must: ['drone', 'quadcopter'] },
-  { slug: 'osmo-pocket', query: 'handheld gimbal camera', must: ['camera', 'gimbal'] },
-  { slug: 'rs4-gimbal', query: 'camera gimbal stabilizer', must: ['gimbal', 'camera'] },
+  { slug: 'osmo-pocket', query: 'pocket action camera handheld', must: ['camera'] },
+  { slug: 'rs4-gimbal', query: 'dji gimbal stabilizer rig', must: ['gimbal'], allowBrands: ['dji'] },
   // Logitech
-  { slug: 'mx-master', query: 'wireless mouse dark desk', must: ['mouse'] },
+  { slug: 'mx-master', query: 'logitech wireless mouse', must: ['mouse'], allowBrands: ['logitech'] },
   { slug: 'mx-mechanical', query: 'low profile keyboard desk', must: ['keyboard'] },
   { slug: 'brio-webcam', query: 'webcam camera monitor', must: ['webcam', 'camera'] },
   // Razer
@@ -150,6 +151,46 @@ const HERO_VIDEO = {
 const credits = []
 let skipped = 0
 
+/**
+ * md5 of every image already written, seeded from disk at startup. Two jobs with
+ * similar queries otherwise converge on the same top-ranked photo, and a
+ * catalogue showing one picture under two product names reads as broken.
+ */
+const seenHashes = new Set()
+
+function seedHashesFrom(dir) {
+  if (!existsSync(dir)) return
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const p = path.join(dir, entry.name)
+    if (entry.isDirectory()) seedHashesFrom(p)
+    else if (p.endsWith('.webp')) seenHashes.add(createHash('md5').update(readFileSync(p)).digest('hex'))
+  }
+}
+
+/**
+ * Captions that name a brand we are not selling under this slug get dropped.
+ * This only catches what the caption says — a logo visible in the pixels but
+ * absent from the text still gets through, which is why the generated sheet
+ * has to be looked at by a human before shipping.
+ */
+const BRAND_WORDS = [
+  'apple', 'airpod', 'iphone', 'ipad', 'macbook', 'imac', 'samsung', 'galaxy',
+  'sony', 'bose', 'sennheiser', 'dji', 'logitech', 'razer', 'anker', 'keychron',
+  'jbl', 'beats', 'marshall', 'bang olufsen', 'sonos', 'huawei', 'xiaomi',
+  'google pixel', 'gopro', 'canon', 'nikon', 'fujifilm', 'panasonic', 'dell',
+  'hp ', 'lenovo', 'asus', 'acer', 'microsoft', 'nintendo',
+]
+
+function rejectsForeignBrands(results, allow = []) {
+  const allowed = allow.map((a) => a.toLowerCase())
+  const clean = results.filter((r) => {
+    const text = `${r.alt_description ?? ''} ${r.description ?? ''}`.toLowerCase()
+    const foreign = BRAND_WORDS.filter((w) => text.includes(w) && !allowed.some((a) => w.includes(a) || a.includes(w)))
+    return foreign.length === 0
+  })
+  return clean.length >= 2 ? clean : results
+}
+
 async function ensureDir(dir) {
   await fs.mkdir(dir, { recursive: true })
 }
@@ -227,17 +268,47 @@ async function fetchBuffer(url) {
   return Buffer.from(await res.arrayBuffer())
 }
 
-/** Download one Unsplash photo and write it as WebP at the given width. */
+/**
+ * Download one Unsplash photo and write it as WebP.
+ *
+ * Returns false when the encoded bytes match an image already on disk, so the
+ * caller can try the next candidate. Hashing the output rather than tracking
+ * photo ids is what makes this reliable: ids have to be parsed back out of URLs
+ * for assets fetched by earlier runs, and an Unsplash id can itself begin with
+ * a dash, which quietly breaks that parsing. The pixels cannot lie.
+ */
 async function writePhoto(photo, dest, width) {
   if (existsSync(dest)) return false
+
   const buf = await fetchBuffer(`${photo.urls.raw}&w=2400&q=90&fm=jpg&fit=max`)
-  await sharp(buf).resize({ width, withoutEnlargement: true }).webp({ quality: QUALITY }).toFile(dest)
+  const encoded = await sharp(buf)
+    .resize({ width, withoutEnlargement: true })
+    .webp({ quality: QUALITY })
+    .toBuffer()
+
+  const hash = createHash('md5').update(encoded).digest('hex')
+  if (seenHashes.has(hash)) return false
+
+  await fs.writeFile(dest, encoded)
+  seenHashes.add(hash)
   return true
+}
+
+/** Re-encode a photo already claimed by this job at a different width. */
+async function writeSized(photo, dest, width) {
+  const buf = await fetchBuffer(`${photo.urls.raw}&w=2400&q=90&fm=jpg&fit=max`)
+  const encoded = await sharp(buf)
+    .resize({ width, withoutEnlargement: true })
+    .webp({ quality: QUALITY })
+    .toBuffer()
+  await fs.writeFile(dest, encoded)
+  seenHashes.add(createHash('md5').update(encoded).digest('hex'))
 }
 
 function credit(file, photo) {
   credits.push({
     file,
+    photoId: photo.id,
     photographer: photo.user?.name ?? 'Unknown',
     profileUrl: photo.user?.links?.html ?? 'https://unsplash.com',
     sourceUrl: photo.links?.html ?? 'https://unsplash.com',
@@ -246,8 +317,13 @@ function credit(file, photo) {
 }
 
 /**
- * Runs one image job. `variants` maps a filename suffix to a result index and
- * width, so a product gets main/alt from two different photos of the same query.
+ * Runs one image job.
+ *
+ * Variants are grouped into **slots**: every variant sharing a slot is rendered
+ * from the same photograph. That is what keeps a product's 400w thumbnail
+ * showing the same picture as its 1600w hero — selecting them independently
+ * would let the de-duplication walk land them on different photos, and the cart
+ * would then show a thumbnail the product page never displays.
  */
 async function runImageJob(job, dir, variants) {
   const targets = variants.map((v) => path.join(dir, `${job.slug}${v.suffix}.webp`))
@@ -255,12 +331,37 @@ async function runImageJob(job, dir, variants) {
     process.stdout.write(`  = ${job.slug} (cached)\n`)
     return
   }
-  const results = await rankByLuma(preferSubject(await searchUnsplash(job.query), job.must), job.targetLuma ?? null)
+  const subject = preferSubject(await searchUnsplash(job.query), job.must)
+  const brandSafe = rejectsForeignBrands(subject, job.allowBrands ?? [])
+  const results = await rankByLuma(brandSafe, job.targetLuma ?? null)
+
+  /** slot -> the photo chosen for it, resolved once. */
+  const chosen = new Map()
+
   for (const v of variants) {
-    const photo = results[v.index] ?? results[0]
     const dest = path.join(dir, `${job.slug}${v.suffix}.webp`)
-    const wrote = await writePhoto(photo, dest, v.width)
-    if (wrote) credit(path.relative(path.join(ROOT, 'public'), dest).replace(/\\/g, '/'), photo)
+    if (existsSync(dest)) continue
+
+    const settled = chosen.get(v.slot)
+    if (settled) {
+      // Same photo, different size: bypass the uniqueness walk entirely.
+      await writeSized(settled, dest, v.width)
+      continue
+    }
+
+    // Walk down the ranking until a candidate yields an image nothing else in
+    // the catalogue already uses.
+    let picked = null
+    for (let i = v.index; i < results.length && !picked; i++) {
+      if (await writePhoto(results[i], dest, v.width)) picked = results[i]
+    }
+
+    if (picked) {
+      chosen.set(v.slot, picked)
+      credit(path.relative(path.join(ROOT, 'public'), dest).replace(/\\/g, '/'), picked)
+    } else {
+      process.stdout.write(`  ! ${job.slug}${v.suffix}: no unused candidate\n`)
+    }
   }
   process.stdout.write(`  + ${job.slug}\n`)
 }
@@ -360,22 +461,26 @@ async function runVideo() {
 async function main() {
   process.stdout.write('NEXUS asset pipeline\n====================\n')
 
+  seedHashesFrom(MEDIA)
+  process.stdout.write(`images already on disk: ${seenHashes.size}
+`)
+
   await runBatch('products', PRODUCTS, path.join(MEDIA, 'products'), [
-    { suffix: '-main', index: 0, width: WIDTH_MAIN },
-    { suffix: '-alt', index: 1, width: WIDTH_MAIN },
-    { suffix: '-thumb', index: 0, width: WIDTH_THUMB },
+    { suffix: '-main', slot: 'hero', index: 0, width: WIDTH_MAIN },
+    { suffix: '-alt', slot: 'second', index: 1, width: WIDTH_MAIN },
+    { suffix: '-thumb', slot: 'hero', index: 0, width: WIDTH_THUMB },
   ])
 
   await runBatch('brands', BRANDS, path.join(MEDIA, 'brands'), [
-    { suffix: '', index: 0, width: 800 },
+    { suffix: '', slot: 'hero', index: 0, width: 800 },
   ])
 
   await runBatch('categories', CATEGORIES, path.join(MEDIA, 'categories'), [
-    { suffix: '', index: 0, width: WIDTH_MAIN },
+    { suffix: '', slot: 'hero', index: 0, width: WIDTH_MAIN },
   ])
 
   await runBatch('flagship', FLAGSHIP, path.join(MEDIA, 'flagship'), [
-    { suffix: '', index: 0, width: 2000 },
+    { suffix: '', slot: 'hero', index: 0, width: 2000 },
   ])
 
   await runVideo()
