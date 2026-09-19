@@ -9,7 +9,11 @@
     "preview": "vite preview",
     "test": "vitest run",
     "typecheck": "vue-tsc --noEmit",
-    "assets": "node scripts/fetch-assets.mjs"
+    "assets": "node scripts/fetch-assets.mjs",
+    "build:embeddings": "node scripts/build-embeddings.mjs",
+    "build:graph": "node scripts/build-graph.mjs",
+    "build:vectorize": "node scripts/build-vectorize.mjs",
+    "eval:search": "node scripts/eval-search.mjs"
   },
   "dependencies": {
     "@huggingface/transformers": "^4.3.0",

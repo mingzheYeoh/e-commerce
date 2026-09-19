@@ -6,3 +6,4 @@ dist
 
 # Transformers.js caches model weights here during build-time embedding runs.
 .cache/
+dist-vectorize/

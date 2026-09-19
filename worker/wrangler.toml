@@ -1,0 +1,28 @@
+name = "nexus-api"
+main = "src/index.ts"
+compatibility_date = "2026-09-01"
+compatibility_flags = ["nodejs_compat"]
+
+# Inference runs inside Cloudflare, so this binding IS the credential and no
+# third-party API key exists in the project at all.
+[ai]
+binding = "AI"
+
+# Product passages for retrieval. 384 dimensions to match bge-small-en-v1.5;
+# cosine because the embeddings are normalised.
+[[vectorize]]
+binding = "VECTORIZE"
+index_name = "nexus-products"
+
+[[d1_databases]]
+binding = "ORDERS"
+database_name = "nexus-orders"
+database_id = "REPLACE_AFTER_CREATING"
+
+[vars]
+ALLOWED_ORIGIN = "http://localhost:5173"
+
+# Secrets are set with `wrangler secret put`, never written here:
+#   wrangler secret put NEO4J_URI
+#   wrangler secret put NEO4J_USER
+#   wrangler secret put NEO4J_PASSWORD
