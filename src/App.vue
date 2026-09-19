@@ -1,11 +1,30 @@
 <script setup lang="ts">
-// Sections are mounted task by task; this shell exists so Task 1 can build.
+import NavBar from '@/components/layout/NavBar.vue'
+import CartDrawer from '@/components/layout/CartDrawer.vue'
+import SearchPalette from '@/components/layout/SearchPalette.vue'
+import { useLenis } from '@/composables/useLenis'
+
+useLenis()
 </script>
 
 <template>
-  <div class="min-h-screen bg-void text-text-primary">
-    <main class="flex min-h-screen items-center justify-center">
-      <p class="mono-label">NEXUS_//[TECH] &nbsp;// &nbsp;SCAFFOLD_ONLINE</p>
-    </main>
-  </div>
+  <a
+    href="#main"
+    class="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[100] focus:border focus:border-accent-cyan focus:bg-void focus:px-4 focus:py-2 focus:font-mono focus:text-xs"
+  >
+    SKIP TO CONTENT
+  </a>
+
+  <NavBar />
+  <SearchPalette />
+  <CartDrawer />
+
+  <main id="main" class="bg-void">
+    <section id="top" class="flex min-h-screen items-center justify-center px-6">
+      <p class="mono-label text-center">
+        MODULE_00 ONLINE — NAV / BAG / SEARCH
+        <span class="mt-2 block text-text-secondary/60">SECTIONS MOUNT IN LATER TASKS</span>
+      </p>
+    </section>
+  </main>
 </template>
