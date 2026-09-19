@@ -12,67 +12,68 @@ const track = [...brands, ...brands]
 </script>
 
 <template>
-  <section id="brands" class="relative border-y border-border-hairline bg-void py-16 md:py-24">
-    <!-- Section header -->
-    <div class="mx-auto mb-10 max-w-[1800px] px-4 md:mb-14 md:px-8">
-      <div class="flex items-end justify-between gap-6 border-b border-border-hairline pb-5">
+  <section id="brands" class="border-t border-border-hairline bg-void py-16 md:py-20">
+    <div class="mx-auto mb-10 max-w-[1600px] px-4 md:px-8">
+      <div class="flex items-end justify-between gap-6">
         <div>
-          <p class="mono-label mb-2 text-accent-cyan">[01_BRANDS]</p>
-          <h2
-            class="font-display text-3xl font-extrabold uppercase leading-none tracking-tighter md:text-5xl lg:text-6xl"
-          >
-            Collective<br class="md:hidden" />
-            <span class="text-text-muted"> Matrix</span>
-          </h2>
+          <h2 class="text-2xl font-bold md:text-4xl">Shop by brand</h2>
+          <p class="mt-2 text-sm text-text-secondary md:text-base">
+            {{ brands.length }} authorised partners, one checkout and one returns policy.
+          </p>
         </div>
-        <p class="mono-label hidden max-w-xs text-right leading-relaxed md:block">
-          SIX CERTIFIED PARTNERS<br />
-          ONE DISPATCH CHANNEL
-        </p>
+        <a
+          href="#drops"
+          class="hidden shrink-0 items-center gap-1.5 text-sm font-medium text-accent transition-colors hover:text-accent-hover md:flex"
+        >
+          View all products
+          <ArrowRight class="h-4 w-4" aria-hidden="true" />
+        </a>
       </div>
     </div>
 
-    <!-- Marquee -->
-    <div
-      class="group/marquee relative overflow-hidden"
-      @mouseleave="hovered = null"
-    >
-      <!-- Edge fades so logos dissolve into the void rather than being cut -->
+    <!-- Brand marquee -->
+    <div class="group/marquee relative overflow-hidden py-2" @mouseleave="hovered = null">
       <div
-        class="pointer-events-none absolute inset-y-0 left-0 z-20 w-16 bg-gradient-to-r from-void to-transparent md:w-40"
+        class="pointer-events-none absolute inset-y-0 left-0 z-20 w-12 bg-gradient-to-r from-void to-transparent md:w-32"
         aria-hidden="true"
       />
       <div
-        class="pointer-events-none absolute inset-y-0 right-0 z-20 w-16 bg-gradient-to-l from-void to-transparent md:w-40"
+        class="pointer-events-none absolute inset-y-0 right-0 z-20 w-12 bg-gradient-to-l from-void to-transparent md:w-32"
         aria-hidden="true"
       />
 
       <ul
         class="flex w-max animate-marquee items-center group-hover/marquee:[animation-play-state:paused]"
       >
-        <li v-for="(brand, index) in track" :key="`${brand.id}-${index}`" class="shrink-0">
+        <li v-for="(brand, index) in track" :key="`${brand.id}-${index}`" class="shrink-0 px-2">
           <button
             type="button"
-            class="flex items-center gap-4 border-r border-border-hairline px-6 py-6 transition-colors md:px-12"
-            :aria-label="`Preview ${brand.name}, ${brand.productCount} items`"
+            class="flex items-center gap-3 rounded-card border px-6 py-4 transition-colors md:px-8"
+            :class="
+              hovered?.id === brand.id
+                ? 'border-border-strong bg-surface-1'
+                : 'border-transparent hover:bg-surface-1'
+            "
+            :aria-label="`Preview ${brand.name}, ${brand.productCount} products`"
             @mouseenter="hovered = brand"
             @focus="hovered = brand"
           >
             <span
-              class="font-display text-xl font-extrabold uppercase tracking-tighter transition-colors duration-300 md:text-3xl"
-              :style="{ color: hovered?.id === brand.id ? brand.accent : undefined }"
-              :class="hovered?.id === brand.id ? '' : 'text-text-secondary/70'"
+              class="font-display text-xl font-bold transition-colors duration-300 md:text-2xl"
+              :class="hovered?.id === brand.id ? 'text-text-primary' : 'text-text-secondary'"
             >
               {{ brand.name }}
             </span>
-            <span class="mono-label shrink-0">{{ brand.productCount }}</span>
+            <span class="nums rounded bg-surface-2 px-1.5 py-0.5 text-xs text-text-muted">
+              {{ brand.productCount }}
+            </span>
           </button>
         </li>
       </ul>
     </div>
 
-    <!-- Hover portal: swaps in the brand's own photography -->
-    <div class="mx-auto mt-10 max-w-[1800px] px-4 md:px-8">
+    <!-- Preview panel -->
+    <div class="mx-auto mt-8 max-w-[1600px] px-4 md:px-8">
       <Transition
         mode="out-in"
         enter-from-class="opacity-0 translate-y-2"
@@ -83,43 +84,36 @@ const track = [...brands, ...brands]
         <article
           v-if="hovered"
           :key="hovered.id"
-          class="relative flex flex-col gap-5 overflow-hidden border border-border-hairline bg-surface-1 md:flex-row md:items-center"
+          class="card flex flex-col gap-5 overflow-hidden md:flex-row md:items-center"
         >
-          <div class="relative h-44 w-full shrink-0 overflow-hidden md:h-40 md:w-72">
+          <div class="relative h-44 w-full shrink-0 overflow-hidden md:h-36 md:w-64">
             <img
               :src="hovered.previewImage"
               :alt="hovered.name"
-              width="288"
-              height="160"
+              width="256"
+              height="144"
               class="h-full w-full object-cover"
             />
-            <div class="absolute inset-0 bg-scanlines bg-scan-4 opacity-50" aria-hidden="true" />
             <div
               class="absolute inset-0"
-              :style="{ boxShadow: `inset 0 0 60px -10px ${hovered.accent}66` }"
+              :style="{ boxShadow: `inset 0 0 50px -12px ${hovered.accent}55` }"
               aria-hidden="true"
             />
           </div>
 
           <div class="flex-1 px-5 pb-5 md:px-0 md:pb-0">
-            <p class="mono-label" :style="{ color: hovered.accent }">CERTIFIED_PARTNER</p>
-            <p class="font-display text-2xl font-extrabold uppercase tracking-tighter md:text-3xl">
-              {{ hovered.name }}
-            </p>
+            <p class="text-xs font-medium" :style="{ color: hovered.accent }">Authorised partner</p>
+            <p class="font-display text-xl font-bold md:text-2xl">{{ hovered.name }}</p>
             <p class="mt-1 text-sm text-text-secondary">{{ hovered.tagline }}</p>
           </div>
 
-          <a
-            href="#drops"
-            class="mx-5 mb-5 flex items-center justify-center gap-2 border border-border-hairline px-5 py-3 font-mono text-[11px] tracking-[0.14em] text-text-secondary transition-colors hover:border-accent-cyan/60 hover:text-accent-cyan md:mx-8 md:mb-0"
-          >
-            EXPLORE INVENTORY ({{ hovered.productCount }})
-            <ArrowRight class="h-3.5 w-3.5" aria-hidden="true" />
+          <a href="#drops" class="btn-secondary mx-5 mb-5 text-center md:mx-6 md:mb-0">
+            Shop {{ hovered.productCount }} products
           </a>
         </article>
 
-        <p v-else class="mono-label py-6 text-center">
-          HOVER A PARTNER TO OPEN ITS PREVIEW PORTAL
+        <p v-else class="py-6 text-center text-sm text-text-secondary">
+          Hover a brand to see what we carry.
         </p>
       </Transition>
     </div>

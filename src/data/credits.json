@@ -1,5 +1,26 @@
 [
   {
+    "file": "media/brands/anker.webp",
+    "photographer": "Mishaal Zahed (Meschael Zahède)",
+    "profileUrl": "https://unsplash.com/@mishaalzahed",
+    "sourceUrl": "https://unsplash.com/photos/white-usb-cable-on-black-surface-dYocS1QjjvI",
+    "source": "Unsplash"
+  },
+  {
+    "file": "media/brands/apple.webp",
+    "photographer": "Jonathan Francisca",
+    "profileUrl": "https://unsplash.com/@jonathan_francisca",
+    "sourceUrl": "https://unsplash.com/photos/apple-macbook-air-and-ipad-on-table-Y9FvnY7FU1A",
+    "source": "Unsplash"
+  },
+  {
+    "file": "media/brands/bose.webp",
+    "photographer": "Frank Septillion",
+    "profileUrl": "https://unsplash.com/@septillion",
+    "sourceUrl": "https://unsplash.com/photos/silver-headphones-on-top-of-black-surface-Qrspubmx6kE",
+    "source": "Unsplash"
+  },
+  {
     "file": "media/brands/dji.webp",
     "photographer": "Jason Mavrommatis",
     "profileUrl": "https://unsplash.com/@jasonblackeye",
@@ -21,10 +42,38 @@
     "source": "Unsplash"
   },
   {
+    "file": "media/brands/logitech.webp",
+    "photographer": "Caspar Camille Rubin",
+    "profileUrl": "https://unsplash.com/@casparrubin",
+    "sourceUrl": "https://unsplash.com/photos/black-corded-gaming-computer-keyboard-and-flat-screen-monitor-oI6zrBj3nKw",
+    "source": "Unsplash"
+  },
+  {
     "file": "media/brands/nothing.webp",
     "photographer": "Jorge Ramirez",
     "profileUrl": "https://unsplash.com/@jorgedevs",
     "sourceUrl": "https://unsplash.com/photos/white-and-black-audio-mixer-1GLDpzTIcRU",
+    "source": "Unsplash"
+  },
+  {
+    "file": "media/brands/razer.webp",
+    "photographer": "Fábio Magalhães",
+    "profileUrl": "https://unsplash.com/@tamarisco",
+    "sourceUrl": "https://unsplash.com/photos/a-computer-screen-with-a-video-game-on-it-nmTm7knUnqs",
+    "source": "Unsplash"
+  },
+  {
+    "file": "media/brands/samsung.webp",
+    "photographer": "Rami Al-zayat",
+    "profileUrl": "https://unsplash.com/@rami_alzayat",
+    "sourceUrl": "https://unsplash.com/photos/silver-android-smartphone-w33-zg-dNL4",
+    "source": "Unsplash"
+  },
+  {
+    "file": "media/brands/sennheiser.webp",
+    "photographer": "BoliviaInteligente",
+    "profileUrl": "https://unsplash.com/@boliviainteligente",
+    "sourceUrl": "https://unsplash.com/photos/a-microphone-on-a-stand-on-a-blue-background-VwO3PO-pNAI",
     "source": "Unsplash"
   },
   {
@@ -77,6 +126,27 @@
     "source": "Unsplash"
   },
   {
+    "file": "media/products/airpods-max-alt.webp",
+    "photographer": "Petri R",
+    "profileUrl": "https://unsplash.com/@petrirh1",
+    "sourceUrl": "https://unsplash.com/photos/black-and-gray-wireless-headphones-gehzL37x6zY",
+    "source": "Unsplash"
+  },
+  {
+    "file": "media/products/airpods-max-main.webp",
+    "photographer": "Frank Septillion",
+    "profileUrl": "https://unsplash.com/@septillion",
+    "sourceUrl": "https://unsplash.com/photos/silver-headphones-on-top-of-black-surface-Qrspubmx6kE",
+    "source": "Unsplash"
+  },
+  {
+    "file": "media/products/airpods-max-thumb.webp",
+    "photographer": "Frank Septillion",
+    "profileUrl": "https://unsplash.com/@septillion",
+    "sourceUrl": "https://unsplash.com/photos/silver-headphones-on-top-of-black-surface-Qrspubmx6kE",
+    "source": "Unsplash"
+  },
+  {
     "file": "media/products/alpha-7cr-alt.webp",
     "photographer": "Greg Rosenke",
     "profileUrl": "https://unsplash.com/@greg_rosenke",
@@ -95,6 +165,90 @@
     "photographer": "Bruce Shen",
     "profileUrl": "https://unsplash.com/@bruceshen0616",
     "sourceUrl": "https://unsplash.com/photos/a-sony-camera-is-seen-against-a-black-background-PUXhQjmaX3s",
+    "source": "Unsplash"
+  },
+  {
+    "file": "media/products/blackwidow-alt.webp",
+    "photographer": "shri",
+    "profileUrl": "https://unsplash.com/@shriously",
+    "sourceUrl": "https://unsplash.com/photos/a-close-up-of-a-cord-and-a-mouse-on-a-table-9Ccnvgf1x7c",
+    "source": "Unsplash"
+  },
+  {
+    "file": "media/products/blackwidow-main.webp",
+    "photographer": "Sandeep",
+    "profileUrl": "https://unsplash.com/@adeveloper79",
+    "sourceUrl": "https://unsplash.com/photos/digital-clock-displays-date-and-time-next-to-keyboard-qPIhf9u7Fzo",
+    "source": "Unsplash"
+  },
+  {
+    "file": "media/products/blackwidow-thumb.webp",
+    "photographer": "Sandeep",
+    "profileUrl": "https://unsplash.com/@adeveloper79",
+    "sourceUrl": "https://unsplash.com/photos/digital-clock-displays-date-and-time-next-to-keyboard-qPIhf9u7Fzo",
+    "source": "Unsplash"
+  },
+  {
+    "file": "media/products/blade-16-alt.webp",
+    "photographer": "Martin Sanchez",
+    "profileUrl": "https://unsplash.com/@martinsanchez",
+    "sourceUrl": "https://unsplash.com/photos/laptop-with-vibrant-neon-keyboard-G78c3DPmD_A",
+    "source": "Unsplash"
+  },
+  {
+    "file": "media/products/blade-16-main.webp",
+    "photographer": "Agung Raharja",
+    "profileUrl": "https://unsplash.com/@agungraharja",
+    "sourceUrl": "https://unsplash.com/photos/folded-laptop-urbSCgUxfQ0",
+    "source": "Unsplash"
+  },
+  {
+    "file": "media/products/blade-16-thumb.webp",
+    "photographer": "Agung Raharja",
+    "profileUrl": "https://unsplash.com/@agungraharja",
+    "sourceUrl": "https://unsplash.com/photos/folded-laptop-urbSCgUxfQ0",
+    "source": "Unsplash"
+  },
+  {
+    "file": "media/products/brio-webcam-alt.webp",
+    "photographer": "Resource Database",
+    "profileUrl": "https://unsplash.com/@resourcedatabase",
+    "sourceUrl": "https://unsplash.com/photos/surveillance-monitors-show-live-feeds-of-public-areas-R8Xuu0mYED0",
+    "source": "Unsplash"
+  },
+  {
+    "file": "media/products/brio-webcam-main.webp",
+    "photographer": "Rebekah Yip",
+    "profileUrl": "https://unsplash.com/@rebekahyip",
+    "sourceUrl": "https://unsplash.com/photos/black-and-silver-camera-on-black-background-VIdQW-1-fI4",
+    "source": "Unsplash"
+  },
+  {
+    "file": "media/products/brio-webcam-thumb.webp",
+    "photographer": "Rebekah Yip",
+    "profileUrl": "https://unsplash.com/@rebekahyip",
+    "sourceUrl": "https://unsplash.com/photos/black-and-silver-camera-on-black-background-VIdQW-1-fI4",
+    "source": "Unsplash"
+  },
+  {
+    "file": "media/products/cmf-buds-alt.webp",
+    "photographer": "TheRegisti",
+    "profileUrl": "https://unsplash.com/@theregisti",
+    "sourceUrl": "https://unsplash.com/photos/black-and-gray-bluetooth-earbuds-YwJGDLKOE48",
+    "source": "Unsplash"
+  },
+  {
+    "file": "media/products/cmf-buds-main.webp",
+    "photographer": "Almas Salakhov",
+    "profileUrl": "https://unsplash.com/@therealslkhv",
+    "sourceUrl": "https://unsplash.com/photos/a-pair-of-black-earbuds-in-a-case-d0T6SunMloQ",
+    "source": "Unsplash"
+  },
+  {
+    "file": "media/products/cmf-buds-thumb.webp",
+    "photographer": "Almas Salakhov",
+    "profileUrl": "https://unsplash.com/@therealslkhv",
+    "sourceUrl": "https://unsplash.com/photos/a-pair-of-black-earbuds-in-a-case-d0T6SunMloQ",
     "source": "Unsplash"
   },
   {
@@ -140,6 +294,90 @@
     "source": "Unsplash"
   },
   {
+    "file": "media/products/fx3-cinema-alt.webp",
+    "photographer": "Kyle Loftus",
+    "profileUrl": "https://unsplash.com/@kyleloftusstudios",
+    "sourceUrl": "https://unsplash.com/photos/man-in-black-shirt-holding-video-camera-I-nd-LSCY04",
+    "source": "Unsplash"
+  },
+  {
+    "file": "media/products/fx3-cinema-main.webp",
+    "photographer": "Florian Klauer",
+    "profileUrl": "https://unsplash.com/@florianklauer",
+    "sourceUrl": "https://unsplash.com/photos/black-and-gray-dslr-camera-LmkaYtMpNS8",
+    "source": "Unsplash"
+  },
+  {
+    "file": "media/products/fx3-cinema-thumb.webp",
+    "photographer": "Florian Klauer",
+    "profileUrl": "https://unsplash.com/@florianklauer",
+    "sourceUrl": "https://unsplash.com/photos/black-and-gray-dslr-camera-LmkaYtMpNS8",
+    "source": "Unsplash"
+  },
+  {
+    "file": "media/products/galaxy-buds-alt.webp",
+    "photographer": "Roger Cai",
+    "profileUrl": "https://unsplash.com/@hi_roger",
+    "sourceUrl": "https://unsplash.com/photos/black-wireless-earphones-on-surfae-HuTUDQqr88c",
+    "source": "Unsplash"
+  },
+  {
+    "file": "media/products/galaxy-buds-main.webp",
+    "photographer": "TheRegisti",
+    "profileUrl": "https://unsplash.com/@theregisti",
+    "sourceUrl": "https://unsplash.com/photos/black-and-blue-bluetooth-earbuds-qt9_OfTaaeY",
+    "source": "Unsplash"
+  },
+  {
+    "file": "media/products/galaxy-buds-thumb.webp",
+    "photographer": "TheRegisti",
+    "profileUrl": "https://unsplash.com/@theregisti",
+    "sourceUrl": "https://unsplash.com/photos/black-and-blue-bluetooth-earbuds-qt9_OfTaaeY",
+    "source": "Unsplash"
+  },
+  {
+    "file": "media/products/galaxy-s26-alt.webp",
+    "photographer": "Tyler Lastovich",
+    "profileUrl": "https://unsplash.com/@lastly",
+    "sourceUrl": "https://unsplash.com/photos/black-iphone-turned-on-d0Sl3AH8Tlg",
+    "source": "Unsplash"
+  },
+  {
+    "file": "media/products/galaxy-s26-main.webp",
+    "photographer": "Pathum Danthanarayana",
+    "profileUrl": "https://unsplash.com/@pathum_danthanarayana",
+    "sourceUrl": "https://unsplash.com/photos/turned-on-android-smartphone-t8TOMKe6xZU",
+    "source": "Unsplash"
+  },
+  {
+    "file": "media/products/galaxy-s26-thumb.webp",
+    "photographer": "Pathum Danthanarayana",
+    "profileUrl": "https://unsplash.com/@pathum_danthanarayana",
+    "sourceUrl": "https://unsplash.com/photos/turned-on-android-smartphone-t8TOMKe6xZU",
+    "source": "Unsplash"
+  },
+  {
+    "file": "media/products/gan-charger-alt.webp",
+    "photographer": "Onur Binay",
+    "profileUrl": "https://unsplash.com/@onurbinay",
+    "sourceUrl": "https://unsplash.com/photos/black-and-white-box-on-persons-hand--DY5znt0Whs",
+    "source": "Unsplash"
+  },
+  {
+    "file": "media/products/gan-charger-main.webp",
+    "photographer": "Mishaal Zahed (Meschael Zahède)",
+    "profileUrl": "https://unsplash.com/@mishaalzahed",
+    "sourceUrl": "https://unsplash.com/photos/white-usb-cable-on-black-surface-dYocS1QjjvI",
+    "source": "Unsplash"
+  },
+  {
+    "file": "media/products/gan-charger-thumb.webp",
+    "photographer": "Mishaal Zahed (Meschael Zahède)",
+    "profileUrl": "https://unsplash.com/@mishaalzahed",
+    "sourceUrl": "https://unsplash.com/photos/white-usb-cable-on-black-surface-dYocS1QjjvI",
+    "source": "Unsplash"
+  },
+  {
     "file": "media/products/glyph-mouse-alt.webp",
     "photographer": "ELLA DON",
     "profileUrl": "https://unsplash.com/@elladon",
@@ -158,6 +396,69 @@
     "photographer": "wtrsnvc _",
     "profileUrl": "https://unsplash.com/@wtrsnvc",
     "sourceUrl": "https://unsplash.com/photos/a-computer-mouse-sitting-on-top-of-a-desk-xbfuYm8wxgA",
+    "source": "Unsplash"
+  },
+  {
+    "file": "media/products/hd900s-alt.webp",
+    "photographer": "Voice + Video",
+    "profileUrl": "https://unsplash.com/@voiceandvideo",
+    "sourceUrl": "https://unsplash.com/photos/black-and-silver-headphones-on-black-textile-J8OcckBDzLE",
+    "source": "Unsplash"
+  },
+  {
+    "file": "media/products/hd900s-main.webp",
+    "photographer": "Kreeson Naraidoo",
+    "profileUrl": "https://unsplash.com/@kreeson",
+    "sourceUrl": "https://unsplash.com/photos/black-samsung-headphones-on-blue-surface-HEakRnVztwQ",
+    "source": "Unsplash"
+  },
+  {
+    "file": "media/products/hd900s-thumb.webp",
+    "photographer": "Kreeson Naraidoo",
+    "profileUrl": "https://unsplash.com/@kreeson",
+    "sourceUrl": "https://unsplash.com/photos/black-samsung-headphones-on-blue-surface-HEakRnVztwQ",
+    "source": "Unsplash"
+  },
+  {
+    "file": "media/products/k-pro-mouse-alt.webp",
+    "photographer": "maar gaming",
+    "profileUrl": "https://unsplash.com/@maargaming",
+    "sourceUrl": "https://unsplash.com/photos/black-and-yellow-logitech-computer-mouse-Pv--vb5vwzQ",
+    "source": "Unsplash"
+  },
+  {
+    "file": "media/products/k-pro-mouse-main.webp",
+    "photographer": "Ash Edmonds",
+    "profileUrl": "https://unsplash.com/@badashphotos",
+    "sourceUrl": "https://unsplash.com/photos/pink-and-green-light-reflected-on-apple-magic-mouse-SHCViKw3edE",
+    "source": "Unsplash"
+  },
+  {
+    "file": "media/products/k-pro-mouse-thumb.webp",
+    "photographer": "Ash Edmonds",
+    "profileUrl": "https://unsplash.com/@badashphotos",
+    "sourceUrl": "https://unsplash.com/photos/pink-and-green-light-reflected-on-apple-magic-mouse-SHCViKw3edE",
+    "source": "Unsplash"
+  },
+  {
+    "file": "media/products/macbook-pro-alt.webp",
+    "photographer": "Miguel Alcântara",
+    "profileUrl": "https://unsplash.com/@miguelalcantara",
+    "sourceUrl": "https://unsplash.com/photos/black-computer-keyboard-showing-keyboard-ltBeID9_BwI",
+    "source": "Unsplash"
+  },
+  {
+    "file": "media/products/macbook-pro-main.webp",
+    "photographer": "Fili Santillán",
+    "profileUrl": "https://unsplash.com/@filisantillan",
+    "sourceUrl": "https://unsplash.com/photos/macbook-pro-EFAqnx9iKG4",
+    "source": "Unsplash"
+  },
+  {
+    "file": "media/products/macbook-pro-thumb.webp",
+    "photographer": "Fili Santillán",
+    "profileUrl": "https://unsplash.com/@filisantillan",
+    "sourceUrl": "https://unsplash.com/photos/macbook-pro-EFAqnx9iKG4",
     "source": "Unsplash"
   },
   {
@@ -203,6 +504,27 @@
     "source": "Unsplash"
   },
   {
+    "file": "media/products/momentum-4-alt.webp",
+    "photographer": "Silivan Munguarakarama",
+    "profileUrl": "https://unsplash.com/@silivan",
+    "sourceUrl": "https://unsplash.com/photos/black-and-red-wireless-headphones-NrR9gn3lFKU",
+    "source": "Unsplash"
+  },
+  {
+    "file": "media/products/momentum-4-main.webp",
+    "photographer": "Fausto Sandoval",
+    "profileUrl": "https://unsplash.com/@uusaez",
+    "sourceUrl": "https://unsplash.com/photos/black-and-red-corded-headphones-on-white-table-w5m3PIGvkqI",
+    "source": "Unsplash"
+  },
+  {
+    "file": "media/products/momentum-4-thumb.webp",
+    "photographer": "Fausto Sandoval",
+    "profileUrl": "https://unsplash.com/@uusaez",
+    "sourceUrl": "https://unsplash.com/photos/black-and-red-corded-headphones-on-white-table-w5m3PIGvkqI",
+    "source": "Unsplash"
+  },
+  {
     "file": "media/products/monitor-one-alt.webp",
     "photographer": "Marius GIRE",
     "profileUrl": "https://unsplash.com/@raimus",
@@ -221,6 +543,90 @@
     "photographer": "Adrian Pelletier",
     "profileUrl": "https://unsplash.com/@adrianpelletier",
     "sourceUrl": "https://unsplash.com/photos/close-up-abstract-view-of-textured-black-speaker-cone-8SnP5ZevNHw",
+    "source": "Unsplash"
+  },
+  {
+    "file": "media/products/mx-master-alt.webp",
+    "photographer": "Jack B",
+    "profileUrl": "https://unsplash.com/@nervum",
+    "sourceUrl": "https://unsplash.com/photos/black-and-red-gaming-mouse-on-black-mouse-pad-PKdXoZxFErw",
+    "source": "Unsplash"
+  },
+  {
+    "file": "media/products/mx-master-main.webp",
+    "photographer": "Ankit Singh",
+    "profileUrl": "https://unsplash.com/@a4pratapsingh",
+    "sourceUrl": "https://unsplash.com/photos/photo-of-turned-on-laptop-computer-on-brown-table-vw_y__9mKl8",
+    "source": "Unsplash"
+  },
+  {
+    "file": "media/products/mx-master-thumb.webp",
+    "photographer": "Ankit Singh",
+    "profileUrl": "https://unsplash.com/@a4pratapsingh",
+    "sourceUrl": "https://unsplash.com/photos/photo-of-turned-on-laptop-computer-on-brown-table-vw_y__9mKl8",
+    "source": "Unsplash"
+  },
+  {
+    "file": "media/products/mx-mechanical-alt.webp",
+    "photographer": "Jessica Lam",
+    "profileUrl": "https://unsplash.com/@lovelle",
+    "sourceUrl": "https://unsplash.com/photos/black-computer-keyboard-on-gray-table-yEF7MFfVbp8",
+    "source": "Unsplash"
+  },
+  {
+    "file": "media/products/mx-mechanical-main.webp",
+    "photographer": "Jessica Lam",
+    "profileUrl": "https://unsplash.com/@lovelle",
+    "sourceUrl": "https://unsplash.com/photos/black-computer-keyboard-on-brown-wooden-table-fq-Ks10WtWI",
+    "source": "Unsplash"
+  },
+  {
+    "file": "media/products/mx-mechanical-thumb.webp",
+    "photographer": "Jessica Lam",
+    "profileUrl": "https://unsplash.com/@lovelle",
+    "sourceUrl": "https://unsplash.com/photos/black-computer-keyboard-on-brown-wooden-table-fq-Ks10WtWI",
+    "source": "Unsplash"
+  },
+  {
+    "file": "media/products/ob4-speaker-alt.webp",
+    "photographer": "Marius GIRE",
+    "profileUrl": "https://unsplash.com/@raimus",
+    "sourceUrl": "https://unsplash.com/photos/a-red-speaker-sitting-on-top-of-a-wooden-table-xREyAKR5vJw",
+    "source": "Unsplash"
+  },
+  {
+    "file": "media/products/ob4-speaker-main.webp",
+    "photographer": "Adrian Pelletier",
+    "profileUrl": "https://unsplash.com/@adrianpelletier",
+    "sourceUrl": "https://unsplash.com/photos/close-up-abstract-view-of-textured-black-speaker-cone-8SnP5ZevNHw",
+    "source": "Unsplash"
+  },
+  {
+    "file": "media/products/ob4-speaker-thumb.webp",
+    "photographer": "Adrian Pelletier",
+    "profileUrl": "https://unsplash.com/@adrianpelletier",
+    "sourceUrl": "https://unsplash.com/photos/close-up-abstract-view-of-textured-black-speaker-cone-8SnP5ZevNHw",
+    "source": "Unsplash"
+  },
+  {
+    "file": "media/products/odyssey-oled-alt.webp",
+    "photographer": "Jack B",
+    "profileUrl": "https://unsplash.com/@nervum",
+    "sourceUrl": "https://unsplash.com/photos/black-flat-screen-computer-monitor-turned-on-near-black-computer-keyboard-B10AxHKLvnQ",
+    "source": "Unsplash"
+  },
+  {
+    "file": "media/products/odyssey-oled-main.webp",
+    "photographer": "Jack B",
+    "profileUrl": "https://unsplash.com/@nervum",
+    "sourceUrl": "https://unsplash.com/photos/black-flat-screen-computer-monitor-turned-on-displaying-desktop-fewhfXbCUzI",
+    "source": "Unsplash"
+  },
+  {
+    "file": "media/products/odyssey-oled-thumb.webp",
+    "photographer": "Jack B",
+    "profileUrl": "https://unsplash.com/@nervum",
+    "sourceUrl": "https://unsplash.com/photos/black-flat-screen-computer-monitor-turned-on-displaying-desktop-fewhfXbCUzI",
     "source": "Unsplash"
   },
   {
@@ -245,6 +651,27 @@
     "source": "Unsplash"
   },
   {
+    "file": "media/products/open-earbuds-alt.webp",
+    "photographer": "Point Normal",
+    "profileUrl": "https://unsplash.com/@normals",
+    "sourceUrl": "https://unsplash.com/photos/transparent-wireless-earbuds-with-charging-case-DBiwmpGfxTw",
+    "source": "Unsplash"
+  },
+  {
+    "file": "media/products/open-earbuds-main.webp",
+    "photographer": "Abilash Rayirath",
+    "profileUrl": "https://unsplash.com/@oursmile360",
+    "sourceUrl": "https://unsplash.com/photos/white-and-black-earbuds-on-black-surface--IX_kVsMUBA",
+    "source": "Unsplash"
+  },
+  {
+    "file": "media/products/open-earbuds-thumb.webp",
+    "photographer": "Abilash Rayirath",
+    "profileUrl": "https://unsplash.com/@oursmile360",
+    "sourceUrl": "https://unsplash.com/photos/white-and-black-earbuds-on-black-surface--IX_kVsMUBA",
+    "source": "Unsplash"
+  },
+  {
     "file": "media/products/osmo-7-alt.webp",
     "photographer": "Victor G",
     "profileUrl": "https://unsplash.com/@victor_vector",
@@ -260,6 +687,27 @@
   },
   {
     "file": "media/products/osmo-7-thumb.webp",
+    "photographer": "Rafa Sanfilippo",
+    "profileUrl": "https://unsplash.com/@rafasanfilippo",
+    "sourceUrl": "https://unsplash.com/photos/a-man-holding-a-camera-and-a-tripod-Kq8qKbXAKFY",
+    "source": "Unsplash"
+  },
+  {
+    "file": "media/products/osmo-pocket-alt.webp",
+    "photographer": "Victor G",
+    "profileUrl": "https://unsplash.com/@victor_vector",
+    "sourceUrl": "https://unsplash.com/photos/black-nikon-dslr-camera-on-brown-wooden-table-wPcZb6fXW5w",
+    "source": "Unsplash"
+  },
+  {
+    "file": "media/products/osmo-pocket-main.webp",
+    "photographer": "Rafa Sanfilippo",
+    "profileUrl": "https://unsplash.com/@rafasanfilippo",
+    "sourceUrl": "https://unsplash.com/photos/a-man-holding-a-camera-and-a-tripod-Kq8qKbXAKFY",
+    "source": "Unsplash"
+  },
+  {
+    "file": "media/products/osmo-pocket-thumb.webp",
     "photographer": "Rafa Sanfilippo",
     "profileUrl": "https://unsplash.com/@rafasanfilippo",
     "sourceUrl": "https://unsplash.com/photos/a-man-holding-a-camera-and-a-tripod-Kq8qKbXAKFY",
@@ -287,6 +735,27 @@
     "source": "Unsplash"
   },
   {
+    "file": "media/products/prime-powerbank-alt.webp",
+    "photographer": "Reka Sarudi",
+    "profileUrl": "https://unsplash.com/@reka_says_hi",
+    "sourceUrl": "https://unsplash.com/photos/a-person-holding-a-cell-phone-and-a-charger-GVRv0wMErKI",
+    "source": "Unsplash"
+  },
+  {
+    "file": "media/products/prime-powerbank-main.webp",
+    "photographer": "Sai Balaji Varma Gadhiraju",
+    "profileUrl": "https://unsplash.com/@saivarma2000",
+    "sourceUrl": "https://unsplash.com/photos/red-leather-case-on-black-surface-QsVafcI4ouo",
+    "source": "Unsplash"
+  },
+  {
+    "file": "media/products/prime-powerbank-thumb.webp",
+    "photographer": "Sai Balaji Varma Gadhiraju",
+    "profileUrl": "https://unsplash.com/@saivarma2000",
+    "sourceUrl": "https://unsplash.com/photos/red-leather-case-on-black-surface-QsVafcI4ouo",
+    "source": "Unsplash"
+  },
+  {
     "file": "media/products/q3-max-alt.webp",
     "photographer": "Florian Krumm",
     "profileUrl": "https://unsplash.com/@floriankrumm",
@@ -308,6 +777,27 @@
     "source": "Unsplash"
   },
   {
+    "file": "media/products/qc-ultra-alt.webp",
+    "photographer": "Frank Septillion",
+    "profileUrl": "https://unsplash.com/@septillion",
+    "sourceUrl": "https://unsplash.com/photos/silver-headphones-on-top-of-black-surface-Qrspubmx6kE",
+    "source": "Unsplash"
+  },
+  {
+    "file": "media/products/qc-ultra-main.webp",
+    "photographer": "Jason Leung",
+    "profileUrl": "https://unsplash.com/@ninjason",
+    "sourceUrl": "https://unsplash.com/photos/black-and-white-headphones-on-white-background-Q2RIZtBTtaI",
+    "source": "Unsplash"
+  },
+  {
+    "file": "media/products/qc-ultra-thumb.webp",
+    "photographer": "Jason Leung",
+    "profileUrl": "https://unsplash.com/@ninjason",
+    "sourceUrl": "https://unsplash.com/photos/black-and-white-headphones-on-white-background-Q2RIZtBTtaI",
+    "source": "Unsplash"
+  },
+  {
     "file": "media/products/ring-one-alt.webp",
     "photographer": "Piyush Haswani",
     "profileUrl": "https://unsplash.com/@piyushh29",
@@ -326,6 +816,69 @@
     "photographer": "Daniele Levis Pelusi",
     "profileUrl": "https://unsplash.com/@yogidan2012",
     "sourceUrl": "https://unsplash.com/photos/watch-emitting-lights-Tizbbx-5esA",
+    "source": "Unsplash"
+  },
+  {
+    "file": "media/products/rs4-gimbal-alt.webp",
+    "photographer": "Victor G",
+    "profileUrl": "https://unsplash.com/@victor_vector",
+    "sourceUrl": "https://unsplash.com/photos/black-nikon-dslr-camera-on-brown-wooden-table-wPcZb6fXW5w",
+    "source": "Unsplash"
+  },
+  {
+    "file": "media/products/rs4-gimbal-main.webp",
+    "photographer": "Rafa Sanfilippo",
+    "profileUrl": "https://unsplash.com/@rafasanfilippo",
+    "sourceUrl": "https://unsplash.com/photos/a-man-holding-a-camera-and-a-tripod-Kq8qKbXAKFY",
+    "source": "Unsplash"
+  },
+  {
+    "file": "media/products/rs4-gimbal-thumb.webp",
+    "photographer": "Rafa Sanfilippo",
+    "profileUrl": "https://unsplash.com/@rafasanfilippo",
+    "sourceUrl": "https://unsplash.com/photos/a-man-holding-a-camera-and-a-tripod-Kq8qKbXAKFY",
+    "source": "Unsplash"
+  },
+  {
+    "file": "media/products/soundcore-liberty-alt.webp",
+    "photographer": "Almas Salakhov",
+    "profileUrl": "https://unsplash.com/@therealslkhv",
+    "sourceUrl": "https://unsplash.com/photos/a-pair-of-black-earbuds-in-a-case-d0T6SunMloQ",
+    "source": "Unsplash"
+  },
+  {
+    "file": "media/products/soundcore-liberty-main.webp",
+    "photographer": "Point Normal",
+    "profileUrl": "https://unsplash.com/@normals",
+    "sourceUrl": "https://unsplash.com/photos/transparent-wireless-earbuds-with-charging-case-DBiwmpGfxTw",
+    "source": "Unsplash"
+  },
+  {
+    "file": "media/products/soundcore-liberty-thumb.webp",
+    "photographer": "Point Normal",
+    "profileUrl": "https://unsplash.com/@normals",
+    "sourceUrl": "https://unsplash.com/photos/transparent-wireless-earbuds-with-charging-case-DBiwmpGfxTw",
+    "source": "Unsplash"
+  },
+  {
+    "file": "media/products/soundlink-max-alt.webp",
+    "photographer": "Nicolas J Leclercq",
+    "profileUrl": "https://unsplash.com/@nicolasjleclercq",
+    "sourceUrl": "https://unsplash.com/photos/white-and-silver-portable-speaker-on-brown-wooden-table-gbG65gRAGx4",
+    "source": "Unsplash"
+  },
+  {
+    "file": "media/products/soundlink-max-main.webp",
+    "photographer": "Adison Ferreira",
+    "profileUrl": "https://unsplash.com/@adimfotografia1",
+    "sourceUrl": "https://unsplash.com/photos/red-jbl-portable-speaker-mS95of4-oV0",
+    "source": "Unsplash"
+  },
+  {
+    "file": "media/products/soundlink-max-thumb.webp",
+    "photographer": "Adison Ferreira",
+    "profileUrl": "https://unsplash.com/@adimfotografia1",
+    "sourceUrl": "https://unsplash.com/photos/red-jbl-portable-speaker-mS95of4-oV0",
     "source": "Unsplash"
   },
   {
@@ -368,6 +921,48 @@
     "photographer": "Keagan Henman",
     "profileUrl": "https://unsplash.com/@henmankk",
     "sourceUrl": "https://unsplash.com/photos/gray-microphone-with-filter-dkaYXcg1_jE",
+    "source": "Unsplash"
+  },
+  {
+    "file": "media/products/viper-v3-alt.webp",
+    "photographer": "Supratik Deshmukh",
+    "profileUrl": "https://unsplash.com/@supratikdeshmukh",
+    "sourceUrl": "https://unsplash.com/photos/black-and-white-corded-computer-mouse-iO0I6-mhDEY",
+    "source": "Unsplash"
+  },
+  {
+    "file": "media/products/viper-v3-main.webp",
+    "photographer": "ELLA DON",
+    "profileUrl": "https://unsplash.com/@elladon",
+    "sourceUrl": "https://unsplash.com/photos/a-computer-mouse-sitting-next-to-a-keyboard-WB7LxMaqW-c",
+    "source": "Unsplash"
+  },
+  {
+    "file": "media/products/viper-v3-thumb.webp",
+    "photographer": "ELLA DON",
+    "profileUrl": "https://unsplash.com/@elladon",
+    "sourceUrl": "https://unsplash.com/photos/a-computer-mouse-sitting-next-to-a-keyboard-WB7LxMaqW-c",
+    "source": "Unsplash"
+  },
+  {
+    "file": "media/products/watch-ultra-alt.webp",
+    "photographer": "Dmitry Vechorko",
+    "profileUrl": "https://unsplash.com/@vechorko",
+    "sourceUrl": "https://unsplash.com/photos/silver-and-black-round-analog-watch-OCaJSBr4NsM",
+    "source": "Unsplash"
+  },
+  {
+    "file": "media/products/watch-ultra-main.webp",
+    "photographer": "Samuel Angor",
+    "profileUrl": "https://unsplash.com/@sammysays___",
+    "sourceUrl": "https://unsplash.com/photos/an-apple-watch-with-a-black-face-and-white-numbers-MuTiB8CM23Y",
+    "source": "Unsplash"
+  },
+  {
+    "file": "media/products/watch-ultra-thumb.webp",
+    "photographer": "Samuel Angor",
+    "profileUrl": "https://unsplash.com/@sammysays___",
+    "sourceUrl": "https://unsplash.com/photos/an-apple-watch-with-a-black-face-and-white-numbers-MuTiB8CM23Y",
     "source": "Unsplash"
   },
   {

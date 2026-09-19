@@ -7,8 +7,8 @@ const { format } = useCurrency()
 
 <template>
   <span
-    class="nums font-mono tracking-tight text-text-primary"
-    :class="size === 'lg' ? 'text-xl md:text-2xl' : 'text-sm'"
+    class="nums font-semibold text-text-primary"
+    :class="size === 'lg' ? 'text-2xl' : 'text-base'"
   >
     {{ format(cents) }}
   </span>

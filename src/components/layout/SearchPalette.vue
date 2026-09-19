@@ -6,6 +6,7 @@ import { useCartStore } from '@/stores/cart'
 import { useUiStore } from '@/stores/ui'
 import { useCurrency } from '@/composables/useCurrency'
 import { useFocusTrap } from '@/composables/useFocusTrap'
+import { brandName } from '@/data/brands'
 
 const ui = useUiStore()
 const cart = useCartStore()
@@ -97,21 +98,20 @@ onUnmounted(() => document.removeEventListener('keydown', onKeydown))
           ref="panel"
           role="dialog"
           aria-modal="true"
-          aria-label="Catalog search"
-          class="w-full max-w-2xl border border-border-hairline bg-surface-1 shadow-2xl shadow-black/60"
+          aria-label="Product search"
+          class="w-full max-w-2xl overflow-hidden rounded-card border border-border-hairline bg-surface-1 shadow-2xl shadow-black/60"
         >
           <!-- Terminal-style input line -->
           <div class="flex items-center gap-3 border-b border-border-hairline px-4 py-3.5">
-            <Search class="h-4 w-4 shrink-0 text-accent-cyan" aria-hidden="true" />
-            <span class="mono-label shrink-0 text-accent-cyan">QUERY:</span>
+            <Search class="h-4 w-4 shrink-0 text-text-secondary" aria-hidden="true" />
             <input
               v-model="query"
               type="text"
-              placeholder="hardware, brand or SKU_"
-              aria-label="Search the catalog"
-              class="w-full bg-transparent font-mono text-sm text-text-primary placeholder:text-text-muted focus:outline-none"
+              placeholder="Search products, brands or SKU"
+              aria-label="Search products"
+              class="w-full bg-transparent text-sm text-text-primary placeholder:text-text-muted focus:outline-none"
             />
-            <kbd class="mono-label shrink-0 border border-border-hairline px-1.5 py-0.5">ESC</kbd>
+            <kbd class="shrink-0 rounded border border-border-hairline px-1.5 py-0.5 text-[10px] text-text-muted">Esc</kbd>
           </div>
 
           <!-- Results -->
@@ -135,36 +135,36 @@ onUnmounted(() => document.removeEventListener('keydown', onKeydown))
                   width="44"
                   height="44"
                   loading="lazy"
-                  class="h-11 w-11 shrink-0 border border-border-hairline object-cover"
+                  class="h-11 w-11 shrink-0 rounded border border-border-hairline object-cover"
                 />
                 <span class="min-w-0 flex-1">
-                  <span class="mono-label block">{{ item.brand.replace('_', ' ') }}</span>
+                  <span class="block text-xs text-text-secondary">{{ brandName(item.brand) }}</span>
                   <span class="block truncate text-sm font-medium tracking-tight">
                     {{ item.title }}
                   </span>
                 </span>
-                <span class="nums shrink-0 font-mono text-xs text-text-secondary">
+                <span class="nums shrink-0 text-sm font-medium">
                   {{ formatPrice(item.price) }}
                 </span>
                 <CornerDownLeft
                   v-if="index === cursor"
-                  class="h-3.5 w-3.5 shrink-0 text-accent-cyan"
+                  class="h-3.5 w-3.5 shrink-0 text-accent"
                   aria-hidden="true"
                 />
               </button>
             </li>
           </ul>
 
-          <p v-else class="px-4 py-10 text-center font-mono text-xs tracking-[0.14em] text-text-muted">
-            NO_MATCH // TRY "DRONE", "KEYBOARD", "SONY"
+          <p v-else class="px-4 py-10 text-center text-sm text-text-secondary">
+            No matches. Try &ldquo;drone&rdquo;, &ldquo;keyboard&rdquo; or &ldquo;Sony&rdquo;.
           </p>
 
           <footer
-            class="flex items-center gap-4 border-t border-border-hairline px-4 py-2.5 font-mono text-[10px] tracking-[0.12em] text-text-muted"
+            class="flex items-center gap-4 border-t border-border-hairline px-4 py-2.5 text-xs text-text-muted"
           >
-            <span>↑↓ NAVIGATE</span>
-            <span>⏎ ADD TO BAG</span>
-            <span class="ml-auto">{{ results.length }} RESULT(S)</span>
+            <span>↑↓ to navigate</span>
+            <span>↵ to add</span>
+            <span class="nums ml-auto">{{ results.length }} results</span>
           </footer>
         </div>
       </div>

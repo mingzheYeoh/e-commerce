@@ -6,12 +6,12 @@ import { useCatalogStore, type Filter } from '@/stores/catalog'
 const catalog = useCatalogStore()
 
 const filters: { id: Filter; label: string }[] = [
-  { id: 'all', label: 'ALL ITEMS' },
-  { id: 'inStock', label: 'IN STOCK ONLY' },
-  { id: 'audio', label: 'ACOUSTICS' },
-  { id: 'peripherals', label: 'PERIPHERALS' },
-  { id: 'imaging', label: 'IMAGING' },
-  { id: 'computing', label: 'COMPUTING' },
+  { id: 'all', label: 'All products' },
+  { id: 'inStock', label: 'In stock' },
+  { id: 'audio', label: 'Audio' },
+  { id: 'peripherals', label: 'Keyboards & mice' },
+  { id: 'imaging', label: 'Cameras & drones' },
+  { id: 'computing', label: 'Laptops & wearables' },
 ]
 
 const count = computed(() => catalog.visible.length)
@@ -19,20 +19,15 @@ const count = computed(() => catalog.visible.length)
 
 <template>
   <section id="drops" class="border-t border-border-hairline bg-void py-16 md:py-24">
-    <div class="mx-auto max-w-[1800px] px-4 md:px-8">
-      <div class="mb-8 flex items-end justify-between gap-6 border-b border-border-hairline pb-5">
+    <div class="mx-auto max-w-[1600px] px-4 md:px-8">
+      <div class="mb-8 flex items-end justify-between gap-6">
         <div>
-          <p class="mono-label mb-2 text-accent-cyan">[04_DROPS]</p>
-          <h2
-            class="font-display text-3xl font-extrabold uppercase leading-none tracking-tighter md:text-5xl lg:text-6xl"
-          >
-            Live<span class="text-text-muted"> Inventory</span>
-          </h2>
+          <h2 class="text-2xl font-bold md:text-4xl">All products</h2>
+          <p class="mt-2 text-sm text-text-secondary md:text-base">
+            <span class="nums">{{ count }}</span> products in stock, ready to ship today.
+          </p>
         </div>
-        <p class="mono-label hidden shrink-0 text-right md:block">
-          {{ count }} SKU(S) MATCHING<br />
-          REALTIME STOCK FEED
-        </p>
+
       </div>
     </div>
 
@@ -42,43 +37,43 @@ const count = computed(() => catalog.visible.length)
       class="sticky top-16 z-30 border-y border-border-hairline bg-void/90 backdrop-blur-md"
     >
       <div
-        class="mx-auto flex max-w-[1800px] items-center gap-2 overflow-x-auto px-4 py-3 md:px-8"
+        class="mx-auto flex max-w-[1600px] items-center gap-2 overflow-x-auto px-4 py-3 md:px-8"
       >
         <button
           v-for="filter in filters"
           :key="filter.id"
           type="button"
-          class="shrink-0 border px-3 py-1.5 font-mono text-[10px] tracking-[0.12em] transition-colors md:text-[11px]"
+          class="shrink-0 rounded-full border px-4 py-1.5 text-sm font-medium transition-colors"
           :class="
             catalog.activeFilter === filter.id
-              ? 'border-accent-cyan bg-accent-cyan/15 text-accent-cyan'
-              : 'border-border-hairline text-text-secondary hover:border-text-secondary/50 hover:text-text-primary'
+              ? 'border-accent bg-accent text-white'
+              : 'border-border-hairline text-text-secondary hover:border-border-strong hover:text-text-primary'
           "
           :aria-pressed="catalog.activeFilter === filter.id"
           @click="catalog.setFilter(filter.id)"
         >
-          [{{ filter.label }}]
+          {{ filter.label }}
         </button>
 
         <span class="mx-1 hidden h-4 w-px shrink-0 bg-border-hairline md:block" aria-hidden="true" />
 
         <button
           type="button"
-          class="shrink-0 border px-3 py-1.5 font-mono text-[10px] tracking-[0.12em] transition-colors md:text-[11px]"
+          class="shrink-0 rounded-full border px-4 py-1.5 text-sm font-medium transition-colors"
           :class="
             catalog.sort === 'priceDesc'
-              ? 'border-accent-cyan bg-accent-cyan/15 text-accent-cyan'
-              : 'border-border-hairline text-text-secondary hover:border-text-secondary/50 hover:text-text-primary'
+              ? 'border-accent bg-accent text-white'
+              : 'border-border-hairline text-text-secondary hover:border-border-strong hover:text-text-primary'
           "
           :aria-pressed="catalog.sort === 'priceDesc'"
           @click="catalog.setSort(catalog.sort === 'priceDesc' ? 'default' : 'priceDesc')"
         >
-          [PRICE: HIGH → LOW]
+          Price: high to low
         </button>
       </div>
     </div>
 
-    <div class="mx-auto max-w-[1800px] px-4 pt-8 md:px-8">
+    <div class="mx-auto max-w-[1600px] px-4 pt-8 md:px-8">
       <TransitionGroup
         tag="div"
         class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
@@ -97,9 +92,9 @@ const count = computed(() => catalog.visible.length)
 
       <p
         v-if="!count"
-        class="py-20 text-center font-mono text-xs tracking-[0.14em] text-text-muted"
+        class="py-20 text-center text-sm text-text-secondary"
       >
-        NO_UNITS_MATCH_FILTER
+        No products match these filters.
       </p>
     </div>
   </section>

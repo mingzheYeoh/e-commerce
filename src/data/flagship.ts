@@ -5,44 +5,44 @@ import type { Flagship } from '@/types'
  * explode, expressed in % of the stage so the layout scales with the viewport.
  */
 export const flagship: Flagship = {
-  sku: 'KIN-SPEC01-000',
-  brand: 'KINETIC',
-  title: 'SPEC_01 Planar Reference',
+  sku: 'SEN-HD900-113',
+  brand: 'SENNHEISER',
+  title: 'HD 900 S Reference',
   price: 649,
   image: '/media/flagship/flagship.webp',
   parts: [
     {
       id: 'core',
-      label: 'CORE',
-      spec: 'Dual H1 Neural Processor',
+      label: 'Driver',
+      spec: '38mm open-back dynamic transducer',
       offset: { x: -34, y: -26 },
       revealAt: 0.45,
     },
     {
       id: 'chassis',
-      label: 'CHASSIS',
-      spec: 'CNC 6061 Aerospace Billet Aluminium',
+      label: 'Chassis',
+      spec: 'Machined aluminium yoke and headband',
       offset: { x: 36, y: -14 },
       revealAt: 0.52,
     },
     {
       id: 'acoustics',
-      label: 'ACOUSTICS',
-      spec: '40mm Custom Planar Drivers (<0.05% THD)',
+      label: 'Acoustics',
+      spec: 'Sub-0.05% THD across 4Hz – 51kHz',
       offset: { x: -30, y: 28 },
       revealAt: 0.6,
     },
     {
       id: 'cell',
-      label: 'CELL',
-      spec: 'Lithium-Polymer 1200mAh // 80H',
+      label: 'Cable',
+      spec: 'Detachable OFC cable, 3m balanced',
       offset: { x: 32, y: 26 },
       revealAt: 0.68,
     },
   ],
   variants: [
-    { name: 'Matte Obsidian', hex: '#0D0D0E' },
-    { name: 'Ghost Transparent', hex: '#8E96A0' },
-    { name: 'Raw Titanium', hex: '#B6B6BA' },
+    { name: 'Midnight', hex: '#1C1C1F' },
+    { name: 'Titanium', hex: '#9A9AA0' },
+    { name: 'Copper', hex: '#B87333' },
   ],
 }

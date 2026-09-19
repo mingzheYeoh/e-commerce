@@ -4,44 +4,54 @@
 
 @layer base {
   html {
-    background-color: #050505;
+    background-color: #0b0b0d;
     color-scheme: dark;
     -webkit-font-smoothing: antialiased;
+    scroll-behavior: smooth;
   }
 
   body {
-    @apply bg-void text-text-primary font-sans antialiased;
+    @apply bg-void font-sans text-text-primary antialiased;
   }
 
-  /* One ring style for the whole site. Cyan, offset against the void so it
-     stays visible on both surface-1 cards and full-bleed video. */
+  h1,
+  h2,
+  h3 {
+    @apply font-display;
+    letter-spacing: -0.02em;
+  }
+
   :where(a, button, input, select, [tabindex]):focus-visible {
-    @apply outline-none ring-2 ring-accent-cyan ring-offset-2 ring-offset-void;
+    @apply outline-none ring-2 ring-accent ring-offset-2 ring-offset-void;
   }
 
   ::selection {
-    @apply bg-accent-cyan text-void;
+    @apply bg-accent text-white;
   }
 }
 
 @layer components {
-  /* Frosted HUD panel — spec §2.3 */
-  .hud-panel {
-    @apply backdrop-blur-xl bg-black/40 border border-white/10;
+  /* Standard retail card: soft surface, hairline edge, gentle radius. */
+  .card {
+    @apply rounded-card border border-border-hairline bg-surface-1;
   }
 
-  /* Anodised aluminium bevel: a 1px top highlight over a dark body */
-  .bevel-edge {
-    @apply border border-border-hairline;
-    box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.06);
+  .label {
+    @apply text-xs font-medium tracking-wide text-text-secondary;
   }
 
-  .mono-label {
-    @apply font-mono text-[11px] uppercase tracking-[0.18em] text-text-muted;
+  /* Kept for SKUs and order references only — the places a monospace face
+     genuinely helps you compare characters. */
+  .code {
+    @apply font-mono text-[11px] tracking-tight text-text-muted;
   }
 
-  .hairline {
-    @apply border-border-hairline;
+  .btn-primary {
+    @apply rounded bg-accent px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-accent-hover disabled:cursor-not-allowed disabled:bg-surface-2 disabled:text-text-muted;
+  }
+
+  .btn-secondary {
+    @apply rounded border border-border-strong px-4 py-2.5 text-sm font-medium text-text-primary transition-colors hover:border-text-secondary hover:bg-surface-2;
   }
 }
 
@@ -50,7 +60,7 @@
     text-wrap: balance;
   }
 
-  /* Tabular numerals keep price/counter digits from jittering as they change */
+  /* Tabular numerals keep prices and counters from jittering as they change */
   .nums {
     font-variant-numeric: tabular-nums;
   }

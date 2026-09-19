@@ -10,8 +10,8 @@ const cheapest = (id: CategoryId) =>
 export const categories: Category[] = [
   {
     id: 'audio',
-    label: 'ACOUSTICS & SYNTHESIS',
-    blurb: 'Studio monitors, planar reference cans and modular voices.',
+    label: 'Audio & headphones',
+    blurb: 'Headphones, earbuds, speakers and studio instruments.',
     unitsInStock: stockIn('audio'),
     fromPrice: cheapest('audio'),
     image: '/media/categories/audio.webp',
@@ -19,8 +19,8 @@ export const categories: Category[] = [
   },
   {
     id: 'peripherals',
-    label: 'CYBERNETIC PERIPHERALS',
-    blurb: 'Gasket-mount boards, switches and control surfaces.',
+    label: 'Keyboards & mice',
+    blurb: 'Mechanical keyboards, precision mice and monitors.',
     unitsInStock: stockIn('peripherals'),
     fromPrice: cheapest('peripherals'),
     image: '/media/categories/peripherals.webp',
@@ -28,8 +28,8 @@ export const categories: Category[] = [
   },
   {
     id: 'imaging',
-    label: 'AERIAL & SPATIAL IMAGING',
-    blurb: 'Enterprise airframes, gimbals and full-frame bodies.',
+    label: 'Cameras & drones',
+    blurb: 'Mirrorless bodies, drones, gimbals and webcams.',
     unitsInStock: stockIn('imaging'),
     fromPrice: cheapest('imaging'),
     image: '/media/categories/imaging.webp',
@@ -37,8 +37,8 @@ export const categories: Category[] = [
   },
   {
     id: 'computing',
-    label: 'WEARABLE AUGMENTATION',
-    blurb: 'Micro-OLED optics, biometrics and field computers.',
+    label: 'Laptops & wearables',
+    blurb: 'Laptops, phones, smartwatches and charging.',
     unitsInStock: stockIn('computing'),
     fromPrice: cheapest('computing'),
     image: '/media/categories/computing.webp',

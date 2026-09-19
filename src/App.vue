@@ -18,9 +18,9 @@ useLenis()
 <template>
   <a
     href="#main"
-    class="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[100] focus:border focus:border-accent-cyan focus:bg-void focus:px-4 focus:py-2 focus:font-mono focus:text-xs"
+    class="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[100] focus:border focus:border-accent focus:bg-void focus:rounded focus:px-4 focus:py-2 focus:text-sm focus:font-medium"
   >
-    SKIP TO CONTENT
+    Skip to content
   </a>
 
   <NavBar />

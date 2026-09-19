@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, ref } from 'vue'
 import { ShieldCheck, Truck, BadgeCheck, ChevronDown } from 'lucide-vue-next'
 import credits from '@/data/credits.json'
 import type { Credit } from '@/types'
 
-const VERSION = 'V2.6.4_RELEASE'
+const YEAR = new Date().getFullYear()
 
 /* -------------------------------------------------- newsletter ----------- */
 const email = ref('')
@@ -22,19 +22,6 @@ function subscribe() {
   email.value = ''
 }
 
-/* -------------------------------------------------- telemetry ------------ */
-const now = ref(new Date())
-let timer: number | undefined
-onMounted(() => {
-  timer = window.setInterval(() => (now.value = new Date()), 1000)
-})
-onUnmounted(() => window.clearInterval(timer))
-
-const utc = computed(() => now.value.toISOString().slice(11, 19))
-const local = computed(() =>
-  now.value.toLocaleTimeString('en-GB', { hour12: false }),
-)
-
 /* -------------------------------------------------- credits -------------- */
 const showCredits = ref(false)
 
@@ -48,9 +35,9 @@ const photographers = computed(() => {
 })
 
 const guarantees = [
-  { icon: ShieldCheck, label: 'ENCRYPTED GATEWAY', detail: 'PCI-DSS // 3DS2' },
-  { icon: BadgeCheck, label: '24-MONTH WARRANTY', detail: 'PARTS & LABOUR' },
-  { icon: Truck, label: 'GLOBAL FREIGHT', detail: '48H EXPRESS DISPATCH' },
+  { icon: ShieldCheck, label: 'Secure payments', detail: 'Encrypted checkout, PCI-DSS compliant' },
+  { icon: BadgeCheck, label: '2-year warranty', detail: 'Parts and labour on every product' },
+  { icon: Truck, label: 'Free express delivery', detail: 'On orders over $200, ships in 48h' },
 ]
 </script>
 
@@ -59,51 +46,48 @@ const guarantees = [
     <!-- Newsletter -->
     <div class="border-b border-border-hairline">
       <div
-        class="mx-auto flex max-w-[1800px] flex-col gap-6 px-4 py-12 md:flex-row md:items-center md:justify-between md:px-8"
+        class="mx-auto flex max-w-[1600px] flex-col gap-6 px-4 py-12 md:flex-row md:items-center md:justify-between md:px-8"
       >
         <div>
-          <h2 class="font-display text-xl font-extrabold uppercase tracking-tighter md:text-3xl">
-            Subscribe to firmware<br class="hidden md:block" />
-            updates &amp; hardware drops
+          <h2 class="text-xl font-bold md:text-3xl">
+            Get new arrivals and offers first
           </h2>
-          <p class="mono-label mt-2">NO MARKETING NOISE // DISPATCH ALERTS ONLY</p>
+          <p class="mt-2 text-sm text-text-secondary">One email a week. Unsubscribe any time.</p>
         </div>
 
         <form class="w-full max-w-md" novalidate @submit.prevent="subscribe">
           <div
-            class="flex items-center gap-2 border bg-surface-1 px-3 py-2.5 transition-colors"
+            class="flex items-center gap-2 rounded border bg-surface-1 px-3 py-2 transition-colors"
             :class="status === 'error' ? 'border-accent-amber' : 'border-border-hairline'"
           >
-            <label for="newsletter" class="mono-label shrink-0 text-accent-cyan">
-              ENTER_EMAIL:
-            </label>
+            <label for="newsletter" class="sr-only">Email address</label>
             <input
               id="newsletter"
               v-model="email"
               type="email"
               autocomplete="email"
-              placeholder="_"
+              placeholder="you@example.com"
               :aria-invalid="status === 'error'"
               aria-describedby="newsletter-status"
-              class="w-full bg-transparent font-mono text-sm text-text-primary placeholder:text-text-muted focus:outline-none"
+              class="w-full bg-transparent text-sm text-text-primary placeholder:text-text-muted focus:outline-none"
               @input="status = 'idle'"
             />
             <button
               type="submit"
-              class="shrink-0 bg-text-primary px-3 py-1.5 font-mono text-[10px] font-bold tracking-[0.12em] text-void transition-colors hover:bg-accent-cyan"
+              class="shrink-0 rounded bg-accent px-4 py-1.5 text-sm font-semibold text-white transition-colors hover:bg-accent-hover"
             >
-              TRANSMIT
+              Subscribe
             </button>
           </div>
 
           <p
             id="newsletter-status"
             role="status"
-            class="mono-label mt-2 h-4"
-            :class="status === 'error' ? 'text-accent-amber' : 'text-accent-neon'"
+            class="mt-2 h-4 text-xs"
+            :class="status === 'error' ? 'text-accent-amber' : 'text-accent-green'"
           >
-            <template v-if="status === 'error'">ERR_INVALID_ADDRESS // RETRY</template>
-            <template v-else-if="status === 'done'">SUBSCRIBED — CHANNEL OPEN</template>
+            <template v-if="status === 'error'">Enter a valid email address.</template>
+            <template v-else-if="status === 'done'">Thanks — you're subscribed.</template>
           </p>
         </form>
       </div>
@@ -111,17 +95,17 @@ const guarantees = [
 
     <!-- Guarantees -->
     <div class="border-b border-border-hairline">
-      <ul class="mx-auto grid max-w-[1800px] grid-cols-1 sm:grid-cols-3">
+      <ul class="mx-auto grid max-w-[1600px] grid-cols-1 sm:grid-cols-3">
         <li
           v-for="(item, index) in guarantees"
           :key="item.label"
           class="flex items-center gap-3 px-4 py-5 md:px-8"
           :class="index > 0 && 'border-t border-border-hairline sm:border-l sm:border-t-0'"
         >
-          <component :is="item.icon" class="h-4 w-4 shrink-0 text-accent-cyan" aria-hidden="true" />
+          <component :is="item.icon" class="h-5 w-5 shrink-0 text-accent" aria-hidden="true" />
           <div>
-            <p class="font-mono text-[11px] tracking-[0.14em] text-text-primary">{{ item.label }}</p>
-            <p class="mono-label">{{ item.detail }}</p>
+            <p class="text-sm font-medium text-text-primary">{{ item.label }}</p>
+            <p class="text-xs text-text-secondary">{{ item.detail }}</p>
           </div>
         </li>
       </ul>
@@ -129,10 +113,10 @@ const guarantees = [
 
     <!-- Photo credits -->
     <div class="border-b border-border-hairline">
-      <div class="mx-auto max-w-[1800px] px-4 py-4 md:px-8">
+      <div class="mx-auto max-w-[1600px] px-4 py-4 md:px-8">
         <button
           type="button"
-          class="flex items-center gap-2 font-mono text-[11px] tracking-[0.14em] text-text-secondary transition-colors hover:text-text-primary"
+          class="flex items-center gap-2 text-sm text-text-secondary transition-colors hover:text-text-primary"
           :aria-expanded="showCredits"
           aria-controls="credits-list"
           @click="showCredits = !showCredits"
@@ -142,7 +126,7 @@ const guarantees = [
             :class="showCredits && 'rotate-180'"
             aria-hidden="true"
           />
-          PHOTOGRAPHY_CREDITS ({{ photographers.length }})
+          Photography credits ({{ photographers.length }})
         </button>
 
         <ul
@@ -155,7 +139,7 @@ const guarantees = [
               :href="credit.profileUrl"
               target="_blank"
               rel="noopener noreferrer"
-              class="mono-label transition-colors hover:text-accent-cyan"
+              class="text-xs text-text-muted transition-colors hover:text-accent"
             >
               {{ credit.photographer }}
             </a>
@@ -165,19 +149,15 @@ const guarantees = [
     </div>
 
     <!-- System readout -->
-    <div class="mx-auto max-w-[1800px] px-4 py-6 md:px-8">
+    <div class="mx-auto max-w-[1600px] px-4 py-6 md:px-8">
       <div
-        class="flex flex-col gap-3 font-mono text-[10px] tracking-[0.14em] text-text-muted md:flex-row md:items-center md:justify-between"
+        class="flex flex-col gap-3 text-xs text-text-muted md:flex-row md:items-center md:justify-between"
       >
-        <p class="flex items-center gap-2">
-          <span class="h-1.5 w-1.5 rounded-full bg-accent-neon" aria-hidden="true" />
-          NEXUS_//[TECH] COLLECTIVE — DEMO STOREFRONT, NOT A REAL RETAILER
-        </p>
-        <p class="nums flex flex-wrap gap-x-5 gap-y-1">
-          <span>UTC {{ utc }}</span>
-          <span>LOCAL {{ local }}</span>
-          <span>PING 24ms</span>
-          <span class="text-text-secondary">{{ VERSION }}</span>
+        <p>© {{ YEAR }} NEXUS — demo storefront, not a real retailer.</p>
+        <p class="flex flex-wrap gap-x-5 gap-y-1">
+          <span>Free delivery over $200</span>
+          <span>30-day returns</span>
+          <span>Secure checkout</span>
         </p>
       </div>
     </div>

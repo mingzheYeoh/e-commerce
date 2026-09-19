@@ -40,36 +40,69 @@ const QUALITY = 82
 
 /** Products: each produces <slug>-main.webp, <slug>-alt.webp, <slug>-thumb.webp */
 const PRODUCTS = [
-  // audio
-  { slug: 'op1-field', query: 'synthesizer close up knobs', must: ['synth', 'keyboard', 'knob'] },
+  // Apple
+  { slug: 'airpods-max', query: 'over ear headphones silver', must: ['headphone'] },
+  { slug: 'macbook-pro', query: 'macbook laptop dark desk', must: ['laptop', 'macbook', 'computer'] },
+  { slug: 'watch-ultra', query: 'smartwatch titanium close up', must: ['watch'] },
+  // Samsung
+  { slug: 'galaxy-s26', query: 'android smartphone dark', must: ['phone'] },
+  { slug: 'galaxy-buds', query: 'wireless earbuds charging case', must: ['earbud', 'earphone', 'airpod'] },
+  { slug: 'odyssey-oled', query: 'ultrawide gaming monitor desk', must: ['monitor', 'screen', 'display'] },
+  // Sony
   { slug: 'wh1000xm6', query: 'black headphones product', must: ['headphone'] },
+  { slug: 'alpha-7cr', query: 'mirrorless camera black background', must: ['mirrorless', 'sony', 'camera body'] },
+  { slug: 'fx3-cinema', query: 'cinema camera rig video', must: ['camera'] },
+  // Bose
+  { slug: 'qc-ultra', query: 'noise cancelling headphones dark', must: ['headphone'] },
+  { slug: 'open-earbuds', query: 'earbuds macro dark', must: ['earbud', 'earphone'] },
+  { slug: 'soundlink-max', query: 'portable bluetooth speaker', must: ['speaker'] },
+  // Sennheiser
+  { slug: 'hd900s', query: 'studio headphones open back', must: ['headphone'] },
+  { slug: 'momentum-4', query: 'wireless headphones desk', must: ['headphone'] },
+  // DJI
+  { slug: 'mavic-4-pro', query: 'drone quadcopter close up', must: ['drone', 'quadcopter'] },
+  { slug: 'osmo-pocket', query: 'handheld gimbal camera', must: ['camera', 'gimbal'] },
+  { slug: 'rs4-gimbal', query: 'camera gimbal stabilizer', must: ['gimbal', 'camera'] },
+  // Logitech
+  { slug: 'mx-master', query: 'wireless mouse dark desk', must: ['mouse'] },
+  { slug: 'mx-mechanical', query: 'low profile keyboard desk', must: ['keyboard'] },
+  { slug: 'brio-webcam', query: 'webcam camera monitor', must: ['webcam', 'camera'] },
+  // Razer
+  { slug: 'blackwidow', query: 'gaming keyboard rgb dark', must: ['keyboard'] },
+  { slug: 'viper-v3', query: 'gaming mouse rgb', must: ['mouse'] },
+  { slug: 'blade-16', query: 'gaming laptop rgb dark', must: ['laptop', 'computer'] },
+  // Anker
+  { slug: 'prime-powerbank', query: 'power bank portable charger', must: ['power bank', 'charger', 'battery'] },
+  { slug: 'soundcore-liberty', query: 'earbuds case product dark', must: ['earbud', 'earphone'] },
+  { slug: 'gan-charger', query: 'usb charger adapter cable', must: ['charger', 'adapter', 'cable', 'usb'] },
+  // Nothing
+  { slug: 'phone-3a', query: 'smartphone dark minimal', must: ['phone'] },
   { slug: 'ear-open', query: 'wireless earbuds charging case', must: ['earbud', 'airpod', 'earphone'] },
-  { slug: 'monitor-one', query: 'speaker audio black', must: ['speaker'] },
-  // peripherals
+  { slug: 'cmf-buds', query: 'earbuds product photography', must: ['earbud', 'earphone'] },
+  // Keychron
   { slug: 'q3-max', query: 'mechanical keyboard rgb dark', must: ['keyboard'] },
   { slug: 'switch-set', query: 'keyboard switches macro', must: ['keyboard', 'key'] },
-  { slug: 'glyph-mouse', query: 'gaming mouse close up', must: ['mouse'] },
-  { slug: 'deck-pro', query: 'audio mixer console dark', must: ['mixer', 'console', 'audio'] },
-  // imaging
-  { slug: 'mavic-4-pro', query: 'drone quadcopter close up', must: ['drone', 'quadcopter'] },
-  { slug: 'osmo-7', query: 'camera gimbal stabilizer', must: ['camera', 'gimbal'] },
-  { slug: 'alpha-7cr', query: 'mirrorless camera black background', must: ['mirrorless', 'sony', 'camera body'] },
-  { slug: 'matrice-350', query: 'professional drone flying sky', must: ['drone', 'quadcopter'] },
-  // computing
-  { slug: 'xr-spatial', query: 'vr headset dark', must: ['vr', 'headset', 'virtual'] },
-  { slug: 'phone-3a', query: 'smartphone dark minimal', must: ['phone'] },
-  { slug: 'ring-one', query: 'smartwatch dark minimal', must: ['watch'] },
+  { slug: 'k-pro-mouse', query: 'computer mouse minimal dark', must: ['mouse'] },
+  // Teenage Engineering
+  { slug: 'op1-field', query: 'synthesizer close up knobs', must: ['synth', 'keyboard', 'knob'] },
   { slug: 'tp7-recorder', query: 'portable audio recorder microphone', must: ['recorder', 'microphone', 'audio'] },
+  { slug: 'ob4-speaker', query: 'speaker audio black', must: ['speaker'] },
 ]
 
 /** Brand hover previews: <id>.webp */
 const BRANDS = [
-  { slug: 'teenage-engineering', query: 'synthesizer module studio' },
-  { slug: 'nothing', query: 'transparent electronics minimal' },
-  { slug: 'dji', query: 'drone camera technology' },
+  { slug: 'apple', query: 'apple products desk minimal' },
+  { slug: 'samsung', query: 'smartphone display technology' },
   { slug: 'sony', query: 'professional camera lens dark' },
+  { slug: 'bose', query: 'headphones minimal product' },
+  { slug: 'sennheiser', query: 'studio headphones microphone' },
+  { slug: 'dji', query: 'drone camera technology' },
+  { slug: 'logitech', query: 'desk setup mouse keyboard' },
+  { slug: 'razer', query: 'gaming setup rgb dark' },
+  { slug: 'anker', query: 'charging cables usb technology' },
+  { slug: 'nothing', query: 'transparent electronics minimal' },
   { slug: 'keychron', query: 'custom keyboard keycaps' },
-  { slug: 'kinetic', query: 'circuit board macro dark' },
+  { slug: 'teenage-engineering', query: 'synthesizer module studio' },
 ]
 
 /** Category bento cards: <id>.webp */
@@ -84,7 +117,7 @@ const CATEGORIES = [
 const FLAGSHIP = [
   {
     slug: 'flagship',
-    query: 'black headphones product',
+    query: 'studio headphones black background',
     must: ['headphone'],
     // The one image a visitor has to read in detail. Neither the darkest
     // candidate (unreadable) nor the brightest (warm lifestyle shots that fight

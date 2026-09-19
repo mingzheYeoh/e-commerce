@@ -34,7 +34,7 @@ onMounted(() => {
       muted
       playsinline
       preload="metadata"
-      class="h-full w-full object-cover opacity-[0.55] contrast-125 saturate-150 brightness-[0.7]"
+      class="h-full w-full object-cover opacity-[0.28] saturate-50"
     >
       <source :src="src" type="video/mp4" />
     </video>
@@ -46,14 +46,14 @@ onMounted(() => {
       height="720"
       loading="eager"
       fetchpriority="high"
-      class="h-full w-full object-cover opacity-[0.45] contrast-125 saturate-150 brightness-[0.7]"
+      class="h-full w-full object-cover opacity-[0.22] saturate-50"
     />
 
     <!-- Melt the footage into the page: linear fade top/bottom, radial vignette -->
     <div class="absolute inset-0 bg-gradient-to-t from-void via-void/20 to-void/80" />
     <div
       class="absolute inset-0"
-      style="background: radial-gradient(ellipse at center, transparent 0%, rgba(5, 5, 5, 0.9) 100%)"
+      style="background: radial-gradient(ellipse at center, transparent 0%, rgba(11, 11, 13, 0.92) 100%)"
     />
   </div>
 </template>

@@ -1,10 +1,16 @@
 export type BrandId =
-  | 'TEENAGE_ENGINEERING'
-  | 'NOTHING'
-  | 'DJI'
+  | 'APPLE'
+  | 'SAMSUNG'
   | 'SONY'
+  | 'BOSE'
+  | 'SENNHEISER'
+  | 'DJI'
+  | 'LOGITECH'
+  | 'RAZER'
+  | 'ANKER'
+  | 'NOTHING'
   | 'KEYCHRON'
-  | 'KINETIC'
+  | 'TEENAGE_ENGINEERING'
 
 export type CategoryId = 'audio' | 'peripherals' | 'imaging' | 'computing'
 
@@ -44,7 +50,7 @@ export interface Brand {
   tagline: string
   productCount: number
   previewImage: string
-  /** Hex used for the hover glow, so each brand portal feels distinct. */
+  /** Muted brand tint for the preview panel. */
   accent: string
 }
 
