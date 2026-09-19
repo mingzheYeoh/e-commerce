@@ -1,0 +1,142 @@
+/**
+ * Semantic product search, running entirely in the visitor's browser.
+ *
+ * Product vectors are precomputed at build time (scripts/build-embeddings.mjs)
+ * and ship as a 67 KB binary. Only the *query* has to be embedded at runtime,
+ * which is why the model is here at all — and why it is fetched lazily, on the
+ * first search rather than on page load.
+ *
+ * There is no API key anywhere in this path, because there is no API: the model
+ * runs on the device. That also means search keeps working offline once the
+ * model is cached, and no shopper's query is sent anywhere.
+ *
+ * Measured on the 22-query evaluation set in search-eval.json:
+ *
+ *   strategy   precision@3   recall@5     MRR
+ *   keyword        33.3%       65.0%     58.6%
+ *   semantic       40.9%       78.3%     74.8%
+ *   hybrid         40.9%       70.7%     75.8%
+ *
+ * Hybrid ships because the keyword engine still wins the queries where hand-
+ * written domain knowledge beats general language understanding — it knows a
+ * wedding needs a camera, and the model does not.
+ */
+import { products } from '@/data/products'
+import { recommend } from './recommend'
+import { dot, fuseRanks } from './retrieval'
+import type { Product } from '@/types'
+
+const MODEL = 'Xenova/all-MiniLM-L6-v2'
+const INDEX_URL = '/media/search/products.json'
+const VECTORS_URL = '/media/search/products.bin'
+
+interface Index {
+  model: string
+  dims: number
+  count: number
+  slugs: string[]
+}
+
+export type SemanticState = 'idle' | 'loading' | 'ready' | 'unavailable'
+
+let state: SemanticState = 'idle'
+let index: Index | null = null
+let vectors: Float32Array | null = null
+let embedder: ((text: string) => Promise<Float32Array>) | null = null
+let loading: Promise<boolean> | null = null
+
+export const semanticState = () => state
+
+/**
+ * Quantised weights, not full precision.
+ *
+ * q8 is roughly a quarter of the download. Re-running the evaluation against
+ * both showed precision and recall marginally *better* at q8 and MRR marginally
+ * worse — all inside the noise of a 22-query set. Paying four times the bytes
+ * for that would be indefensible.
+ */
+async function buildEmbedder() {
+  const { pipeline, env } = await import('@huggingface/transformers')
+  // Weights come from the Hugging Face CDN and are cached by the browser.
+  env.allowLocalModels = false
+  const pipe = await pipeline('feature-extraction', MODEL, { dtype: 'q8' })
+  return async (text: string) => {
+    const out = await pipe([text], { pooling: 'mean', normalize: true })
+    return Float32Array.from(out.data as Float32Array)
+  }
+}
+
+/**
+ * Loads the index and the model. Safe to call repeatedly: concurrent callers
+ * share one in-flight promise, and a failure is remembered as `unavailable` so
+ * a blocked CDN does not retry on every keystroke.
+ */
+export function ensureReady(): Promise<boolean> {
+  if (state === 'ready') return Promise.resolve(true)
+  if (state === 'unavailable') return Promise.resolve(false)
+  if (loading) return loading
+
+  state = 'loading'
+  loading = (async () => {
+    try {
+      const [meta, buf] = await Promise.all([
+        fetch(INDEX_URL).then((r) => r.json() as Promise<Index>),
+        fetch(VECTORS_URL).then((r) => r.arrayBuffer()),
+      ])
+      if (meta.count * meta.dims * 4 !== buf.byteLength) {
+        throw new Error('vector file does not match its index — rebuild embeddings')
+      }
+      index = meta
+      vectors = new Float32Array(buf)
+      embedder = await buildEmbedder()
+      state = 'ready'
+      return true
+    } catch {
+      // Offline, a blocked CDN, or a browser without the required APIs. The
+      // keyword engine still answers every query, so search degrades rather
+      // than breaks.
+      state = 'unavailable'
+      return false
+    } finally {
+      loading = null
+    }
+  })()
+  return loading
+}
+
+const byId = new Map(products.map((p) => [p.id, p]))
+
+/** Ranked product ids, most similar first. Empty if the model is not ready. */
+export async function semanticRank(query: string): Promise<string[]> {
+  if (!(await ensureReady()) || !index || !vectors || !embedder) return []
+  const q = await embedder(query)
+  return index.slugs
+    .map((id, i) => ({ id, score: dot(q, vectors!, i * index!.dims, index!.dims) }))
+    .sort((a, b) => b.score - a.score)
+    .map((r) => r.id)
+}
+
+export interface HybridResult {
+  products: Product[]
+  /** False when the answer came from the keyword engine alone. */
+  semantic: boolean
+}
+
+/**
+ * The search a shopper actually gets.
+ *
+ * The keyword engine answers immediately and unconditionally; the model is
+ * folded in only once it is ready. A visitor on a slow connection sees results
+ * now and better results a moment later, rather than a spinner.
+ */
+export async function hybridSearch(query: string, limit = 6): Promise<HybridResult> {
+  const keyword = recommend(query, products.length).items.map((r) => r.product.id)
+
+  const semantic = state === 'ready' ? await semanticRank(query) : []
+  if (!semantic.length) {
+    return { products: keyword.slice(0, limit).map((id) => byId.get(id)!), semantic: false }
+  }
+
+  const fused = fuseRanks([keyword, semantic]).slice(0, limit)
+  return { products: fused.map((id) => byId.get(id)!).filter(Boolean), semantic: true }
+}

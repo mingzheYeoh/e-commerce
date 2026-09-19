@@ -1,0 +1,28 @@
+{
+  "_why": "A fixed set of shopper questions with the products that genuinely answer them. Without it, 'the search feels better' is an opinion. With it, a retrieval change is a number that moves up or down, and a regression is visible the moment it happens.",
+  "_relevant": "Judged by hand against the catalogue. A product counts as relevant when a shopper asking this would be satisfied to see it, not merely when it shares a word with the query.",
+  "queries": [
+    { "q": "noise cancelling headphones for a long flight", "relevant": ["qc-ultra", "wh1000xm6", "momentum-4", "airpods-max"] },
+    { "q": "which phone takes the best photos", "relevant": ["iphone-18-pro-max", "galaxy-s26-ultra", "xiaomi-17-ultra", "pixel-11-pro", "iphone-18-pro"] },
+    { "q": "laptop powerful enough for video editing", "relevant": ["macbook-pro", "xps-16", "blade-16"] },
+    { "q": "something to record music in my bedroom", "relevant": ["op1-field", "tp7-recorder", "hd900s"] },
+    { "q": "a keyboard that feels good to type on all day", "relevant": ["q3-max", "mx-mechanical", "blackwidow"] },
+    { "q": "keep my devices charged while travelling", "relevant": ["prime-powerbank", "gan-charger"] },
+    { "q": "camera for shooting a wedding", "relevant": ["alpha-7cr", "fx3-cinema"] },
+    { "q": "drone for aerial footage", "relevant": ["mavic-4-pro"] },
+    { "q": "affordable earbuds", "relevant": ["soundcore-liberty", "cmf-buds", "ear-open"] },
+    { "q": "a big screen for gaming", "relevant": ["odyssey-oled"] },
+    { "q": "watch to track my runs", "relevant": ["watch-ultra"] },
+    { "q": "laptop with two screens", "relevant": ["zenbook-duo"] },
+    { "q": "business laptop with a great keyboard", "relevant": ["thinkpad-x1-carbon", "xps-16", "macbook-pro"] },
+    { "q": "wireless mouse for office work", "relevant": ["mx-master", "k-pro-mouse"] },
+    { "q": "webcam for video meetings", "relevant": ["brio-webcam"] },
+    { "q": "how do I stop my video looking shaky", "relevant": ["rs4-gimbal", "osmo-pocket"] },
+    { "q": "headphones that let me hear traffic while jogging", "relevant": ["open-earbuds", "ear-open"] },
+    { "q": "speaker loud enough for a party", "relevant": ["soundlink-max", "ob4-speaker"] },
+    { "q": "small camera for vlogging", "relevant": ["osmo-pocket", "fx3-cinema"] },
+    { "q": "android phone under a thousand dollars", "relevant": ["oneplus-15", "galaxy-s26", "phone-3a", "pixel-11-pro"] },
+    { "q": "gift for someone who loves synths", "relevant": ["op1-field", "ob4-speaker", "tp7-recorder"] },
+    { "q": "I want the lightest laptop you have", "relevant": ["zenbook-s14", "thinkpad-x1-carbon", "macbook-pro"] }
+  ]
+}

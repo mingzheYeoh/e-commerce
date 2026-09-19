@@ -5,6 +5,8 @@ import { Search, CornerDownLeft, Sparkles } from 'lucide-vue-next'
 import { products } from '@/data/products'
 import { brandName } from '@/data/brands'
 import { recommend } from '@/lib/recommend'
+import { ensureReady, hybridSearch, semanticState, type SemanticState } from '@/lib/semantic'
+import type { Product } from '@/types'
 import { useCartStore } from '@/stores/cart'
 import { useUiStore } from '@/stores/ui'
 import { useCurrency } from '@/composables/useCurrency'
@@ -47,11 +49,49 @@ const fallback = computed(() => {
     .slice(0, 8)
 })
 
-const rows = computed(() =>
-  isSentence.value && result.value.items.length
-    ? result.value.items
-    : fallback.value.map((product) => ({ product, reasons: [] as string[] })),
+/**
+ * Semantic results, when and if the model is ready.
+ *
+ * The embedding model is a ~23 MB download, so it is fetched on the first
+ * sentence a visitor types rather than on page load, and the keyword engine
+ * answers in the meantime. Results improve a moment later instead of the
+ * shopper watching a spinner — and if the model never arrives (offline, blocked
+ * CDN, old browser) nothing is broken, the keyword answer simply stands.
+ */
+const enhanced = ref<Product[] | null>(null)
+const engine = ref<SemanticState>('idle')
+let latest = 0
+
+watch(
+  [query, isSentence],
+  async () => {
+    enhanced.value = null
+    if (!isSentence.value) return
+
+    const token = ++latest
+    void ensureReady().then(() => {
+      engine.value = semanticState()
+    })
+
+    const { products: hits, semantic } = await hybridSearch(query.value, 6)
+    // A slower earlier query must not overwrite a newer one's results.
+    if (token !== latest || !semantic) return
+    enhanced.value = hits
+    engine.value = semanticState()
+  },
+  { flush: 'post' },
 )
+
+const rows = computed(() => {
+  if (enhanced.value?.length) {
+    // Reasons come from the keyword engine, so carry over whichever it explained.
+    const why = new Map(result.value.items.map((r) => [r.product.id, r.reasons]))
+    return enhanced.value.map((product) => ({ product, reasons: why.get(product.id) ?? [] }))
+  }
+  return isSentence.value && result.value.items.length
+    ? result.value.items
+    : fallback.value.map((product) => ({ product, reasons: [] as string[] }))
+})
 
 const understood = computed(() => (isSentence.value ? result.value.understood : []))
 
@@ -140,17 +180,31 @@ onUnmounted(() => document.removeEventListener('keydown', onKeydown))
                drone came back — and it makes the seam visible when it
                understood nothing. -->
           <div
-            v-if="understood.length"
+            v-if="understood.length || engine !== 'idle'"
             class="flex flex-wrap items-center gap-2 border-b border-border-hairline bg-accent/5 px-4 py-2.5"
           >
             <Sparkles class="h-3.5 w-3.5 shrink-0 text-accent" aria-hidden="true" />
-            <span class="text-xs text-text-secondary">Looking for</span>
+            <span v-if="understood.length" class="text-xs text-text-secondary">Looking for</span>
             <span
               v-for="item in understood"
               :key="item"
               class="rounded-full bg-accent/15 px-2 py-0.5 text-xs font-medium text-accent"
             >
               {{ item }}
+            </span>
+
+            <!-- Which engine answered. A shopper does not need the word
+                 "embeddings", but they do benefit from knowing the results just
+                 changed under them, and it makes the degraded path honest
+                 rather than silent. -->
+            <span
+              v-if="engine !== 'idle'"
+              class="ml-auto shrink-0 text-[11px] text-text-muted"
+              :title="`Query embedded on-device with all-MiniLM-L6-v2; no query leaves the browser`"
+            >
+              <template v-if="engine === 'loading'">loading semantic model…</template>
+              <template v-else-if="engine === 'ready'">keyword + semantic</template>
+              <template v-else>keyword only — model unavailable</template>
             </span>
           </div>
 
