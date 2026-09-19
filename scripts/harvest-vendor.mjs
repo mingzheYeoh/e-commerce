@@ -1,8 +1,15 @@
 /**
- * Fills the phones slice: tier-1 harvest, gap renumbering and thumbnails.
+ * Tier-1 image fill: harvest from manufacturer sites, close gaps, write thumbs.
  *
- * Run with `node scripts/harvest-phones.mjs`. Existing files are left alone, so
- * it is safe to re-run after deleting whichever images failed an eye check.
+ * Run with `node scripts/harvest-vendor.mjs [slug ...]`. Existing files are kept,
+ * so it is safe to re-run after deleting whichever images failed an eye check.
+ * Vendors behind a bot wall (Lenovo, Sony, LG, GoPro) are absent on purpose:
+ * they fall through to the Commons/Unsplash ladder in fetch-assets.mjs.
+ *
+ * Laptops are absent for a different reason. Dell's and ASUS's served HTML
+ * carries only campaign photography -- office scenes and editorial shots with
+ * the machine barely visible -- because their PDP galleries load over JS. Every
+ * candidate was rejected on sight, so the whole category takes the tier-2 path.
  */
 import fs from 'node:fs'
 import path from 'node:path'
@@ -70,6 +77,9 @@ const JOBS = [
   },
 ]
 
+// `node scripts/harvest-vendor.mjs xps-16` fills one product instead of all.
+const ONLY = process.argv.slice(2)
+
 /** Closes holes left by images removed in review, so `-1` always exists. */
 function compactGallery(slug) {
   const present = [1, 2, 3, 4]
@@ -100,9 +110,12 @@ const VENDOR_OF = {
   'xiaomi-17-ultra': 'Xiaomi',
   'galaxy-s26-ultra': 'Samsung',
   'oneplus-15': 'OnePlus',
+  'xps-16': 'Dell',
+  'zenbook-s14': 'ASUS',
+  'zenbook-duo': 'ASUS',
 }
 
-for (const job of JOBS) {
+for (const job of JOBS.filter((j) => !ONLY.length || ONLY.includes(j.slug))) {
   const before = compactGallery(job.slug)
   try {
     // Re-running is cheap and idempotent: existing files are kept, and the walk
@@ -147,6 +160,7 @@ for (const [slug, size] of [
 
 console.log('\nthumbnails:')
 for (const slug of [...JOBS.map((j) => j.slug), 'iphone-18-pro', 'iphone-18-pro-max']) {
+  if (ONLY.length && !ONLY.includes(slug)) continue
   console.log(`  ${slug.padEnd(20)} ${(await writeThumb(slug)) ? 'written' : 'skipped'}`)
 }
 

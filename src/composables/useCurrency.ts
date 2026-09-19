@@ -2,11 +2,26 @@ import { computed } from 'vue'
 import { useUiStore, type CurrencyCode } from '@/stores/ui'
 
 /**
- * Fixed rates. A storefront this size does not need a live FX feed, and a
- * hardcoded table cannot fail at runtime or leak a key.
+ * Fixed rates, mid-market as at 2026-09-17. A storefront this size does not
+ * need a live FX feed, and a hardcoded table cannot fail at runtime or leak a
+ * key. Typed against `CurrencyCode` so adding a currency without its rate and
+ * symbol is a compile error rather than a `NaN` on a price tag.
  */
-const RATES: Record<CurrencyCode, number> = { USD: 1, EUR: 0.92, GBP: 0.79 }
-const SYMBOLS: Record<CurrencyCode, string> = { USD: '$', EUR: '€', GBP: '£' }
+const RATES: Record<CurrencyCode, number> = {
+  USD: 1,
+  EUR: 0.92,
+  GBP: 0.79,
+  SGD: 1.27,
+  MYR: 4.1,
+}
+
+const SYMBOLS: Record<CurrencyCode, string> = {
+  USD: '$',
+  EUR: '€',
+  GBP: '£',
+  SGD: 'S$',
+  MYR: 'RM',
+}
 
 export function useCurrency() {
   const ui = useUiStore()

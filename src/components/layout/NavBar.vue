@@ -12,7 +12,7 @@ const ui = useUiStore()
 const { format } = useCurrency()
 
 
-const currencies: CurrencyCode[] = ['USD', 'EUR', 'GBP']
+const currencies: CurrencyCode[] = ['USD', 'EUR', 'GBP', 'SGD', 'MYR']
 
 // Pulse the counter whenever the bag grows, so an add from far down the page
 // still registers up here.

@@ -42,7 +42,13 @@ const JUNK = /(social[-_]?share|og[-_]?default|share[-_]?image|default[-_]?meta|
  * passes every pixel-level check because it is a real, sharp, correctly sized
  * image of the right phone; only the path gives it away.
  */
-const PROMO = /\/(home|promo|promotions?|campaign|banner|offer|deal|hero[-_]?banner|merch)\//i
+const PROMO =
+  // Path segments that mean merchandising rather than catalogue...
+  /\/(home|promos?|promotions?|campaigns?|banners?|offers?|deals?|merch|websitesbanner)\//i
+// ...and the word anywhere at all, because Dell puts it in the filename
+// (`site-banner-dell-pro-...`) and ASUS pluralises the directory (`/banners/`).
+// A genuine product image URL almost never contains "banner".
+const PROMO_WORD = /(site[-_]?banner|desktop[-_]?banner|mobile[-_]?banner|hero[-_]?banner)/i
 
 /**
  * Not every image URL ends in a file extension. Google serves product imagery
@@ -76,7 +82,7 @@ export function extractImageUrls(html, pageUrl) {
     if (u.startsWith('//')) u = 'https:' + u
     else if (u.startsWith('/')) u = new URL(u, pageUrl).href
     if (!/^https?:/i.test(u)) return
-    if (!isImage(u) || JUNK.test(u) || PROMO.test(u)) return
+    if (!isImage(u) || JUNK.test(u) || PROMO.test(u) || PROMO_WORD.test(u)) return
     if (REJECTED.some((frag) => u.includes(frag))) return
     if (!out.includes(u)) out.push(u)
   }

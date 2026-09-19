@@ -41,6 +41,11 @@ const QUALITY = 82
 
 /** Products: each produces <slug>-main.webp, <slug>-alt.webp, <slug>-thumb.webp */
 const PRODUCTS = [
+  // Laptops. Tier 1 cannot reach these: see scripts/harvest-vendor.mjs.
+  { slug: 'xps-16', query: 'dell xps laptop open desk', wiki: 'Dell XPS 15', must: ['laptop', 'notebook', 'computer'], allowBrands: ['dell', 'xps', 'alienware'] },
+  { slug: 'thinkpad-x1-carbon', query: 'thinkpad laptop black', wiki: 'ThinkPad X1 Carbon', must: ['thinkpad', 'laptop'], allowBrands: ['lenovo', 'thinkpad', 'ibm'] },
+  { slug: 'zenbook-s14', query: 'asus zenbook thin laptop', wiki: 'Asus Zenbook', must: ['laptop', 'zenbook', 'notebook'], allowBrands: ['asus', 'zenbook'] },
+  { slug: 'zenbook-duo', query: 'dual screen laptop two displays', wiki: 'Asus Zenbook Duo', must: ['laptop', 'dual', 'zenbook'], allowBrands: ['asus', 'zenbook'] },
   // Phones. Xiaomi is here rather than in the vendor harvester because mi.com
   // ships only art-directed marketing imagery -- see scripts/rejected-images.json.
   // Apple

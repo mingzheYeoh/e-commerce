@@ -14,6 +14,9 @@ export type BrandId =
   | 'GOOGLE'
   | 'XIAOMI'
   | 'ONEPLUS'
+  | 'DELL'
+  | 'LENOVO'
+  | 'ASUS'
 
 export type CategoryId = 'audio' | 'peripherals' | 'imaging' | 'computing' | 'phones'
 

@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 
-export type CurrencyCode = 'USD' | 'EUR' | 'GBP'
+export type CurrencyCode = 'USD' | 'EUR' | 'GBP' | 'SGD' | 'MYR'
 
 export const useUiStore = defineStore('ui', {
   state: () => ({
