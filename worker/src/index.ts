@@ -8,6 +8,7 @@
  */
 import { ask, type Env as RagEnv } from './rag'
 import { facts, queryOrError } from './graph'
+import { converse } from './agent'
 
 export interface Env extends RagEnv {
   ORDERS: D1Database
@@ -51,6 +52,22 @@ export default {
           return json({ error: 'question is required' }, { status: 400, headers })
         }
         return json(await ask(env, question), { headers })
+      }
+
+      /*
+       * The shopping assistant: a bounded tool-calling loop. Returns the calls
+       * it made alongside the answer, so the reasoning is inspectable rather
+       * than a black box.
+       */
+      if (url.pathname === '/api/chat' && request.method === 'POST') {
+        const { question, history } = (await request.json()) as {
+          question?: string
+          history?: { role: 'user' | 'assistant'; content: string }[]
+        }
+        if (typeof question !== 'string' || !question.trim()) {
+          return json({ error: 'question is required' }, { status: 400, headers })
+        }
+        return json(await converse(env, question, Array.isArray(history) ? history : []), { headers })
       }
 
       /* Structured lookups, answered by the graph without a model in the loop. */
