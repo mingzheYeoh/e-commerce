@@ -56,21 +56,24 @@ from looping.
 
 ```
 src/
+├─ pages/        HomePage · ShopPage · ProductPage · NotFoundPage
+├─ router/
 ├─ components/
-│  ├─ layout/     NavBar · CartDrawer · SearchPalette · SiteFooter
-│  ├─ sections/   HeroViewport · BrandMatrix · CategoryLaunchpad
-│  │              DeconstructedFlagship (+ flagship/LayeredRenderer) · ProductDropGrid
-│  ├─ commerce/   ProductCard · StockBadge · PriceTag
-│  └─ fx/         VideoBackdrop · ScanlineOverlay
-├─ composables/   useLenis · useReducedMotion · useCurrency · useFocusTrap
-├─ data/          products · brands · categories · flagship · credits.json
-├─ stores/        cart (+ spec) · catalog · ui
+│  ├─ layout/    NavBar · CartDrawer · SearchPalette · SiteFooter
+│  ├─ sections/  HeroViewport · CategoryLaunchpad · FeaturedRail · BrandMatrix
+│  │             PromoFeature · DeconstructedFlagship (+ flagship/LayeredRenderer)
+│  ├─ commerce/  ProductCard · BuyBox · StockBadge · PriceTag
+│  └─ fx/        VideoBackdrop
+├─ composables/  useLenis · useReducedMotion · useCurrency · useFocusTrap
+├─ data/         products · brands · categories · flagship · credits.json
+├─ stores/       cart (+ spec) · catalog · ui
 └─ types/
 scripts/fetch-assets.mjs
 ```
 
-Three Pinia stores hold all state. `cart` is the only one with real business
-logic, and the only one with tests:
+Three Pinia stores. `catalog` is a projection of the URL and `ui` holds display
+preferences; `cart` is the only one with real business logic, and the only one
+with tests:
 
 - lines merge by SKU instead of duplicating
 - quantity is clamped to `stockCount`; a sold-out product cannot be added
@@ -83,6 +86,10 @@ logic, and the only one with tests:
 kill switch — CSS animations, Lenis, the GSAP pin — keys off it. With reduced
 motion the flagship section renders its fully exploded state statically instead
 of pinning the viewport for 300vh: the same information, no choreography.
+
+`html` must keep `scroll-behavior: auto`. Lenis sets the scroll position every
+frame, and letting the browser animate on top of that is a feedback loop that
+locks the main thread.
 
 ### The scrollytelling section
 
