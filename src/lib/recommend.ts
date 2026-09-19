@@ -1,6 +1,6 @@
 import { products } from '@/data/products'
 import { brands } from '@/data/brands'
-import type { Product } from '@/types'
+import type { Product, CategoryId } from '@/types'
 
 /**
  * Turns a sentence into a product shortlist.
@@ -32,12 +32,27 @@ export interface RecommendResult {
 }
 
 /** Use cases, and the spec words that satisfy them. */
-const INTENTS: { id: string; triggers: string[]; wants: string[]; label: string }[] = [
+/**
+ * `wants` is matched against raw product text, which has no idea what kind of
+ * device it is reading. "camera" appears on phones, laptops and drones alike,
+ * and a phone's "36 hours video playback" is a battery claim that happens to
+ * contain the word video. `prefers` restores the missing signal: an intent
+ * nudges its natural category up without excluding anything, so a phone still
+ * answers "shoot 4K video" — just below the gear built for it.
+ */
+const INTENTS: {
+  id: string
+  triggers: string[]
+  wants: string[]
+  label: string
+  prefers?: CategoryId[]
+}[] = [
   {
     id: 'noise',
     triggers: ['flight', 'plane', 'flying', 'commute', 'commuting', 'train', 'office', 'noisy', 'noise', 'quiet', 'focus'],
     wants: ['noise cancellation', 'anc', 'quietcomfort'],
     label: 'blocking out noise',
+    prefers: ['audio'],
   },
   {
     id: 'travel',
@@ -50,12 +65,14 @@ const INTENTS: { id: string; triggers: string[]; wants: string[]; label: string 
     triggers: ['video', 'vlog', 'vlogging', 'film', 'filming', 'cinema', 'youtube', 'shoot', 'shooting', 'footage'],
     wants: ['4k', '6k', 'prores', 'gimbal', 'stabilis', 'cmos', 'camera'],
     label: 'shooting video',
+    prefers: ['imaging'],
   },
   {
     id: 'photo',
     triggers: ['photo', 'photography', 'portrait', 'landscape', 'camera', 'shots'],
     wants: ['full-frame', 'mp', 'sensor', 'stabilisation'],
     label: 'photography',
+    prefers: ['imaging'],
   },
   {
     id: 'gaming',
@@ -89,12 +106,21 @@ const INTENTS: { id: string; triggers: string[]; wants: string[]; label: string 
   },
 ]
 
-/** Everyday words for our four departments. */
-const CATEGORY_WORDS: Record<string, string[]> = {
+/**
+ * Everyday words for each department.
+ *
+ * Typed against `CategoryId` rather than `string` on purpose: a new category
+ * with no words here is a compile error, not a search that silently answers the
+ * wrong department. 'phone' sat under `computing` until phones became their own
+ * category, and nothing caught it — build, typecheck and tests all stayed green
+ * while "I need a new phone" returned laptops.
+ */
+const CATEGORY_WORDS: Record<CategoryId, string[]> = {
+  phones: ['phone', 'phones', 'smartphone', 'handset', 'iphone', 'android', 'galaxy', 'pixel'],
   audio: ['headphone', 'headphones', 'earbud', 'earbuds', 'earphone', 'speaker', 'audio', 'sound', 'music', 'listen', 'synth', 'recorder'],
   peripherals: ['keyboard', 'mouse', 'mice', 'monitor', 'display', 'desk setup', 'typing', 'switches'],
   imaging: ['camera', 'drone', 'gimbal', 'webcam', 'lens', 'aerial', 'quadcopter'],
-  computing: ['laptop', 'macbook', 'phone', 'smartphone', 'watch', 'smartwatch', 'charger', 'power bank', 'computer'],
+  computing: ['laptop', 'macbook', 'watch', 'smartwatch', 'charger', 'power bank', 'computer', 'tablet'],
 }
 
 /**
@@ -176,6 +202,7 @@ export function recommend(query: string, limit = 6): RecommendResult {
       const hits = intent.wants.filter((w) => hay.includes(w)).length
       if (hits) {
         score += 5 + hits * 2
+        if (intent.prefers?.includes(product.category)) score += 6
         reasons.push(`suited to ${intent.label}`)
       }
     }

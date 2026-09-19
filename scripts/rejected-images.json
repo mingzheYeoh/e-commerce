@@ -1,0 +1,44 @@
+{
+  "_why": "URL fragments a human rejected after looking at the image. The automated guards cannot catch these: each is a sharp, correctly sized picture of the right product that is still wrong for a storefront gallery. Matching on a fragment rather than a whole URL survives the query strings these CDNs append. Without this list, every re-run downloads them again and the eye check has to be redone from scratch.",
+  "rejected": [
+    {
+      "match": "Exclusive-Global-Group-Image",
+      "reason": "promotional artwork: reads 'Samsung.com only / Pink Gold / Silver Shadow' beside an S Pen"
+    },
+    {
+      "match": "SDSAC-10498",
+      "reason": "promotional artwork: 'Samsung.com & Samsung Experience Stores Only', bundled with earbuds"
+    },
+    {
+      "match": "See-ActualSize",
+      "reason": "size-comparison diagram with burnt-in measurements, not product photography"
+    },
+    {
+      "match": "@sku@",
+      "reason": "unresolved template URL — the page ships the placeholder, not a real asset"
+    },
+    {
+      "match": "$studioPath$",
+      "reason": "unresolved template URL"
+    },
+    {
+      "match": "GooglePlayPartne",
+      "reason": "Google Play partnership banner, not product photography"
+    },
+    {
+      "match": "xiaomi-17-ultra/pc/489eb45a",
+      "reason": "marketing key art: 'Ultra' script lettering over a hand, burnt-in type"
+    },
+    {
+      "match": "xiaomi-17-ultra/pc/gcdah302",
+      "reason": "display-panel technology shot, not the phone"
+    },
+    {
+      "match": "xiaomi-17-ultra/pc/83a48170",
+      "reason": "cropped screen gradient, no product visible"
+    }
+  ],
+  "_note_on_depth": "Galaxy S26 Ultra stops at three images on purpose. Its buy page has no fourth clean product shot -- every remaining candidate is marketing artwork. Three verified images beat four with one wrong in it, and ProductPage probes each path and renders only what resolves.",
+  "_note_on_xiaomi": "mi.com's global product pages are long-scroll marketing pages with no clean PDP gallery -- every candidate is art-directed with burnt-in type. Xiaomi is the slice's tier-1 failure and falls through to the Commons/Unsplash ladder, which is what the ladder is for.",
+  "_note_on_wrong_generation": "New failure mode found in the phones slice: the Commons fallback returned genuine, sharp, correctly branded photographs of a Xiaomi 15 Ultra for a Xiaomi 17 Ultra listing -- one of them showing the model name on screen. Every existing guard passed, because the subject really is a Xiaomi phone. allowBrands made it worse by confirming the brand while ignoring the generation. A tier-2 seed must name the same model as the listing; when Commons has no photograph of that model, the product keeps fewer verified images rather than borrowing last year's."
+}

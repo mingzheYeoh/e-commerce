@@ -41,6 +41,8 @@ const QUALITY = 82
 
 /** Products: each produces <slug>-main.webp, <slug>-alt.webp, <slug>-thumb.webp */
 const PRODUCTS = [
+  // Phones. Xiaomi is here rather than in the vendor harvester because mi.com
+  // ships only art-directed marketing imagery -- see scripts/rejected-images.json.
   // Apple
   { slug: 'airpods-max', query: 'apple airpods max headphones', wiki: 'AirPods Max', must: ['headphone'], allowBrands: ['apple', 'airpod'] },
   { slug: 'macbook-pro', query: 'macbook laptop dark desk', wiki: 'MacBook Pro 16', must: ['laptop', 'macbook', 'computer'] },

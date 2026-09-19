@@ -10,9 +10,19 @@
  */
 import { createHash } from 'node:crypto'
 import fs from 'node:fs/promises'
-import { existsSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import sharp from 'sharp'
+
+/**
+ * Fragments of URLs a human looked at and turned down. This is the durable half
+ * of the eye check: without it, deleting a bad image just makes the next run
+ * fetch it again, and every review has to start over.
+ */
+const REJECTED = JSON.parse(
+  readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), 'rejected-images.json'), 'utf8'),
+).rejected.map((r) => r.match)
 
 const UA =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
@@ -25,7 +35,27 @@ const UA =
  */
 const JUNK = /(social[-_]?share|og[-_]?default|share[-_]?image|default[-_]?meta|placeholder|sprite|logo|favicon|icon[-_]|thumb[-_]?nail)/i
 
-const isImage = (u) => /\.(jpe?g|png|webp|avif)(\?|$)/i.test(u) || /\/is\/image\//.test(u)
+/**
+ * Promotional artwork lives under merchandising paths, not product ones, and it
+ * carries burnt-in marketing copy — Samsung's homepage slot returned a banner
+ * reading "Samsung.com & Samsung Experience Stores Only" over a bundle shot. It
+ * passes every pixel-level check because it is a real, sharp, correctly sized
+ * image of the right phone; only the path gives it away.
+ */
+const PROMO = /\/(home|promo|promotions?|campaign|banner|offer|deal|hero[-_]?banner|merch)\//i
+
+/**
+ * Not every image URL ends in a file extension. Google serves product imagery
+ * from lh3.googleusercontent.com as opaque ids with a `=w2000` size suffix, and
+ * Adobe Scene7 (Apple, Dell, Samsung, Sony, LG) serves from `/is/image/` with
+ * the format as a query parameter. Requiring an extension silently discarded
+ * all 414 image URLs on the Google Store's Pixel page.
+ */
+const EXTENSIONLESS_HOSTS = /(lh[3-6]\.googleusercontent\.com|ggpht\.com)/i
+const isImage = (u) =>
+  /\.(jpe?g|png|webp|avif)(\?|$)/i.test(u) ||
+  /\/is\/image\//.test(u) ||
+  EXTENSIONLESS_HOSTS.test(u)
 
 export async function fetchText(url) {
   const res = await fetch(url, { headers: { 'user-agent': UA, accept: 'text/html' } })
@@ -46,7 +76,8 @@ export function extractImageUrls(html, pageUrl) {
     if (u.startsWith('//')) u = 'https:' + u
     else if (u.startsWith('/')) u = new URL(u, pageUrl).href
     if (!/^https?:/i.test(u)) return
-    if (!isImage(u) || JUNK.test(u)) return
+    if (!isImage(u) || JUNK.test(u) || PROMO.test(u)) return
+    if (REJECTED.some((frag) => u.includes(frag))) return
     if (!out.includes(u)) out.push(u)
   }
 
@@ -122,7 +153,7 @@ export function rankCandidates(urls, keywords) {
  * bad URL costs the product its whole gallery. That failure-isolation rule is
  * what took the Commons pipeline from 12/35 products to 35/35.
  */
-export async function harvest(pageUrl, slug, outDir, want = 4, keywords = []) {
+export async function harvest(pageUrl, slug, outDir, want = 4, keywords = [], sizeSuffix = '') {
   const html = await fetchText(pageUrl)
   const candidates = rankCandidates(extractImageUrls(html, pageUrl), keywords)
   const saved = []
@@ -131,7 +162,9 @@ export async function harvest(pageUrl, slug, outDir, want = 4, keywords = []) {
     const dest = path.join(outDir, `${slug}-${saved.length + 1}.webp`)
     if (existsSync(dest)) { saved.push({ url, dest, skipped: true }); continue }
     try {
-      const info = await saveImage(url, dest)
+      // Extensionless CDNs (Google) hand back a small default unless the
+      // request asks for a size, e.g. `=w2000`.
+      const info = await saveImage(sizeSuffix && !url.includes('=') ? url + sizeSuffix : url, dest)
       saved.push({ url, dest, ...info })
     } catch { /* next candidate */ }
   }

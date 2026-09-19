@@ -9,6 +9,15 @@ const cheapest = (id: CategoryId) =>
 
 export const categories: Category[] = [
   {
+    id: 'phones',
+    label: 'Phones',
+    blurb: 'Flagship handsets from Apple, Samsung, Google, OnePlus and Xiaomi.',
+    unitsInStock: stockIn('phones'),
+    fromPrice: cheapest('phones'),
+    image: '/media/categories/phones.webp',
+    span: 'large',
+  },
+  {
     id: 'audio',
     label: 'Audio & headphones',
     blurb: 'Headphones, earbuds, speakers and studio instruments.',

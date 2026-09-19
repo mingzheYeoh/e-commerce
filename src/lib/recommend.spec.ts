@@ -60,3 +60,24 @@ describe('recommend', () => {
     expect(soldOut === -1 || soldOut === items.length - 1).toBe(true)
   })
 })
+
+  it('routes phone words to the phones department, not computing', () => {
+    // 'phone' lived in CATEGORY_WORDS.computing before phones became its own
+    // category. Nothing failed when it was left there: build, typecheck and
+    // every other test stayed green while search quietly answered the wrong
+    // department. This is the test that notices.
+    for (const q of ['I need a new phone', 'best smartphone for photos', 'a handset under $1000']) {
+      const { items } = recommend(q)
+      expect(items[0].product.category).toBe('phones')
+    }
+  })
+
+  it('surfaces each phone brand by name', () => {
+    for (const [query, brand] of [
+      ['google pixel', 'GOOGLE'],
+      ['oneplus phone', 'ONEPLUS'],
+      ['xiaomi phone', 'XIAOMI'],
+    ] as const) {
+      expect(recommend(query).items[0].product.brand).toBe(brand)
+    }
+  })

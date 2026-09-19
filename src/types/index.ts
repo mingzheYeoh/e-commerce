@@ -11,8 +11,11 @@ export type BrandId =
   | 'NOTHING'
   | 'KEYCHRON'
   | 'TEENAGE_ENGINEERING'
+  | 'GOOGLE'
+  | 'XIAOMI'
+  | 'ONEPLUS'
 
-export type CategoryId = 'audio' | 'peripherals' | 'imaging' | 'computing'
+export type CategoryId = 'audio' | 'peripherals' | 'imaging' | 'computing' | 'phones'
 
 export interface Colorway {
   name: string
