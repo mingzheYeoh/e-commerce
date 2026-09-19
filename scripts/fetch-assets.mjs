@@ -41,25 +41,25 @@ const QUALITY = 82
 /** Products: each produces <slug>-main.webp, <slug>-alt.webp, <slug>-thumb.webp */
 const PRODUCTS = [
   // audio
-  { slug: 'op1-field', query: 'synthesizer knobs dark studio' },
-  { slug: 'wh1000xm6', query: 'headphones dark background' },
-  { slug: 'ear-open', query: 'wireless earbuds dark' },
-  { slug: 'monitor-one', query: 'studio monitor speaker dark' },
+  { slug: 'op1-field', query: 'synthesizer close up knobs', must: ['synth', 'keyboard', 'knob'] },
+  { slug: 'wh1000xm6', query: 'black headphones product', must: ['headphone'] },
+  { slug: 'ear-open', query: 'wireless earbuds charging case', must: ['earbud', 'airpod', 'earphone'] },
+  { slug: 'monitor-one', query: 'speaker audio black', must: ['speaker'] },
   // peripherals
-  { slug: 'q3-max', query: 'mechanical keyboard rgb dark' },
-  { slug: 'switch-set', query: 'keyboard switches macro' },
-  { slug: 'glyph-mouse', query: 'computer mouse dark desk' },
-  { slug: 'deck-pro', query: 'audio mixer console dark' },
+  { slug: 'q3-max', query: 'mechanical keyboard rgb dark', must: ['keyboard'] },
+  { slug: 'switch-set', query: 'keyboard switches macro', must: ['keyboard', 'key'] },
+  { slug: 'glyph-mouse', query: 'gaming mouse close up', must: ['mouse'] },
+  { slug: 'deck-pro', query: 'audio mixer console dark', must: ['mixer', 'console', 'audio'] },
   // imaging
-  { slug: 'mavic-4-pro', query: 'drone dark background' },
-  { slug: 'osmo-7', query: 'camera gimbal stabilizer' },
-  { slug: 'alpha-7cr', query: 'mirrorless camera dark' },
-  { slug: 'matrice-350', query: 'professional drone flying sky' },
+  { slug: 'mavic-4-pro', query: 'drone quadcopter close up', must: ['drone', 'quadcopter'] },
+  { slug: 'osmo-7', query: 'camera gimbal stabilizer', must: ['camera', 'gimbal'] },
+  { slug: 'alpha-7cr', query: 'mirrorless camera black background', must: ['mirrorless', 'sony', 'camera body'] },
+  { slug: 'matrice-350', query: 'professional drone flying sky', must: ['drone', 'quadcopter'] },
   // computing
-  { slug: 'xr-spatial', query: 'vr headset dark' },
-  { slug: 'phone-3a', query: 'smartphone dark minimal' },
-  { slug: 'ring-one', query: 'smartwatch dark minimal' },
-  { slug: 'tp7-recorder', query: 'field recorder audio device' },
+  { slug: 'xr-spatial', query: 'vr headset dark', must: ['vr', 'headset', 'virtual'] },
+  { slug: 'phone-3a', query: 'smartphone dark minimal', must: ['phone'] },
+  { slug: 'ring-one', query: 'smartwatch dark minimal', must: ['watch'] },
+  { slug: 'tp7-recorder', query: 'portable audio recorder microphone', must: ['recorder', 'microphone', 'audio'] },
 ]
 
 /** Brand hover previews: <id>.webp */
@@ -129,6 +129,50 @@ async function searchUnsplash(query) {
   return results.sort((a, b) => (b.likes ?? 0) - (a.likes ?? 0))
 }
 
+/**
+ * Sorting by likes alone is biased toward artistry over subject: the most-liked
+ * "drone" photo on Unsplash is an aerial landscape, and the most-liked
+ * "synthesizer" is a studio mood shot. When a job declares `must` keywords, keep
+ * only results whose caption actually names the object, then rank those by
+ * likes. Falls back to the unfiltered list if nothing matches.
+ */
+function preferSubject(results, must) {
+  if (!must?.length) return results
+  const hit = results.filter((r) => {
+    const text = `${r.alt_description ?? ''} ${r.description ?? ''}`.toLowerCase()
+    return must.some((word) => text.includes(word))
+  })
+  return hit.length >= 2 ? hit : results
+}
+
+/**
+ * The site's base is #050505, so a photo on a bright background reads as a hole
+ * punched in the page no matter how good it is. Probe the thumbnails of the
+ * strongest candidates and rank them darkest-first.
+ *
+ * Unsplash exposes an average colour per photo, but it is unreliable for
+ * product shots on seamless backdrops, so this measures the actual pixels.
+ */
+async function preferDark(results, sampleSize = 8) {
+  const candidates = results.slice(0, sampleSize)
+  const scored = await Promise.all(
+    candidates.map(async (photo) => {
+      try {
+        const buf = await fetchBuffer(`${photo.urls.raw}&w=200&q=60&fm=jpg&fit=max`)
+        const { channels } = await sharp(buf).stats()
+        // Rec. 709 luma over the per-channel means
+        const luma =
+          0.2126 * channels[0].mean + 0.7152 * channels[1].mean + 0.0722 * channels[2].mean
+        return { photo, luma }
+      } catch {
+        return { photo, luma: 255 } // unmeasurable sorts last
+      }
+    }),
+  )
+  scored.sort((a, b) => a.luma - b.luma)
+  return [...scored.map((s) => s.photo), ...results.slice(sampleSize)]
+}
+
 async function fetchBuffer(url) {
   const res = await fetch(url, { headers: { 'User-Agent': 'nexus-asset-pipeline' } })
   if (!res.ok) throw new Error(`download ${res.status}`)
@@ -163,7 +207,7 @@ async function runImageJob(job, dir, variants) {
     process.stdout.write(`  = ${job.slug} (cached)\n`)
     return
   }
-  const results = await searchUnsplash(job.query)
+  const results = await preferDark(preferSubject(await searchUnsplash(job.query), job.must))
   for (const v of variants) {
     const photo = results[v.index] ?? results[0]
     const dest = path.join(dir, `${job.slug}${v.suffix}.webp`)
