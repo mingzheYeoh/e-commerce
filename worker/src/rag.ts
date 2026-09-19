@@ -18,7 +18,20 @@ export interface Env extends GraphEnv {
 }
 
 const EMBED_MODEL = '@cf/baai/bge-small-en-v1.5'
-const CHAT_MODEL = '@cf/meta/llama-3.1-8b-instruct'
+
+/**
+ * Verified against `wrangler ai models`, not recalled.
+ *
+ * The first build named `@cf/meta/llama-3.1-8b-instruct`, which Cloudflare
+ * retired on 2026-05-30 — the deploy succeeded and every request then failed
+ * with AiError 5028. Model identifiers are inventory, not knowledge: check the
+ * live catalogue before pinning one.
+ *
+ * A 70B follows the "refuse when the context does not cover it" instruction far
+ * more reliably than a 3B, and grounding is the whole point here. fp8-fast keeps
+ * the latency acceptable for a search box.
+ */
+const CHAT_MODEL = '@cf/meta/llama-3.3-70b-instruct-fp8-fast'
 
 export interface Passage {
   id: string

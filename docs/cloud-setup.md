@@ -1,5 +1,8 @@
 # Cloud setup — Cloudflare and Neo4j
 
+**Deployed:** <https://nexus-api.mingzhe030228.workers.dev> — `/api/health` reports
+which bindings resolved.
+
 Everything here is optional at runtime. The storefront, its search and the graph
 snapshot all work as static files; these services add the things a static site
 genuinely cannot do — hold a credential, run inference, and answer Cypher.
@@ -135,3 +138,21 @@ Two mitigations, and the project uses both:
 
 Moving the catalogue itself into a database would buy nothing and add a way for
 the storefront to break.
+
+
+---
+
+## Pinning a Workers AI model
+
+`wrangler ai models` lists what the account can actually call. Do not copy a
+model id from documentation or memory: the first deploy here named
+`@cf/meta/llama-3.1-8b-instruct`, retired on 2026-05-30. The deploy succeeded
+and every request failed with `AiError 5028`, visible only in `wrangler tail`.
+
+Currently pinned:
+
+| Use | Model |
+|---|---|
+| Answering | `@cf/meta/llama-3.3-70b-instruct-fp8-fast` |
+| Embedding | `@cf/baai/bge-small-en-v1.5` (384 dims, cls pooling) |
+| Tool calling (Layer 3) | `@cf/mistralai/mistral-small-3.1-24b-instruct` — documented function-calling support |

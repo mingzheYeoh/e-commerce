@@ -17,7 +17,7 @@ index_name = "nexus-products"
 [[d1_databases]]
 binding = "ORDERS"
 database_name = "nexus-orders"
-database_id = "REPLACE_AFTER_CREATING"
+database_id = "7aa62821-d17f-43a2-b605-2643780e9690"
 
 [vars]
 ALLOWED_ORIGIN = "http://localhost:5173"
