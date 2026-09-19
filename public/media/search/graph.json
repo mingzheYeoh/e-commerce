@@ -58,7 +58,7 @@
     "inStock": true,
     "batteryMah": 7300,
     "chargeWatts": 120,
-    "screenInches": 78,
+    "screenInches": 6.78,
     "refreshHz": 165,
     "megapixels": 50,
     "memoryGb": 12
@@ -71,7 +71,7 @@
     "inStock": true,
     "batteryMah": 6000,
     "chargeWatts": 90,
-    "screenInches": 1,
+    "screenInches": 6.9,
     "refreshHz": 120,
     "megapixels": 200
    },
@@ -193,7 +193,7 @@
     "price": 3899,
     "rating": 4.9,
     "inStock": true,
-    "megapixels": 2
+    "megapixels": 10.2
    },
    {
     "id": "qc-ultra",
@@ -209,7 +209,7 @@
     "price": 299,
     "rating": 4.3,
     "inStock": true,
-    "batteryHours": 5
+    "batteryHours": 7.5
    },
    {
     "id": "soundlink-max",
@@ -248,7 +248,7 @@
     "price": 799,
     "rating": 4.7,
     "inStock": true,
-    "screenInches": 1
+    "screenInches": 2
    },
    {
     "id": "rs4-gimbal",
@@ -265,14 +265,15 @@
     "price": 119,
     "rating": 4.8,
     "inStock": true,
-    "batteryHours": 3
+    "batteryHours": 1680
    },
    {
     "id": "mx-mechanical",
     "title": "MX Mechanical Keyboard",
     "price": 169,
     "rating": 4.6,
-    "inStock": true
+    "inStock": true,
+    "batteryHours": 360
    },
    {
     "id": "brio-webcam",
@@ -320,8 +321,7 @@
     "title": "Soundcore Liberty 5",
     "price": 129.99,
     "rating": 4.3,
-    "inStock": true,
-    "batteryHours": 48
+    "inStock": true
    },
    {
     "id": "gan-charger",
@@ -350,16 +350,14 @@
     "title": "Ear (Open)",
     "price": 149,
     "rating": 4.4,
-    "inStock": true,
-    "batteryHours": 38
+    "inStock": true
    },
    {
     "id": "cmf-buds",
     "title": "CMF Buds Pro 3",
     "price": 69,
     "rating": 4.1,
-    "inStock": false,
-    "batteryHours": 43
+    "inStock": false
    },
    {
     "id": "q3-max",
@@ -409,8 +407,7 @@
     "price": 649,
     "rating": 4.6,
     "inStock": true,
-    "batteryHours": 20,
-    "screenInches": 4
+    "batteryHours": 20
    }
   ],
   "Brand": [

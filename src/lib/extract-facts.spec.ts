@@ -65,3 +65,27 @@ describe('extractFacts', () => {
     expect(withFacts.length / products.length).toBeGreaterThan(0.8)
   })
 })
+
+describe('extractFacts — numbers read out of real spec prose', () => {
+  it('reads a two-decimal measurement whole, not from its middle', () => {
+    // "6.78in" was parsed as 78 inches: without a boundary before the digits the
+    // pattern is free to start after the decimal point. The graph then answered
+    // "largest screen" with a phone.
+    expect(extractFacts(find('oneplus-15')).screenInches).toBe(6.78)
+    expect(extractFacts(find('fx3-cinema')).megapixels).toBe(10.2)
+  })
+
+  it('does not mistake a sensor size for a screen size', () => {
+    // "50MP 1in Light Fusion" and "Sensor: 1in CMOS" are sensors. The Osmo's
+    // actual screen is 2in, and the Xiaomi's is 6.9in.
+    expect(extractFacts(find('xiaomi-17-ultra')).screenInches).toBe(6.9)
+    expect(extractFacts(find('osmo-pocket')).screenInches).toBe(2)
+  })
+
+  it('takes the headline battery figure, not a fast-charge claim', () => {
+    // "70 days, 1 min charge = 3 hours" — the 3 is what a minute of charging
+    // buys, not what the mouse lasts.
+    const mx = extractFacts(find('mx-master'))
+    expect(mx.batteryHours).toBe(70 * 24)
+  })
+})

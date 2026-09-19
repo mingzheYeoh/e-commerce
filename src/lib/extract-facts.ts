@@ -44,6 +44,16 @@ const linesAbout = (p: Product, subject: RegExp) =>
     .map((s) => `${s.label}: ${s.value}`)
     .join(' | ')
 
+/**
+ * A number, but only one that starts where a number starts.
+ *
+ * Every numeric pattern below opens with `NUM`, which refuses to begin in the
+ * middle of a figure. Without it, `(\d{1,2})\s*in` reads "6.78in" as 78 inches
+ * and `(\d{1,3})\s*mp` reads "10.2MP" as 2 megapixels — both silently, both
+ * producing a plausible number that then poisons every comparison it enters.
+ */
+const NUM = String.raw`(?<![\d.])(\d+(?:\.\d+)?)`
+
 /** First capture group of the first pattern that matches, as a number. */
 function firstNumber(text: string, patterns: RegExp[]): number | undefined {
   for (const re of patterns) {
@@ -110,6 +120,26 @@ function storageIn(text: string): number | undefined {
 }
 
 /**
+ * How long it runs on a charge, in hours.
+ *
+ * The first figure in a battery line is the headline one. The MX Master's reads
+ * "70 days, 1 min charge = 3 hours", where the 3 describes what a minute of
+ * charging buys — taking the first `\d+ hours` anywhere in the blob claimed the
+ * mouse lasts three hours instead of ten weeks. Days are converted so the two
+ * are comparable at all.
+ */
+function batteryLife(batteryText: string): number | undefined {
+  const days = firstNumber(batteryText, [new RegExp(NUM + String.raw`\s*days?\b`, 'i')])
+  const hours = firstNumber(batteryText, [new RegExp(NUM + String.raw`\s*-?\s*hours?\b`, 'i')])
+  if (days === undefined) return hours
+  if (hours === undefined) return days * 24
+  // Both present: whichever the vendor put first is the claim being made.
+  const dayAt = batteryText.search(/\d[\d.,]*\s*days?\b/i)
+  const hourAt = batteryText.search(/\d[\d.,]*\s*-?\s*hours?\b/i)
+  return dayAt < hourAt ? days * 24 : hours
+}
+
+/**
  * A panel refresh rate, or nothing.
  *
  * `\b` matters: without it, "40,000 Hz" matches the digits "000" and yields a
@@ -117,25 +147,35 @@ function storageIn(text: string): number | undefined {
  * any comparison it takes part in. The range bound is the second guard.
  */
 function displayRefresh(displayText: string): number | undefined {
-  const hz = firstNumber(displayText, [/\b(\d{2,3})\s*hz/i])
+  const hz = firstNumber(displayText, [new RegExp(NUM + String.raw`\s*hz`, 'i')])
   return hz !== undefined && hz >= 24 && hz <= 540 ? hz : undefined
 }
 
 export function extractFacts(product: Product): ProductFacts {
   const text = specText(product)
   const displayText = linesAbout(product, /display|screen|refresh|panel|oled|amoled|lcd/i)
+  // Battery claims and charging claims share a line; scoping keeps a quoted
+  // runtime from being read out of an unrelated spec.
+  const batteryText = linesAbout(product, /battery|runtime|playback|endurance/i) || text
 
   return {
-    // "Up to 36 hours video playback", "20 hours with ANC on"
-    batteryHours: firstNumber(text, [/(\d{1,3})\s*hours?\b/i, /(\d{1,3})\s*-?\s*hour\b/i]),
+    batteryHours: batteryLife(batteryText),
     batteryMah: firstNumber(text, [/([\d,]{3,6})\s*mah/i]),
     // "60W wired, 15W wireless" -> the wired figure, which is the headline one.
-    chargeWatts: firstNumber(text, [/(\d{1,3})\s*w\s*wired/i, /(\d{1,3})\s*w\b(?!\s*wireless)/i]),
-    screenInches: firstNumber(text, [/(\d{1,2}(?:\.\d)?)\s*in\b/i, /(\d{1,2}(?:\.\d)?)\s*-?inch/i]),
+    chargeWatts: firstNumber(text, [
+      new RegExp(NUM + String.raw`\s*w\s*wired`, 'i'),
+      new RegExp(NUM + String.raw`\s*w\b(?!\s*wireless)`, 'i'),
+    ]),
+    // Scoped like refreshHz: "50MP 1in Light Fusion" and "Sensor: 1in CMOS" are
+    // sensor sizes, and reading them as screens gave a phone a one-inch display.
+    screenInches: firstNumber(displayText, [
+      new RegExp(NUM + String.raw`\s*in\b`, 'i'),
+      new RegExp(NUM + String.raw`\s*-?inch`, 'i'),
+    ]),
     // Scoped to display lines and bounded to plausible panel rates, so an audio
     // frequency response ("4 Hz - 40,000 Hz") can never be read as one.
     refreshHz: displayRefresh(displayText),
-    megapixels: firstNumber(text, [/(\d{1,3})\s*mp\b/i]),
+    megapixels: firstNumber(text, [new RegExp(NUM + String.raw`\s*mp\b`, 'i')]),
     storageGb: storageIn(text),
     memoryGb: firstNumber(text, [/(\d{1,3})\s*gb\s*(?:lpddr|unified|ram|memory)/i]),
     ports: withImpliedPorts(PORTS.filter(([re]) => re.test(text)).map(([, name]) => name)),
