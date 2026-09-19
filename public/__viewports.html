@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Viewport rig</title>
+    <style>
+      body {
+        margin: 0;
+        background: #18181b;
+        font: 11px ui-monospace, monospace;
+        color: #8e8e93;
+        display: flex;
+        gap: 12px;
+        padding: 12px;
+      }
+      figure { margin: 0; }
+      figcaption { padding: 4px 0; letter-spacing: 0.12em; }
+      iframe { border: 1px solid #333; background: #050505; display: block; }
+    </style>
+  </head>
+  <body>
+    <!-- Dev-only rig: the extension cannot resize a maximized window, so
+         responsive checks run inside sized iframes instead. -->
+    <figure>
+      <figcaption>390 × 844 — PHONE</figcaption>
+      <iframe src="/" width="390" height="844" title="phone"></iframe>
+    </figure>
+    <figure>
+      <figcaption>768 × 844 — TABLET</figcaption>
+      <iframe src="/" width="768" height="844" title="tablet"></iframe>
+    </figure>
+  </body>
+</html>

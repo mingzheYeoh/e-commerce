@@ -109,7 +109,7 @@ const pad = (n: number) => String(n).padStart(2, '0')
         <button
           type="button"
           data-bag-trigger
-          class="flex items-center gap-2.5 border px-3 py-2 font-mono text-[11px] tracking-[0.14em] transition-all"
+          class="flex shrink-0 items-center gap-2.5 whitespace-nowrap border px-2.5 py-2 font-mono text-[11px] tracking-[0.14em] transition-all md:px-3"
           :class="
             cart.count
               ? 'border-accent-cyan/60 bg-accent-cyan/10 text-accent-cyan'

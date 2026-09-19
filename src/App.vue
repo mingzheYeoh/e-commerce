@@ -2,7 +2,8 @@
 import NavBar from '@/components/layout/NavBar.vue'
 import CartDrawer from '@/components/layout/CartDrawer.vue'
 import SearchPalette from '@/components/layout/SearchPalette.vue'
-import { useLenis } from '@/composables/useLenis'
+import HeroViewport from '@/components/sections/HeroViewport.vue'
+ import { useLenis } from '@/composables/useLenis'
 
 useLenis()
 </script>
@@ -20,11 +21,6 @@ useLenis()
   <CartDrawer />
 
   <main id="main" class="bg-void">
-    <section id="top" class="flex min-h-screen items-center justify-center px-6">
-      <p class="mono-label text-center">
-        MODULE_00 ONLINE — NAV / BAG / SEARCH
-        <span class="mt-2 block text-text-secondary/60">SECTIONS MOUNT IN LATER TASKS</span>
-      </p>
-    </section>
+    <HeroViewport />
   </main>
 </template>
