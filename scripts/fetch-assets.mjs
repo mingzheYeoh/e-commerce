@@ -42,52 +42,52 @@ const QUALITY = 82
 /** Products: each produces <slug>-main.webp, <slug>-alt.webp, <slug>-thumb.webp */
 const PRODUCTS = [
   // Apple
-  { slug: 'airpods-max', query: 'apple airpods max headphones', must: ['headphone'], allowBrands: ['apple', 'airpod'] },
-  { slug: 'macbook-pro', query: 'macbook laptop dark desk', must: ['laptop', 'macbook', 'computer'] },
-  { slug: 'watch-ultra', query: 'smartwatch titanium close up', must: ['watch'] },
+  { slug: 'airpods-max', query: 'apple airpods max headphones', wiki: 'AirPods Max', must: ['headphone'], allowBrands: ['apple', 'airpod'] },
+  { slug: 'macbook-pro', query: 'macbook laptop dark desk', wiki: 'MacBook Pro 16', must: ['laptop', 'macbook', 'computer'] },
+  { slug: 'watch-ultra', query: 'smartwatch titanium close up', wiki: 'Apple Watch Ultra', must: ['watch'] },
   // Samsung
-  { slug: 'galaxy-s26', query: 'samsung galaxy phone', must: ['phone'], allowBrands: ['samsung', 'galaxy'] },
-  { slug: 'galaxy-buds', query: 'samsung galaxy buds earbuds', must: ['earbud', 'earphone', 'bud'], allowBrands: ['samsung', 'galaxy'] },
-  { slug: 'odyssey-oled', query: 'ultrawide gaming monitor desk', must: ['monitor', 'screen', 'display'] },
+  { slug: 'galaxy-s26', query: 'samsung galaxy phone', wiki: 'Samsung Galaxy S24 Ultra', must: ['phone'], allowBrands: ['samsung', 'galaxy'] },
+  { slug: 'galaxy-buds', query: 'samsung galaxy buds earbuds', wiki: 'Samsung Galaxy Buds', must: ['earbud', 'earphone', 'bud'], allowBrands: ['samsung', 'galaxy'] },
+  { slug: 'odyssey-oled', query: 'ultrawide gaming monitor desk', wiki: 'Samsung Odyssey monitor', must: ['monitor', 'screen', 'display'] },
   // Sony
-  { slug: 'wh1000xm6', query: 'sony wireless headphones', must: ['headphone'], allowBrands: ['sony'] },
-  { slug: 'alpha-7cr', query: 'mirrorless camera black background', must: ['mirrorless', 'sony', 'camera body'] },
-  { slug: 'fx3-cinema', query: 'cinema camera rig video', must: ['camera'] },
+  { slug: 'wh1000xm6', query: 'sony wireless headphones', wiki: 'Sony WH-1000XM', must: ['headphone'], allowBrands: ['sony'] },
+  { slug: 'alpha-7cr', query: 'mirrorless camera black background', wiki: 'Sony Alpha 7', must: ['mirrorless', 'sony', 'camera body'] },
+  { slug: 'fx3-cinema', query: 'cinema camera rig video', wiki: 'Sony FX3 camera', must: ['camera'] },
   // Bose
-  { slug: 'qc-ultra', query: 'noise cancelling headphones dark', must: ['headphone'] },
-  { slug: 'open-earbuds', query: 'earbuds macro dark', must: ['earbud', 'earphone'] },
-  { slug: 'soundlink-max', query: 'bose portable speaker', must: ['speaker'], allowBrands: ['bose'] },
+  { slug: 'qc-ultra', query: 'noise cancelling headphones dark', wiki: 'Bose QuietComfort', must: ['headphone'] },
+  { slug: 'open-earbuds', query: 'earbuds macro dark', wiki: 'Bose earbuds', must: ['earbud', 'earphone'] },
+  { slug: 'soundlink-max', query: 'bose portable speaker', wiki: 'Bose SoundLink speaker', must: ['speaker'], allowBrands: ['bose'] },
   // Sennheiser
-  { slug: 'hd900s', query: 'sennheiser studio headphones', must: ['headphone'], allowBrands: ['sennheiser'] },
-  { slug: 'momentum-4', query: 'sennheiser momentum headphones', must: ['headphone'], allowBrands: ['sennheiser'] },
+  { slug: 'hd900s', query: 'sennheiser studio headphones', wiki: 'Sennheiser HD headphones', must: ['headphone'], allowBrands: ['sennheiser'] },
+  { slug: 'momentum-4', query: 'sennheiser momentum headphones', wiki: 'Sennheiser Momentum', must: ['headphone'], allowBrands: ['sennheiser'] },
   // DJI
-  { slug: 'mavic-4-pro', query: 'drone quadcopter close up', must: ['drone', 'quadcopter'] },
-  { slug: 'osmo-pocket', query: 'pocket action camera handheld', must: ['camera'] },
-  { slug: 'rs4-gimbal', query: 'dji gimbal stabilizer rig', must: ['gimbal'], allowBrands: ['dji'] },
+  { slug: 'mavic-4-pro', query: 'drone quadcopter close up', wiki: 'DJI Mavic 4 Pro', must: ['drone', 'quadcopter'] },
+  { slug: 'osmo-pocket', query: 'pocket action camera handheld', wiki: 'DJI Osmo Pocket', must: ['camera'] },
+  { slug: 'rs4-gimbal', query: 'dji gimbal stabilizer rig', wiki: 'DJI Ronin gimbal', must: ['gimbal'], allowBrands: ['dji'] },
   // Logitech
-  { slug: 'mx-master', query: 'logitech wireless mouse', must: ['mouse'], allowBrands: ['logitech'] },
-  { slug: 'mx-mechanical', query: 'low profile keyboard desk', must: ['keyboard'] },
-  { slug: 'brio-webcam', query: 'webcam camera monitor', must: ['webcam', 'camera'] },
+  { slug: 'mx-master', query: 'logitech wireless mouse', wiki: 'Logitech MX Master', must: ['mouse'], allowBrands: ['logitech'] },
+  { slug: 'mx-mechanical', query: 'low profile keyboard desk', wiki: 'Logitech keyboard', must: ['keyboard'] },
+  { slug: 'brio-webcam', query: 'webcam camera monitor', wiki: 'Logitech webcam', must: ['webcam', 'camera'] },
   // Razer
-  { slug: 'blackwidow', query: 'gaming keyboard rgb dark', must: ['keyboard'] },
-  { slug: 'viper-v3', query: 'gaming mouse rgb', must: ['mouse'] },
-  { slug: 'blade-16', query: 'gaming laptop rgb dark', must: ['laptop', 'computer'] },
+  { slug: 'blackwidow', query: 'gaming keyboard rgb dark', wiki: 'Razer BlackWidow keyboard', must: ['keyboard'] },
+  { slug: 'viper-v3', query: 'gaming mouse rgb', wiki: 'Razer mouse', must: ['mouse'] },
+  { slug: 'blade-16', query: 'gaming laptop rgb dark', wiki: 'Razer Blade laptop', must: ['laptop', 'computer'] },
   // Anker
-  { slug: 'prime-powerbank', query: 'power bank portable charger', must: ['power bank', 'charger', 'battery'] },
-  { slug: 'soundcore-liberty', query: 'earbuds case product dark', must: ['earbud', 'earphone'] },
-  { slug: 'gan-charger', query: 'usb charger adapter cable', must: ['charger', 'adapter', 'cable', 'usb'] },
+  { slug: 'prime-powerbank', query: 'power bank portable charger', wiki: 'Anker power bank', must: ['power bank', 'charger', 'battery'] },
+  { slug: 'soundcore-liberty', query: 'earbuds case product dark', wiki: 'Anker Soundcore earbuds', must: ['earbud', 'earphone'] },
+  { slug: 'gan-charger', query: 'usb charger adapter cable', wiki: 'Anker charger', must: ['charger', 'adapter', 'cable', 'usb'] },
   // Nothing
-  { slug: 'phone-3a', query: 'smartphone dark minimal', must: ['phone'] },
-  { slug: 'ear-open', query: 'wireless earbuds charging case', must: ['earbud', 'airpod', 'earphone'] },
-  { slug: 'cmf-buds', query: 'earbuds product photography', must: ['earbud', 'earphone'] },
+  { slug: 'phone-3a', query: 'smartphone dark minimal', wiki: 'Nothing Phone', must: ['phone'] },
+  { slug: 'ear-open', query: 'wireless earbuds charging case', wiki: 'Nothing Ear', must: ['earbud', 'airpod', 'earphone'] },
+  { slug: 'cmf-buds', query: 'earbuds product photography', wiki: 'CMF by Nothing', must: ['earbud', 'earphone'] },
   // Keychron
-  { slug: 'q3-max', query: 'mechanical keyboard rgb dark', must: ['keyboard'] },
-  { slug: 'switch-set', query: 'keyboard switches macro', must: ['keyboard', 'key'] },
-  { slug: 'k-pro-mouse', query: 'computer mouse minimal dark', must: ['mouse'] },
+  { slug: 'q3-max', query: 'mechanical keyboard rgb dark', wiki: 'Keychron keyboard', must: ['keyboard'] },
+  { slug: 'switch-set', query: 'keyboard switches macro', wiki: 'mechanical keyboard switches', must: ['keyboard', 'key'] },
+  { slug: 'k-pro-mouse', query: 'computer mouse minimal dark', wiki: 'Keychron mouse', must: ['mouse'] },
   // Teenage Engineering
-  { slug: 'op1-field', query: 'synthesizer close up knobs', must: ['synth', 'keyboard', 'knob'] },
-  { slug: 'tp7-recorder', query: 'portable audio recorder microphone', must: ['recorder', 'microphone', 'audio'] },
-  { slug: 'ob4-speaker', query: 'speaker audio black', must: ['speaker'] },
+  { slug: 'op1-field', query: 'synthesizer close up knobs', wiki: 'Teenage Engineering OP-1', must: ['synth', 'keyboard', 'knob'] },
+  { slug: 'tp7-recorder', query: 'portable audio recorder microphone', wiki: 'Teenage Engineering TP-7', must: ['recorder', 'microphone', 'audio'] },
+  { slug: 'ob4-speaker', query: 'speaker audio black', wiki: 'Teenage Engineering OB-4', must: ['speaker'] },
 ]
 
 /** Brand hover previews: <id>.webp */
@@ -242,7 +242,7 @@ async function rankByLuma(results, target = null, sampleSize = 8) {
   const scored = await Promise.all(
     candidates.map(async (photo) => {
       try {
-        const buf = await fetchBuffer(`${photo.urls.raw}&w=200&q=60&fm=jpg&fit=max`)
+        const buf = await fetchBuffer(photo.probeUrl ?? photo.downloadUrl)
         const { channels } = await sharp(buf).stats()
         // Rec. 709 luma over the per-channel means
         const luma =
@@ -262,14 +262,104 @@ async function rankByLuma(results, target = null, sampleSize = 8) {
   return [...scored.map((s) => s.photo), ...results.slice(sampleSize)]
 }
 
-async function fetchBuffer(url) {
-  const res = await fetch(url, { headers: { 'User-Agent': 'nexus-asset-pipeline' } })
+/**
+ * Wikimedia Commons: the only source that has photographs of the actual
+ * products — a real Mavic 4 Pro, a real Apple Watch Ultra — under a licence
+ * that permits reuse. Stock libraries only have lookalikes, and manufacturer
+ * press images are licensed for editorial use, not for a storefront.
+ *
+ * CC BY-SA requires attribution, so licence and author are captured per file
+ * and surfaced on the product page.
+ */
+async function searchCommons(query, limit = 12) {
+  const url =
+    'https://commons.wikimedia.org/w/api.php?action=query&generator=search' +
+    `&gsrsearch=${encodeURIComponent(query + ' filetype:bitmap')}` +
+    `&gsrlimit=${limit}&gsrnamespace=6&prop=imageinfo&iiprop=url|extmetadata` +
+    '&iiurlwidth=2000&format=json'
+
+  const res = await fetch(url, {
+    headers: { 'User-Agent': 'nexus-asset-pipeline/1.0 (portfolio demo)' },
+  })
+  if (!res.ok) throw new Error(`commons ${res.status}`)
+
+  const pages = Object.values((await res.json()).query?.pages ?? {})
+  const strip = (html) => (html ?? '').replace(/<[^>]*>/g, '').trim()
+
+  return pages
+    .map((p) => {
+      const info = p.imageinfo?.[0]
+      if (!info?.thumburl) return null
+      const meta = info.extmetadata ?? {}
+      const licence = strip(meta.LicenseShortName?.value)
+      // Anything without a clearly reusable licence is dropped rather than guessed at.
+      if (!/^(CC|Public domain|CC0)/i.test(licence)) return null
+      return {
+        source: 'Wikimedia Commons',
+        downloadUrl: info.thumburl,
+        title: p.title.replace(/^File:/, ''),
+        licence,
+        artist: strip(meta.Artist?.value) || 'Unknown',
+        pageUrl: info.descriptionurl ?? 'https://commons.wikimedia.org',
+      }
+    })
+    .filter(Boolean)
+}
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+
+/**
+ * Wikimedia asks clients to identify themselves and to keep request rates
+ * reasonable; firing four downloads per product with no gap earns a 429 and a
+ * half-empty catalogue. Requests to their hosts are serialised with a delay,
+ * and a 429 backs off rather than failing the asset.
+ */
+let wikimediaGate = Promise.resolve()
+const WIKIMEDIA_DELAY_MS = 400
+
+function isWikimedia(url) {
+  return /wikimedia\.org|wikipedia\.org/.test(url)
+}
+
+async function fetchBuffer(url, attempt = 0) {
+  if (isWikimedia(url)) {
+    const wait = wikimediaGate
+    let release
+    wikimediaGate = new Promise((resolve) => (release = resolve))
+    await wait
+    setTimeout(release, WIKIMEDIA_DELAY_MS)
+  }
+
+  const res = await fetch(url, {
+    headers: { 'User-Agent': 'nexus-asset-pipeline/1.0 (portfolio demo; contact via repo)' },
+  })
+
+  if (res.status === 429 && attempt < 4) {
+    const backoff = 1500 * 2 ** attempt
+    process.stdout.write(`  … rate limited, waiting ${backoff}ms\n`)
+    await sleep(backoff)
+    return fetchBuffer(url, attempt + 1)
+  }
+
   if (!res.ok) throw new Error(`download ${res.status}`)
   return Buffer.from(await res.arrayBuffer())
 }
 
+/** Unsplash results, mapped onto the same shape Commons results use. */
+function asCandidates(unsplash) {
+  return unsplash.map((p) => ({
+    source: 'Unsplash',
+    downloadUrl: `${p.urls.raw}&w=2400&q=90&fm=jpg&fit=max`,
+    title: p.alt_description ?? 'Product photograph',
+    licence: 'Unsplash Licence',
+    artist: p.user?.name ?? 'Unknown',
+    pageUrl: p.links?.html ?? 'https://unsplash.com',
+    probeUrl: `${p.urls.raw}&w=200&q=60&fm=jpg&fit=max`,
+  }))
+}
+
 /**
- * Download one Unsplash photo and write it as WebP.
+ * Download one photo and write it as WebP.
  *
  * Returns false when the encoded bytes match an image already on disk, so the
  * caller can try the next candidate. Hashing the output rather than tracking
@@ -277,10 +367,10 @@ async function fetchBuffer(url) {
  * for assets fetched by earlier runs, and an Unsplash id can itself begin with
  * a dash, which quietly breaks that parsing. The pixels cannot lie.
  */
-async function writePhoto(photo, dest, width) {
+async function writePhoto(candidate, dest, width) {
   if (existsSync(dest)) return false
 
-  const buf = await fetchBuffer(`${photo.urls.raw}&w=2400&q=90&fm=jpg&fit=max`)
+  const buf = await fetchBuffer(candidate.downloadUrl)
   const encoded = await sharp(buf)
     .resize({ width, withoutEnlargement: true })
     .webp({ quality: QUALITY })
@@ -295,8 +385,8 @@ async function writePhoto(photo, dest, width) {
 }
 
 /** Re-encode a photo already claimed by this job at a different width. */
-async function writeSized(photo, dest, width) {
-  const buf = await fetchBuffer(`${photo.urls.raw}&w=2400&q=90&fm=jpg&fit=max`)
+async function writeSized(candidate, dest, width) {
+  const buf = await fetchBuffer(candidate.downloadUrl)
   const encoded = await sharp(buf)
     .resize({ width, withoutEnlargement: true })
     .webp({ quality: QUALITY })
@@ -305,14 +395,14 @@ async function writeSized(photo, dest, width) {
   seenHashes.add(createHash('md5').update(encoded).digest('hex'))
 }
 
-function credit(file, photo) {
+function credit(file, candidate) {
   credits.push({
     file,
-    photoId: photo.id,
-    photographer: photo.user?.name ?? 'Unknown',
-    profileUrl: photo.user?.links?.html ?? 'https://unsplash.com',
-    sourceUrl: photo.links?.html ?? 'https://unsplash.com',
-    source: 'Unsplash',
+    photographer: candidate.artist,
+    profileUrl: candidate.pageUrl,
+    sourceUrl: candidate.pageUrl,
+    licence: candidate.licence,
+    source: candidate.source,
   })
 }
 
@@ -331,9 +421,29 @@ async function runImageJob(job, dir, variants) {
     process.stdout.write(`  = ${job.slug} (cached)\n`)
     return
   }
-  const subject = preferSubject(await searchUnsplash(job.query), job.must)
-  const brandSafe = rejectsForeignBrands(subject, job.allowBrands ?? [])
-  const results = await rankByLuma(brandSafe, job.targetLuma ?? null)
+  // Commons first: those are photographs of the actual model. Unsplash fills
+  // whatever is left, because Commons coverage is uneven — it has a Mavic 4 Pro
+  // but nothing for most earbuds.
+  let commons = []
+  if (job.wiki) {
+    try {
+      commons = await searchCommons(job.wiki)
+    } catch (err) {
+      process.stdout.write(`  ~ ${job.slug}: commons unavailable (${err.message})
+`)
+    }
+  }
+
+  const stock = rejectsForeignBrands(
+    preferSubject(await searchUnsplash(job.query), job.must),
+    job.allowBrands ?? [],
+  )
+  const results = [...commons, ...(await rankByLuma(asCandidates(stock), job.targetLuma ?? null))]
+
+  if (job.wiki) {
+    process.stdout.write(`  · ${job.slug}: ${commons.length} real-product photo(s) from Commons
+`)
+  }
 
   /** slot -> the photo chosen for it, resolved once. */
   const chosen = new Map()
@@ -466,9 +576,11 @@ async function main() {
 `)
 
   await runBatch('products', PRODUCTS, path.join(MEDIA, 'products'), [
-    { suffix: '-main', slot: 'hero', index: 0, width: WIDTH_MAIN },
-    { suffix: '-alt', slot: 'second', index: 1, width: WIDTH_MAIN },
-    { suffix: '-thumb', slot: 'hero', index: 0, width: WIDTH_THUMB },
+    { suffix: '-1', slot: 'a', index: 0, width: WIDTH_MAIN },
+    { suffix: '-2', slot: 'b', index: 1, width: WIDTH_MAIN },
+    { suffix: '-3', slot: 'c', index: 2, width: WIDTH_MAIN },
+    { suffix: '-4', slot: 'd', index: 3, width: WIDTH_MAIN },
+    { suffix: '-thumb', slot: 'a', index: 0, width: WIDTH_THUMB },
   ])
 
   await runBatch('brands', BRANDS, path.join(MEDIA, 'brands'), [
@@ -502,10 +614,27 @@ async function main() {
     JSON.stringify([...byFile.values()].sort((a, b) => a.file.localeCompare(b.file)), null, 2) + '\n',
   )
 
+  // A product with no hero image renders a broken card, so the run says so
+  // plainly rather than leaving it to be found in the browser.
+  const incomplete = PRODUCTS.filter(
+    (job) =>
+      !existsSync(path.join(MEDIA, 'products', `${job.slug}-1.webp`)) ||
+      !existsSync(path.join(MEDIA, 'products', `${job.slug}-thumb.webp`)),
+  ).map((job) => job.slug)
+
   process.stdout.write(
     `\ndone. ${byFile.size} assets credited, ${skipped} skipped.\n` +
       `credits -> src/data/credits.json\n`,
   )
+
+  if (incomplete.length) {
+    process.stdout.write(
+      `\nINCOMPLETE — no hero image for: ${incomplete.join(', ')}\n` +
+        `Re-run \`npm run assets\` to fill the gaps.\n`,
+    )
+  } else {
+    process.stdout.write(`all ${PRODUCTS.length} products have a hero image and thumbnail.\n`)
+  }
 }
 
 main().catch((err) => {

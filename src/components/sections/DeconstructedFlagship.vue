@@ -72,7 +72,8 @@ function preorder() {
     rating: 5,
     reviewCount: 0,
     specsSummary: flagship.parts.map((p) => p.spec),
-    media: { heroImage: flagship.image, thumb: flagship.image },
+    specs: flagship.parts.map((p) => ({ label: p.label, value: p.spec })),
+    media: { heroImage: flagship.image, thumb: flagship.image, gallery: [flagship.image] },
     colorways: flagship.variants,
   }
   cart.add(asProduct)

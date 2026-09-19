@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
-import { Search, ShoppingBag } from 'lucide-vue-next'
+import { Search, ShoppingBag, Tag } from 'lucide-vue-next'
+import MegaMenu from './MegaMenu.vue'
 import { useCartStore } from '@/stores/cart'
 import { useUiStore, type CurrencyCode } from '@/stores/ui'
 import { useCurrency } from '@/composables/useCurrency'
@@ -10,12 +11,6 @@ const cart = useCartStore()
 const ui = useUiStore()
 const { format } = useCurrency()
 
-const links = [
-  { label: 'Shop all', to: { path: '/shop' } },
-  { label: 'Audio', to: { path: '/shop', query: { category: 'audio' } } },
-  { label: 'Cameras & drones', to: { path: '/shop', query: { category: 'imaging' } } },
-  { label: 'Keyboards & mice', to: { path: '/shop', query: { category: 'peripherals' } } },
-]
 
 const currencies: CurrencyCode[] = ['USD', 'EUR', 'GBP']
 
@@ -42,34 +37,32 @@ watch(
         <span class="hidden text-xs text-text-muted lg:inline">Consumer Electronics</span>
       </RouterLink>
 
-      <ul class="hidden items-center gap-1 lg:flex">
-        <li v-for="link in links" :key="link.label">
-          <RouterLink
-            :to="link.to"
-            class="rounded px-3 py-2 text-sm font-medium text-text-secondary transition-colors hover:bg-surface-2 hover:text-text-primary"
-          >
-            {{ link.label }}
-          </RouterLink>
-        </li>
-      </ul>
+      <nav class="hidden items-center gap-1 lg:flex" aria-label="Main">
+        <MegaMenu />
+        <RouterLink
+          to="/shop?deal=1"
+          class="flex h-10 items-center gap-1.5 rounded px-3 text-sm font-medium text-text-secondary transition-colors hover:bg-surface-2 hover:text-text-primary"
+        >
+          <Tag class="h-3.5 w-3.5" aria-hidden="true" />
+          Deals
+        </RouterLink>
+      </nav>
 
       <div class="flex items-center gap-2 md:gap-3">
         <button
           type="button"
-          class="hidden items-center gap-2.5 rounded border border-border-hairline bg-surface-1 px-3 py-2 text-sm text-text-secondary transition-colors hover:border-border-strong hover:text-text-primary sm:flex"
+          class="hidden h-10 items-center gap-2.5 rounded border border-border-hairline bg-surface-1 px-3 text-sm text-text-secondary transition-colors hover:border-border-strong hover:text-text-primary sm:flex"
           aria-label="Search products"
           @click="ui.openSearch()"
         >
           <Search class="h-4 w-4" aria-hidden="true" />
           <span>Search</span>
-          <kbd class="rounded border border-border-hairline px-1.5 py-0.5 text-[10px] text-text-muted">
-            ⌘K
-          </kbd>
+          <kbd class="rounded border border-border-hairline px-1.5 text-[10px] leading-4 text-text-muted">⌘K</kbd>
         </button>
 
         <button
           type="button"
-          class="rounded border border-border-hairline bg-surface-1 p-2 text-text-secondary transition-colors hover:text-text-primary sm:hidden"
+          class="flex h-10 w-10 items-center justify-center rounded border border-border-hairline bg-surface-1 text-text-secondary transition-colors hover:text-text-primary sm:hidden"
           aria-label="Search products"
           @click="ui.openSearch()"
         >
@@ -80,7 +73,7 @@ watch(
         <select
           id="currency"
           :value="ui.currency"
-          class="hidden rounded border border-border-hairline bg-surface-1 px-2 py-2 text-sm text-text-secondary transition-colors hover:border-border-strong md:block"
+          class="hidden h-10 rounded border border-border-hairline bg-surface-1 px-2 text-sm text-text-secondary transition-colors hover:border-border-strong md:block"
           @change="ui.setCurrency(($event.target as HTMLSelectElement).value as CurrencyCode)"
         >
           <option v-for="code in currencies" :key="code" :value="code" class="bg-surface-1">
@@ -90,7 +83,7 @@ watch(
 
         <button
           type="button"
-          class="flex shrink-0 items-center gap-2 whitespace-nowrap rounded border px-3 py-2 text-sm font-medium transition-all"
+          class="flex h-10 shrink-0 items-center gap-2 whitespace-nowrap rounded border px-3 text-sm font-medium transition-all"
           :class="
             cart.count
               ? 'border-accent bg-accent/10 text-accent'

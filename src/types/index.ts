@@ -33,13 +33,18 @@ export interface Product {
   badge?: 'NEW_DROP' | 'LIMITED_EDITION' | 'DISCOUNT'
   rating: number
   reviewCount: number
+  /** Three highlights, for cards and search results. */
   specsSummary: string[]
+  /** The full table shown on the product page. */
+  specs: { label: string; value: string }[]
   media: {
     heroImage: string
     /** Cross-faded in on card hover. The original spec called for a video here;
      *  a second still costs ~200KB instead of ~6MB for the same read. */
     hoverImage?: string
     thumb: string
+    /** Every angle we hold, hero first. Drives the product page gallery. */
+    gallery: string[]
   }
   colorways: Colorway[]
 }
@@ -92,4 +97,6 @@ export interface Credit {
   profileUrl: string
   sourceUrl: string
   source: string
+  /** Present for Commons files; CC BY-SA requires it to be shown. */
+  licence?: string
 }

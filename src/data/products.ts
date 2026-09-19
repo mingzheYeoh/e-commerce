@@ -1,10 +1,17 @@
 import type { Product, BrandId, CategoryId, Colorway } from '@/types'
 
-const img = (slug: string) => ({
-  heroImage: `/media/products/${slug}-main.webp`,
-  hoverImage: `/media/products/${slug}-alt.webp`,
-  thumb: `/media/products/${slug}-thumb.webp`,
-})
+const img = (slug: string) => {
+  // Four angles per product, written by scripts/fetch-assets.mjs. Commons
+  // rarely has four photographs of one model, so the tail can be thinner —
+  // the gallery renders whatever exists.
+  const gallery = [1, 2, 3, 4].map((n) => `/media/products/${slug}-${n}.webp`)
+  return {
+    heroImage: gallery[0],
+    hoverImage: gallery[1],
+    thumb: `/media/products/${slug}-thumb.webp`,
+    gallery,
+  }
+}
 
 /** Finishes reused across products, so the same grey means the same grey. */
 const C = {
@@ -30,12 +37,23 @@ type Draft = {
   reviews: number
   specs: string[]
   colorways: Colorway[]
+  techSpecs?: [string, string][]
 }
 
 const drafts: Draft[] = [
   /* ---------------------------------------------------------------- Apple */
   {
     slug: 'airpods-max',
+    techSpecs: [
+      ['Driver', '40mm dynamic, custom Apple'],
+      ['Noise control', 'Active ANC with Transparency'],
+      ['Battery', '20 hours with ANC on'],
+      ['Chip', 'Apple H2, one per cup'],
+      ['Audio', 'Personalised Spatial Audio, head tracking'],
+      ['Connectivity', 'Bluetooth 5.3, USB-C'],
+      ['Weight', '384.8 g'],
+      ['In the box', 'Smart Case, USB-C cable'],
+    ],
     sku: 'APL-APM2-101',
     brand: 'APPLE',
     title: 'AirPods Max (2nd gen)',
@@ -50,6 +68,16 @@ const drafts: Draft[] = [
   },
   {
     slug: 'macbook-pro',
+    techSpecs: [
+      ['Chip', 'Apple M5 Pro, 14-core CPU / 20-core GPU'],
+      ['Memory', '24GB unified, up to 128GB'],
+      ['Storage', '512GB SSD, up to 8TB'],
+      ['Display', '16.2in Liquid Retina XDR, 3456×2234, 120Hz'],
+      ['Brightness', '1000 nits sustained, 1600 nits peak HDR'],
+      ['Battery', 'Up to 24 hours video playback'],
+      ['Ports', '3× Thunderbolt 5, HDMI, SDXC, MagSafe 3'],
+      ['Weight', '2.14 kg'],
+    ],
     sku: 'APL-MBP16-102',
     brand: 'APPLE',
     title: 'MacBook Pro 16" M5 Pro',
@@ -63,6 +91,16 @@ const drafts: Draft[] = [
   },
   {
     slug: 'watch-ultra',
+    techSpecs: [
+      ['Case', '49mm aerospace-grade titanium'],
+      ['Display', 'LTPO3 OLED, 3000 nits peak'],
+      ['Water resistance', '100m, EN13319 dive certified'],
+      ['GPS', 'Precision dual-frequency L1 + L5'],
+      ['Battery', '36 hours normal, 72 hours low power'],
+      ['Sensors', 'ECG, blood oxygen, temperature, depth'],
+      ['Durability', 'MIL-STD-810H'],
+      ['Connectivity', '5G cellular, Wi-Fi 6, Bluetooth 5.3'],
+    ],
     sku: 'APL-AWU3-103',
     brand: 'APPLE',
     title: 'Apple Watch Ultra 3',
@@ -78,6 +116,16 @@ const drafts: Draft[] = [
   /* -------------------------------------------------------------- Samsung */
   {
     slug: 'galaxy-s26',
+    techSpecs: [
+      ['Display', '6.9in QHD+ Dynamic AMOLED 2X, 1–120Hz'],
+      ['Processor', 'Snapdragon 8 Elite for Galaxy'],
+      ['Main camera', '200MP wide, f/1.7, OIS'],
+      ['Zoom', '5× optical periscope, 100× Space Zoom'],
+      ['Memory', '12GB RAM, 256GB–1TB storage'],
+      ['Battery', '5000mAh, 45W wired, 15W wireless'],
+      ['Build', 'Titanium frame, Gorilla Armor 2'],
+      ['Water resistance', 'IP68'],
+    ],
     sku: 'SAM-S26U-104',
     brand: 'SAMSUNG',
     title: 'Galaxy S26 Ultra',
@@ -92,6 +140,16 @@ const drafts: Draft[] = [
   },
   {
     slug: 'galaxy-buds',
+    techSpecs: [
+      ['Driver', '2-way, 10.5mm woofer + 6.1mm tweeter'],
+      ['Codec', '24-bit Hi-Fi, SSC UHQ, AAC, SBC'],
+      ['Noise control', 'Adaptive ANC with voice detect'],
+      ['Battery', '6h buds, 30h with case'],
+      ['Water resistance', 'IPX7'],
+      ['Microphones', '3 mics per bud with VPU'],
+      ['Charging', 'USB-C, Qi wireless'],
+      ['Weight', '5.5 g per bud'],
+    ],
     sku: 'SAM-BUD4-105',
     brand: 'SAMSUNG',
     title: 'Galaxy Buds4 Pro',
@@ -105,6 +163,16 @@ const drafts: Draft[] = [
   },
   {
     slug: 'odyssey-oled',
+    techSpecs: [
+      ['Panel', '49in QD-OLED, 1800R curve'],
+      ['Resolution', '5120 × 1440 (Dual QHD)'],
+      ['Refresh', '240Hz, 0.03ms GtG'],
+      ['HDR', 'VESA DisplayHDR True Black 400'],
+      ['Colour', '99% DCI-P3'],
+      ['Ports', 'DisplayPort 1.4, 2× HDMI 2.1, USB hub'],
+      ['Sync', 'AMD FreeSync Premium Pro'],
+      ['Stand', 'Height, tilt and swivel adjustable'],
+    ],
     sku: 'SAM-G95-106',
     brand: 'SAMSUNG',
     title: 'Odyssey OLED G9 49"',
@@ -120,6 +188,16 @@ const drafts: Draft[] = [
   /* ----------------------------------------------------------------- Sony */
   {
     slug: 'wh1000xm6',
+    techSpecs: [
+      ['Driver', '30mm carbon fibre composite'],
+      ['Processor', 'HD Noise Cancelling QN3'],
+      ['Battery', '30 hours ANC on, 3 min quick charge = 3h'],
+      ['Codec', 'LDAC, AAC, SBC, Hi-Res Wireless'],
+      ['Frequency', '4Hz – 40,000Hz'],
+      ['Microphones', '8 mics for calls and ANC'],
+      ['Features', 'Speak-to-Chat, adaptive sound control'],
+      ['Weight', '250 g'],
+    ],
     sku: 'SNY-XM6-107',
     brand: 'SONY',
     title: 'WH-1000XM6 Wireless',
@@ -133,6 +211,16 @@ const drafts: Draft[] = [
   },
   {
     slug: 'alpha-7cr',
+    techSpecs: [
+      ['Sensor', '61MP full-frame Exmor R BSI CMOS'],
+      ['Processor', 'BIONZ XR with AI unit'],
+      ['Stabilisation', '5-axis in-body, 8 stops'],
+      ['Autofocus', '693 phase-detect points, AI subject recognition'],
+      ['ISO', '100–32000, expandable 50–102400'],
+      ['Video', '4K60 with Super35 crop, 10-bit 4:2:2'],
+      ['Viewfinder', '2.36M-dot OLED'],
+      ['Weight', '515 g with battery'],
+    ],
     sku: 'SNY-A7CR-108',
     brand: 'SONY',
     title: 'Alpha 7CR Full-Frame',
@@ -146,6 +234,16 @@ const drafts: Draft[] = [
   },
   {
     slug: 'fx3-cinema',
+    techSpecs: [
+      ['Sensor', '10.2MP full-frame back-illuminated CMOS'],
+      ['Video', '4K 120p, 10-bit 4:2:2 All-Intra'],
+      ['Dynamic range', '15+ stops, S-Cinetone and S-Log3'],
+      ['ISO', 'Dual base ISO 800 / 12800'],
+      ['Cooling', 'Active fan for unlimited recording'],
+      ['Audio', 'XLR handle, 4-channel 24-bit'],
+      ['Mount', 'Sony E-mount'],
+      ['Weight', '715 g body only'],
+    ],
     sku: 'SNY-FX3-109',
     brand: 'SONY',
     title: 'FX3 Cinema Line',
@@ -162,6 +260,16 @@ const drafts: Draft[] = [
   /* ----------------------------------------------------------------- Bose */
   {
     slug: 'qc-ultra',
+    techSpecs: [
+      ['Noise control', 'CustomTune adaptive ANC'],
+      ['Audio', 'Bose Immersive Audio with head tracking'],
+      ['Battery', '24 hours, 30 without Immersive'],
+      ['Codec', 'aptX Adaptive, AAC, SBC'],
+      ['Microphones', '6-mic array with rejection'],
+      ['Controls', 'Capacitive strip plus buttons'],
+      ['Folding', 'Flat-fold with carry case'],
+      ['Weight', '250 g'],
+    ],
     sku: 'BSE-QCU-110',
     brand: 'BOSE',
     title: 'QuietComfort Ultra',
@@ -175,6 +283,16 @@ const drafts: Draft[] = [
   },
   {
     slug: 'open-earbuds',
+    techSpecs: [
+      ['Design', 'Open-ear cuff, nothing in the canal'],
+      ['Audio', 'Bose OpenAudio dipole transducer'],
+      ['Battery', '7.5 hours, 27 with case'],
+      ['Water resistance', 'IPX4'],
+      ['Codec', 'aptX Adaptive, AAC, SBC'],
+      ['Controls', 'Multifunction button per bud'],
+      ['Fit', 'Rotating barrel, one size'],
+      ['Weight', '6.5 g per bud'],
+    ],
     sku: 'BSE-UOE-111',
     brand: 'BOSE',
     title: 'Ultra Open Earbuds',
@@ -188,6 +306,16 @@ const drafts: Draft[] = [
   },
   {
     slug: 'soundlink-max',
+    techSpecs: [
+      ['Drivers', 'Custom transducer array with two radiators'],
+      ['Battery', '20 hours'],
+      ['Durability', 'IP67 water and dust resistant'],
+      ['Codec', 'aptX Adaptive, AAC, SBC'],
+      ['Inputs', 'Bluetooth 5.4, 3.5mm aux, USB-C'],
+      ['Features', 'Party and stereo pairing'],
+      ['Extras', 'Removable rope handle, powerbank out'],
+      ['Weight', '2.1 kg'],
+    ],
     sku: 'BSE-SLM-112',
     brand: 'BOSE',
     title: 'SoundLink Max Portable',
@@ -203,6 +331,16 @@ const drafts: Draft[] = [
   /* ----------------------------------------------------------- Sennheiser */
   {
     slug: 'hd900s',
+    techSpecs: [
+      ['Transducer', '38mm open-back dynamic'],
+      ['Frequency', '4Hz – 51,000Hz'],
+      ['Impedance', '300 ohms'],
+      ['THD', 'Below 0.05% at 1kHz'],
+      ['Cable', 'Detachable 3m OFC, balanced and 6.3mm'],
+      ['Earpads', 'Replaceable velour'],
+      ['Build', 'Machined aluminium yoke and headband'],
+      ['Weight', '260 g without cable'],
+    ],
     sku: 'SEN-HD900-113',
     brand: 'SENNHEISER',
     title: 'HD 900 S Reference',
@@ -217,6 +355,16 @@ const drafts: Draft[] = [
   },
   {
     slug: 'momentum-4',
+    techSpecs: [
+      ['Driver', '42mm dynamic'],
+      ['Battery', '60 hours'],
+      ['Noise control', 'Adaptive hybrid ANC'],
+      ['Codec', 'aptX Adaptive, AAC, SBC'],
+      ['Frequency', '6Hz – 22,000Hz'],
+      ['Microphones', '4-mic beamforming'],
+      ['App', 'Smart Control with parametric EQ'],
+      ['Weight', '293 g'],
+    ],
     sku: 'SEN-MOM4-114',
     brand: 'SENNHEISER',
     title: 'Momentum 4 Wireless',
@@ -233,6 +381,16 @@ const drafts: Draft[] = [
   /* ------------------------------------------------------------------ DJI */
   {
     slug: 'mavic-4-pro',
+    techSpecs: [
+      ['Main camera', '4/3 CMOS Hasselblad, 100MP'],
+      ['Video', '6K/60fps ProRes, 4K/120fps'],
+      ['Gimbal', '3-axis with 360° infinity rotation'],
+      ['Flight time', 'Up to 43 minutes'],
+      ['Range', '30km O4+ transmission'],
+      ['Obstacle sensing', 'Omnidirectional with LiDAR'],
+      ['Storage', '64GB internal plus microSD'],
+      ['Weight', '1063 g'],
+    ],
     sku: 'DJI-MV4-115',
     brand: 'DJI',
     title: 'Mavic 4 Pro Cine',
@@ -247,6 +405,16 @@ const drafts: Draft[] = [
   },
   {
     slug: 'osmo-pocket',
+    techSpecs: [
+      ['Sensor', '1in CMOS, f/2.0'],
+      ['Video', '4K/120fps, 10-bit D-Log M'],
+      ['Gimbal', '3-axis mechanical stabilisation'],
+      ['Screen', '2in rotatable OLED touchscreen'],
+      ['Tracking', 'ActiveTrack 6.0 with face detection'],
+      ['Audio', '3-mic array, DJI Mic 2 direct connect'],
+      ['Battery', '166 minutes at 1080p/24'],
+      ['Weight', '179 g'],
+    ],
     sku: 'DJI-OP3-116',
     brand: 'DJI',
     title: 'Osmo Pocket 3 Creator',
@@ -260,6 +428,16 @@ const drafts: Draft[] = [
   },
   {
     slug: 'rs4-gimbal',
+    techSpecs: [
+      ['Payload', '4.5 kg tested'],
+      ['Focus', 'LiDAR rangefinder with 21-point ToF'],
+      ['Axis', '3-axis with automated locks'],
+      ['Battery', '29 hours, 1.5h full charge'],
+      ['Screen', '1.8in full-colour touchscreen'],
+      ['Modes', 'PF, PTF, FPV, 3D Roll 360'],
+      ['Mount', 'Dual-layer quick release plate'],
+      ['Weight', '1.2 kg'],
+    ],
     sku: 'DJI-RS4-117',
     brand: 'DJI',
     title: 'RS 4 Pro Gimbal',
@@ -275,6 +453,16 @@ const drafts: Draft[] = [
   /* ------------------------------------------------------------- Logitech */
   {
     slug: 'mx-master',
+    techSpecs: [
+      ['Sensor', '8000 DPI Darkfield, tracks on glass'],
+      ['Scrolling', 'MagSpeed electromagnetic, 1000 lines/sec'],
+      ['Buttons', '7 customisable, thumb wheel'],
+      ['Battery', '70 days, 1 min charge = 3 hours'],
+      ['Connectivity', 'Bolt USB receiver, Bluetooth, 3 devices'],
+      ['Software', 'Logi Options+ with per-app profiles'],
+      ['Flow', 'Cross-computer copy and paste'],
+      ['Weight', '141 g'],
+    ],
     sku: 'LOG-MXM4-118',
     brand: 'LOGITECH',
     title: 'MX Master 4',
@@ -288,6 +476,16 @@ const drafts: Draft[] = [
   },
   {
     slug: 'mx-mechanical',
+    techSpecs: [
+      ['Switches', 'Low-profile tactile quiet'],
+      ['Layout', 'Full size with numeric keypad'],
+      ['Backlight', '6 patterns, proximity activated'],
+      ['Battery', '15 days lit, 10 months unlit'],
+      ['Connectivity', 'Bolt receiver, Bluetooth, 3 devices'],
+      ['Compatibility', 'Windows, macOS, Linux, iPadOS, Android'],
+      ['Build', 'Aluminium top case'],
+      ['Weight', '828 g'],
+    ],
     sku: 'LOG-MXK-119',
     brand: 'LOGITECH',
     title: 'MX Mechanical Keyboard',
@@ -301,6 +499,16 @@ const drafts: Draft[] = [
   },
   {
     slug: 'brio-webcam',
+    techSpecs: [
+      ['Resolution', '4K UHD 30fps, 1080p 60fps'],
+      ['Field of view', 'Adjustable 65°, 78°, 90°'],
+      ['HDR', 'RightLight 5 with HDR'],
+      ['Zoom', '5× digital'],
+      ['Autofocus', 'Continuous with face priority'],
+      ['Microphones', 'Dual omnidirectional with noise reduction'],
+      ['Security', 'Windows Hello IR facial recognition'],
+      ['Mount', 'Clip plus tripod thread'],
+    ],
     sku: 'LOG-BRIO-120',
     brand: 'LOGITECH',
     title: 'Brio 4K Pro Webcam',
@@ -316,6 +524,16 @@ const drafts: Draft[] = [
   /* ---------------------------------------------------------------- Razer */
   {
     slug: 'blackwidow',
+    techSpecs: [
+      ['Switches', 'Razer Green mechanical, 80M keystrokes'],
+      ['Actuation', '1.9mm, clicky tactile'],
+      ['Lighting', 'Per-key Chroma RGB, underglow'],
+      ['Controls', 'Command dial, 4 media keys'],
+      ['Wrist rest', 'Magnetic plush leatherette'],
+      ['Polling', '1000Hz'],
+      ['Build', '5052 aluminium alloy top'],
+      ['Extras', '8 dedicated macro keys'],
+    ],
     sku: 'RZR-BW4-121',
     brand: 'RAZER',
     title: 'BlackWidow V4 Pro',
@@ -329,6 +547,16 @@ const drafts: Draft[] = [
   },
   {
     slug: 'viper-v3',
+    techSpecs: [
+      ['Sensor', 'Focus Pro 35K optical'],
+      ['DPI', '35,000 with 750 IPS tracking'],
+      ['Polling', '8000Hz with HyperPolling dongle'],
+      ['Switches', 'Gen-3 optical, 90M clicks'],
+      ['Battery', '95 hours at 1000Hz'],
+      ['Shape', 'Symmetrical right-handed'],
+      ['Feet', '100% PTFE'],
+      ['Weight', '54 g'],
+    ],
     sku: 'RZR-VV3-122',
     brand: 'RAZER',
     title: 'Viper V3 Pro',
@@ -342,6 +570,16 @@ const drafts: Draft[] = [
   },
   {
     slug: 'blade-16',
+    techSpecs: [
+      ['GPU', 'NVIDIA GeForce RTX 5090 Laptop, 24GB'],
+      ['CPU', 'Intel Core Ultra 9 275HX'],
+      ['Display', '16in OLED 2560×1600, 240Hz, 0.2ms'],
+      ['Memory', '32GB DDR5-6400, up to 96GB'],
+      ['Storage', '2TB PCIe Gen4 NVMe'],
+      ['Cooling', 'Vapour chamber with liquid metal'],
+      ['Build', 'CNC aluminium unibody'],
+      ['Weight', '2.14 kg'],
+    ],
     sku: 'RZR-BL16-123',
     brand: 'RAZER',
     title: 'Blade 16 Creator',
@@ -357,6 +595,16 @@ const drafts: Draft[] = [
   /* ---------------------------------------------------------------- Anker */
   {
     slug: 'prime-powerbank',
+    techSpecs: [
+      ['Capacity', '27,650mAh / 99.54Wh'],
+      ['Output', '250W total across three ports'],
+      ['Ports', '2× USB-C 140W, 1× USB-A 65W'],
+      ['Recharge', 'Full in 70 minutes at 170W'],
+      ['Display', 'Smart LCD with per-port wattage'],
+      ['Safety', 'ActiveShield 3.0 temperature monitoring'],
+      ['Airline', 'Under the 100Wh carry-on limit'],
+      ['Weight', '1.4 kg'],
+    ],
     sku: 'ANK-P27-124',
     brand: 'ANKER',
     title: 'Prime 27,650mAh Bank',
@@ -370,6 +618,16 @@ const drafts: Draft[] = [
   },
   {
     slug: 'soundcore-liberty',
+    techSpecs: [
+      ['Driver', '10mm dual dynamic with dual chamber'],
+      ['Noise control', 'Adaptive ANC 3.0, 98.5% reduction'],
+      ['Battery', '8h buds, 48h with case'],
+      ['Codec', 'LDAC Hi-Res Wireless, AAC, SBC'],
+      ['Microphones', '6 mics with AI wind reduction'],
+      ['Water resistance', 'IPX4'],
+      ['Charging', 'USB-C and wireless'],
+      ['App', 'HearID personalised EQ'],
+    ],
     sku: 'ANK-SCL5-125',
     brand: 'ANKER',
     title: 'Soundcore Liberty 5',
@@ -384,6 +642,16 @@ const drafts: Draft[] = [
   },
   {
     slug: 'gan-charger',
+    techSpecs: [
+      ['Output', '250W total'],
+      ['Ports', '4× USB-C, 2× USB-A'],
+      ['Fast charge', '140W single port PD 3.1'],
+      ['Technology', 'GaN III, 40% smaller than silicon'],
+      ['Display', 'Power distribution readout'],
+      ['Safety', 'ActiveShield 3.0'],
+      ['Input', '100–240V worldwide'],
+      ['Form', 'Desktop with detachable cord'],
+    ],
     sku: 'ANK-747-126',
     brand: 'ANKER',
     title: 'Prime 250W GaN Charger',
@@ -399,6 +667,16 @@ const drafts: Draft[] = [
   /* -------------------------------------------------------------- Nothing */
   {
     slug: 'phone-3a',
+    techSpecs: [
+      ['Display', '6.7in LTPO AMOLED, 1–120Hz, 3000 nits'],
+      ['Processor', 'Snapdragon 7s Gen 3'],
+      ['Camera', '50MP main + 50MP periscope + 8MP ultrawide'],
+      ['Glyph', 'Glyph Matrix rear LED interface'],
+      ['Memory', '12GB RAM, 256GB storage'],
+      ['Battery', '5000mAh, 50W wired'],
+      ['Software', 'Nothing OS 3, 3 years of upgrades'],
+      ['Build', 'Transparent back, IP64'],
+    ],
     sku: 'NTH-P3A-127',
     brand: 'NOTHING',
     title: 'Phone (3a) Pro',
@@ -412,6 +690,16 @@ const drafts: Draft[] = [
   },
   {
     slug: 'ear-open',
+    techSpecs: [
+      ['Design', 'Open-ear, ear-hook fit'],
+      ['Driver', '14.2mm custom dynamic'],
+      ['Battery', '8h buds, 30h with case'],
+      ['Water resistance', 'IP54'],
+      ['Codec', 'AAC, SBC'],
+      ['Microphones', '3 mics with Clear Voice'],
+      ['Controls', 'Pinch and slide'],
+      ['Weight', '8.1 g per bud'],
+    ],
     sku: 'NTH-EAR-128',
     brand: 'NOTHING',
     title: 'Ear (Open)',
@@ -425,6 +713,16 @@ const drafts: Draft[] = [
   },
   {
     slug: 'cmf-buds',
+    techSpecs: [
+      ['Driver', '11mm bio-fibre dynamic'],
+      ['Noise control', 'Hybrid ANC up to 50dB'],
+      ['Battery', '10h buds, 43h with case'],
+      ['Case', 'Smart Dial for volume and tracks'],
+      ['Codec', 'LDAC, AAC, SBC'],
+      ['Water resistance', 'IP55'],
+      ['Microphones', '6 mics with Clear Voice'],
+      ['Weight', '4.9 g per bud'],
+    ],
     sku: 'NTH-CMF-129',
     brand: 'NOTHING',
     title: 'CMF Buds Pro 3',
@@ -440,6 +738,16 @@ const drafts: Draft[] = [
   /* ------------------------------------------------------------- Keychron */
   {
     slug: 'q3-max',
+    techSpecs: [
+      ['Mount', 'Double gasket with silicone pads'],
+      ['Switches', 'Hot-swappable, 3-pin and 5-pin'],
+      ['Firmware', 'QMK and VIA, fully remappable'],
+      ['Connectivity', '2.4GHz, Bluetooth 5.1, USB-C'],
+      ['Battery', '4000mAh, up to 100 hours'],
+      ['Case', 'CNC machined 6063 aluminium'],
+      ['Keycaps', 'Double-shot PBT, OSA profile'],
+      ['Weight', '1.9 kg'],
+    ],
     sku: 'KEY-Q3M-130',
     brand: 'KEYCHRON',
     title: 'Q3 Max QMK Custom',
@@ -454,6 +762,16 @@ const drafts: Draft[] = [
   },
   {
     slug: 'switch-set',
+    techSpecs: [
+      ['Type', 'Linear'],
+      ['Actuation force', '45 gf'],
+      ['Pre-travel', '1.9 mm'],
+      ['Total travel', '3.5 mm'],
+      ['Lubrication', 'Factory lubed stem and spring'],
+      ['Housing', 'Polycarbonate top, nylon bottom'],
+      ['Pins', '5-pin PCB mount'],
+      ['Quantity', '110 switches'],
+    ],
     sku: 'KEY-NBS-131',
     brand: 'KEYCHRON',
     title: 'Nebula Switch Set ×110',
@@ -467,6 +785,16 @@ const drafts: Draft[] = [
   },
   {
     slug: 'k-pro-mouse',
+    techSpecs: [
+      ['Sensor', 'PixArt PAW3395 optical'],
+      ['DPI', '26,000 adjustable in 50 steps'],
+      ['Polling', '1000Hz wired, 1000Hz 2.4GHz'],
+      ['Switches', 'Optical, 80M clicks'],
+      ['Connectivity', '2.4GHz, Bluetooth 5.1, USB-C'],
+      ['Battery', '500mAh, up to 70 hours'],
+      ['Software', 'Keychron Launcher, browser based'],
+      ['Weight', '70 g'],
+    ],
     sku: 'KEY-M6-132',
     brand: 'KEYCHRON',
     title: 'M6 Wireless Mouse',
@@ -482,6 +810,16 @@ const drafts: Draft[] = [
   /* -------------------------------------------------- Teenage Engineering */
   {
     slug: 'op1-field',
+    techSpecs: [
+      ['Engine', '32-bit audio throughout'],
+      ['Battery', '16 hours continuous'],
+      ['Connectivity', 'Bluetooth MIDI, USB-C audio interface'],
+      ['Keys', '24 keys, velocity sensitive'],
+      ['Synthesis', '12 engines including Dimension and Digital'],
+      ['Effects', '8 effects, 2 send slots'],
+      ['Tape', '4-track tape with 6 reels'],
+      ['Build', 'Aluminium unibody, 1.1 kg'],
+    ],
     sku: 'TE-OP1F-133',
     brand: 'TEENAGE_ENGINEERING',
     title: 'OP-1 Field Synthesizer',
@@ -496,6 +834,16 @@ const drafts: Draft[] = [
   },
   {
     slug: 'tp7-recorder',
+    techSpecs: [
+      ['Recording', '96kHz / 32-bit float'],
+      ['Storage', '128GB internal'],
+      ['Reel', 'Motorised tape reel for scrubbing'],
+      ['Inputs', '3× USB-C, 3.5mm mic in'],
+      ['Microphone', 'Built-in omnidirectional'],
+      ['Battery', '7 hours continuous'],
+      ['Transcription', 'Via field companion app'],
+      ['Build', 'Machined aluminium, 90 g'],
+    ],
     sku: 'TE-TP7-134',
     brand: 'TEENAGE_ENGINEERING',
     title: 'TP-7 Field Recorder',
@@ -509,6 +857,16 @@ const drafts: Draft[] = [
   },
   {
     slug: 'ob4-speaker',
+    techSpecs: [
+      ['Drivers', '2× 4in bass, 2× tweeters'],
+      ['Recording', 'Always-on 2-hour rolling buffer'],
+      ['Sources', 'FM radio, Bluetooth, aux'],
+      ['Battery', 'Up to 20 hours'],
+      ['Controls', 'Motorised tape wheel for scrubbing'],
+      ['Display', 'Dot-matrix LED'],
+      ['Build', 'Aluminium with rubber bumpers'],
+      ['Weight', '3.2 kg'],
+    ],
     sku: 'TE-OB4-135',
     brand: 'TEENAGE_ENGINEERING',
     title: 'OB-4 Magic Radio',
@@ -536,6 +894,7 @@ export const products: Product[] = drafts.map((d) => ({
   rating: d.rating,
   reviewCount: d.reviews,
   specsSummary: d.specs,
+  specs: (d.techSpecs ?? []).map(([label, value]) => ({ label, value })),
   media: img(d.slug),
   colorways: d.colorways,
 }))

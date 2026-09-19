@@ -46,6 +46,25 @@ The route is the single source of truth — the shop page mirrors `route.query`
 into the catalog store and never the other way round, which is what keeps it
 from looping.
 
+### Search that reads a sentence
+
+The search box (⌘K) takes either a fragment or a sentence. A sentence goes
+through `src/lib/recommend.ts`, which pulls **structured constraints** out of
+free text and scores the catalogue against them:
+
+    "headphones for a noisy flight under $500"
+      -> budget: 500 (a hard ceiling — "under" means under)
+      -> intent: blocking out noise
+      -> category: audio
+
+What it understood is shown above the results, so a shopper never has to guess
+why a product came back — and the seam is visible when it understood nothing.
+
+This is a local intent engine, not a language model. It runs offline in a
+fraction of a millisecond and there is no key to leak, but it only knows the
+intents in its table. Everything sits behind one `recommend()` call, so putting
+a real model behind a serverless function later is a change to that file alone.
+
 ### Query flags
 
 - `?motion=on` — force animation even when the OS asks for reduced motion
@@ -133,9 +152,27 @@ the script ranks candidates in three passes:
 The script is idempotent (existing files are skipped) and fail-soft (a failed
 asset logs `SKIP` and the run still exits 0).
 
-Photography: [Unsplash](https://unsplash.com). Hero video:
-[Pexels](https://pexels.com). Both licences permit commercial use.
-Photographers are credited in `src/data/credits.json` and listed in the footer.
+### Where the photographs come from
+
+Two sources, in priority order:
+
+1. **[Wikimedia Commons](https://commons.wikimedia.org)** — photographs of the
+   *actual* products: a real Mavic 4 Pro, a real Apple Watch Ultra. This is the
+   only way to get a product shot that matches the listing, because stock
+   libraries only have lookalikes and manufacturer press images are licensed
+   for editorial use, not for a storefront. Most Commons files are CC BY-SA,
+   which requires the author and licence to be named wherever the image
+   appears — so they are printed under the product gallery, not just in the
+   footer.
+2. **[Unsplash](https://unsplash.com)** — fills the gallery where Commons has
+   nothing, which is most earbuds and accessories.
+
+Hero video: [Pexels](https://pexels.com). Every credit is captured in
+`src/data/credits.json` at fetch time.
+
+Each product carries up to four angles plus a thumbnail. The product page probes
+each path before rendering it, because Commons coverage is uneven and a 404 in a
+gallery is worse than a shorter gallery.
 
 ## Deviations from the original brief
 

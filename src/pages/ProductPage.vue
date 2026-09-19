@@ -8,20 +8,57 @@ import NotFoundPage from './NotFoundPage.vue'
 import { products } from '@/data/products'
 import { categories } from '@/data/categories'
 import { flagship } from '@/data/flagship'
+import credits from '@/data/credits.json'
+import type { Credit } from '@/types'
 
 const props = defineProps<{ id: string }>()
 
 const product = computed(() => products.find((p) => p.id === props.id))
 
-const gallery = computed(() => {
-  if (!product.value) return []
-  return [product.value.media.heroImage, product.value.media.hoverImage].filter(
-    (src): src is string => Boolean(src),
-  )
-})
+/**
+ * Commons rarely has four photographs of one model, so the pipeline writes as
+ * many as it found. Rather than guess, each candidate path is probed once and
+ * only the ones that resolve are shown — a 404 in a gallery is worse than a
+ * shorter gallery.
+ */
+const gallery = ref<string[]>([])
+
+watch(
+  () => product.value?.id,
+  async () => {
+    gallery.value = []
+    if (!product.value) return
+    const candidates = product.value.media.gallery
+    const checks = await Promise.all(
+      candidates.map(
+        (src) =>
+          new Promise<string | null>((resolve) => {
+            const probe = new Image()
+            probe.onload = () => resolve(src)
+            probe.onerror = () => resolve(null)
+            probe.src = src
+          }),
+      ),
+    )
+    gallery.value = checks.filter((src): src is string => src !== null)
+  },
+  { immediate: true },
+)
 
 const active = ref(0)
 watch(() => props.id, () => (active.value = 0))
+
+/**
+ * Attribution for the image on screen. Commons photographs are CC BY-SA, which
+ * requires the author and licence to be named wherever the work appears — a
+ * line in the footer is not enough on its own.
+ */
+const creditFor = computed<Credit | undefined>(() => {
+  const src = gallery.value[active.value]
+  if (!src) return undefined
+  const file = src.replace(/^\//, '')
+  return (credits as Credit[]).find((c) => c.file === file)
+})
 
 const categoryLabel = computed(
   () => categories.find((c) => c.id === product.value?.category)?.label ?? 'Shop',
@@ -68,7 +105,20 @@ const related = computed(() =>
             />
           </div>
 
-          <div v-if="gallery.length > 1" class="mt-3 flex gap-3">
+          <p v-if="creditFor" class="mt-2 text-xs text-text-muted">
+            Photo:
+            <a
+              :href="creditFor.sourceUrl"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="underline transition-colors hover:text-text-secondary"
+            >
+              {{ creditFor.photographer }}
+            </a>
+            · {{ creditFor.source }}<template v-if="creditFor.licence"> · {{ creditFor.licence }}</template>
+          </p>
+
+          <div v-if="gallery.length > 1" class="mt-3 flex flex-wrap gap-3">
             <button
               v-for="(src, index) in gallery"
               :key="src"
@@ -90,18 +140,18 @@ const related = computed(() =>
 
       <!-- Specs -->
       <section class="mt-16 border-t border-border-hairline pt-10">
-        <h2 class="text-xl font-bold">Specifications</h2>
-        <dl class="mt-5 grid gap-x-10 gap-y-3 sm:grid-cols-2 lg:grid-cols-3">
+        <h2 class="text-xl font-bold">Tech specs</h2>
+        <dl class="mt-5 grid gap-x-12 gap-y-0 sm:grid-cols-2">
           <div
-            v-for="(spec, index) in product.specsSummary"
-            :key="spec"
-            class="flex justify-between gap-4 border-b border-border-hairline pb-3 text-sm"
+            v-for="spec in product.specs"
+            :key="spec.label"
+            class="flex justify-between gap-6 border-b border-border-hairline py-3 text-sm"
           >
-            <dt class="text-text-secondary">Feature {{ index + 1 }}</dt>
-            <dd class="text-right font-medium">{{ spec }}</dd>
+            <dt class="shrink-0 text-text-secondary">{{ spec.label }}</dt>
+            <dd class="text-right font-medium">{{ spec.value }}</dd>
           </div>
-          <div class="flex justify-between gap-4 border-b border-border-hairline pb-3 text-sm">
-            <dt class="text-text-secondary">SKU</dt>
+          <div class="flex justify-between gap-6 border-b border-border-hairline py-3 text-sm">
+            <dt class="shrink-0 text-text-secondary">Model number</dt>
             <dd class="code text-right">{{ product.sku }}</dd>
           </div>
         </dl>

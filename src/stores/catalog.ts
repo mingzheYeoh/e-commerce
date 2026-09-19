@@ -3,7 +3,7 @@ import { products } from '@/data/products'
 import type { CategoryId } from '@/types'
 
 export type Filter = 'all' | 'inStock' | CategoryId
-export type Sort = 'default' | 'priceDesc'
+export type Sort = 'default' | 'priceDesc' | 'priceAsc'
 
 /**
  * A projection of the URL, not a source of truth.
@@ -16,6 +16,7 @@ export const useCatalogStore = defineStore('catalog', {
   state: () => ({
     activeFilter: 'all' as Filter,
     activeBrand: null as string | null,
+    dealsOnly: false,
     sort: 'default' as Sort,
   }),
 
@@ -23,17 +24,21 @@ export const useCatalogStore = defineStore('catalog', {
     visible: (state) => {
       const filtered = products.filter((p) => {
         if (state.activeBrand && p.brand !== state.activeBrand) return false
+        if (state.dealsOnly && p.badge !== 'DISCOUNT') return false
         if (state.activeFilter === 'inStock') return p.inStock
         if (state.activeFilter !== 'all') return p.category === state.activeFilter
         return true
       })
 
-      return state.sort === 'priceDesc'
-        ? [...filtered].sort((a, b) => b.price - a.price)
-        : filtered
+      if (state.sort === 'priceDesc') return [...filtered].sort((a, b) => b.price - a.price)
+      if (state.sort === 'priceAsc') return [...filtered].sort((a, b) => a.price - b.price)
+      return filtered
     },
 
     hasFilters: (state) =>
-      state.activeFilter !== 'all' || state.activeBrand !== null || state.sort !== 'default',
+      state.activeFilter !== 'all' ||
+      state.activeBrand !== null ||
+      state.dealsOnly ||
+      state.sort !== 'default',
   },
 })

@@ -29,7 +29,9 @@ watch(
     else catalog.activeFilter = 'all'
 
     catalog.activeBrand = typeof q.brand === 'string' ? q.brand : null
-    catalog.sort = q.sort === 'price-desc' ? 'priceDesc' : 'default'
+    catalog.dealsOnly = q.deal === '1'
+    catalog.sort =
+      q.sort === 'price-desc' ? 'priceDesc' : q.sort === 'price-asc' ? 'priceAsc' : 'default'
   },
   { immediate: true },
 )
@@ -49,10 +51,12 @@ function applyFilter(id: Filter) {
   else router.push({ query: queryFor({ category: id, stock: null }) })
 }
 
-function toggleSort() {
-  router.push({
-    query: queryFor({ sort: catalog.sort === 'priceDesc' ? null : 'price-desc' }),
-  })
+function setSort(value: string) {
+  router.push({ query: queryFor({ sort: value === 'default' ? null : value }) })
+}
+
+function setBrand(value: string) {
+  router.push({ query: queryFor({ brand: value === 'all' ? null : value }) })
 }
 
 const activeLabel = computed(() => {
@@ -93,60 +97,61 @@ const activeLabel = computed(() => {
       </div>
     </div>
 
-    <!-- Filter rail -->
+    <!-- Filter toolbar. Filters narrow the set and sit on the left; the two
+         controls that do not narrow anything — brand picker and sort order —
+         are labelled selects on the right, so they read as different things. -->
     <div class="sticky top-16 z-30 border-b border-border-hairline bg-void/90 backdrop-blur-md">
-      <div class="mx-auto flex max-w-[1600px] items-center gap-2 overflow-x-auto px-4 py-3 md:px-8">
-        <button
-          v-for="filter in filters"
-          :key="filter.id"
-          type="button"
-          class="shrink-0 rounded-full border px-4 py-1.5 text-sm font-medium transition-colors"
-          :class="
-            catalog.activeFilter === filter.id && !catalog.activeBrand
-              ? 'border-accent bg-accent text-white'
-              : 'border-border-hairline text-text-secondary hover:border-border-strong hover:text-text-primary'
-          "
-          :aria-pressed="catalog.activeFilter === filter.id"
-          @click="applyFilter(filter.id)"
-        >
-          {{ filter.label }}
-        </button>
+      <div
+        class="mx-auto flex max-w-[1600px] flex-col gap-3 px-4 py-3 md:flex-row md:items-center md:justify-between md:px-8"
+      >
+        <div class="flex items-center gap-2 overflow-x-auto pb-1 md:pb-0">
+          <button
+            v-for="filter in filters"
+            :key="filter.id"
+            type="button"
+            class="h-9 shrink-0 rounded-full border px-4 text-sm font-medium transition-colors"
+            :class="
+              catalog.activeFilter === filter.id
+                ? 'border-accent bg-accent text-white'
+                : 'border-border-hairline text-text-secondary hover:border-border-strong hover:text-text-primary'
+            "
+            :aria-pressed="catalog.activeFilter === filter.id"
+            @click="applyFilter(filter.id)"
+          >
+            {{ filter.label }}
+          </button>
+        </div>
 
-        <span class="mx-1 hidden h-4 w-px shrink-0 bg-border-hairline md:block" aria-hidden="true" />
+        <div class="flex shrink-0 items-center gap-4">
+          <div class="flex items-center gap-2">
+            <label for="brand-filter" class="text-sm text-text-muted">Brand</label>
+            <select
+              id="brand-filter"
+              :value="catalog.activeBrand ?? 'all'"
+              class="h-9 rounded border border-border-hairline bg-surface-1 px-2.5 text-sm text-text-primary transition-colors hover:border-border-strong"
+              @change="setBrand(($event.target as HTMLSelectElement).value)"
+            >
+              <option value="all">All brands</option>
+              <option v-for="brand in brands" :key="brand.id" :value="brand.id">
+                {{ brand.name }}
+              </option>
+            </select>
+          </div>
 
-        <button
-          type="button"
-          class="shrink-0 rounded-full border px-4 py-1.5 text-sm font-medium transition-colors"
-          :class="
-            catalog.sort === 'priceDesc'
-              ? 'border-accent bg-accent text-white'
-              : 'border-border-hairline text-text-secondary hover:border-border-strong hover:text-text-primary'
-          "
-          :aria-pressed="catalog.sort === 'priceDesc'"
-          @click="toggleSort"
-        >
-          Price: high to low
-        </button>
-      </div>
-    </div>
-
-    <!-- Brand rail -->
-    <div class="border-b border-border-hairline">
-      <div class="mx-auto flex max-w-[1600px] items-center gap-2 overflow-x-auto px-4 py-3 md:px-8">
-        <span class="shrink-0 pr-1 text-sm text-text-muted">Brand</span>
-        <RouterLink
-          v-for="brand in brands"
-          :key="brand.id"
-          :to="{ path: '/shop', query: { brand: brand.id } }"
-          class="shrink-0 rounded-full px-3 py-1 text-sm transition-colors"
-          :class="
-            catalog.activeBrand === brand.id
-              ? 'bg-surface-2 font-medium text-text-primary'
-              : 'text-text-secondary hover:text-text-primary'
-          "
-        >
-          {{ brand.name }}
-        </RouterLink>
+          <div class="flex items-center gap-2">
+            <label for="sort-order" class="text-sm text-text-muted">Sort</label>
+            <select
+              id="sort-order"
+              :value="catalog.sort === 'priceDesc' ? 'price-desc' : catalog.sort === 'priceAsc' ? 'price-asc' : 'default'"
+              class="h-9 rounded border border-border-hairline bg-surface-1 px-2.5 text-sm text-text-primary transition-colors hover:border-border-strong"
+              @change="setSort(($event.target as HTMLSelectElement).value)"
+            >
+              <option value="default">Featured</option>
+              <option value="price-asc">Price: low to high</option>
+              <option value="price-desc">Price: high to low</option>
+            </select>
+          </div>
+        </div>
       </div>
     </div>
 

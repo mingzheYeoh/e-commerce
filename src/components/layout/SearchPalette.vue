@@ -1,13 +1,14 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, toRef, watch } from 'vue'
-import { Search, CornerDownLeft } from 'lucide-vue-next'
-import { products } from '@/data/products'
 import { useRouter } from 'vue-router'
+import { Search, CornerDownLeft, Sparkles } from 'lucide-vue-next'
+import { products } from '@/data/products'
+import { brandName } from '@/data/brands'
+import { recommend } from '@/lib/recommend'
 import { useCartStore } from '@/stores/cart'
 import { useUiStore } from '@/stores/ui'
 import { useCurrency } from '@/composables/useCurrency'
 import { useFocusTrap } from '@/composables/useFocusTrap'
-import { brandName } from '@/data/brands'
 
 const router = useRouter()
 const ui = useUiStore()
@@ -20,28 +21,39 @@ const cursor = ref(0)
 
 useFocusTrap(panel, toRef(ui, 'searchOpen'), () => ui.closeSearch())
 
+const EXAMPLES = [
+  'headphones for a noisy flight under $500',
+  'something to vlog with, around $1000',
+  'best gaming mouse',
+  'keyboard and mouse for working from home',
+]
+
 /**
- * People search for the object, not our taxonomy: "drone", not "imaging", and
- * "keyboard", not "KEYCHRON". Nothing in a product's own fields carries those
- * words, so each category contributes its everyday synonyms to the haystack.
+ * One box, two behaviours. A sentence goes to the recommender, which reads a
+ * budget and a use case out of it; a short fragment falls back to plain
+ * matching, because "mavic" is a lookup, not a question.
  */
-const CATEGORY_TERMS: Record<string, string> = {
-  audio: 'audio acoustics sound headphones earbuds speaker monitor synth synthesizer recorder',
-  peripherals: 'peripherals keyboard keycaps switches mouse controller deck input',
-  imaging: 'imaging drone quadcopter aerial camera gimbal lens photography video',
-  computing: 'computing wearable vr xr spatial headset phone smartphone ring watch biometrics',
-}
+const isSentence = computed(() => query.value.trim().split(/\s+/).length >= 3)
 
-const haystack = (p: (typeof products)[number]) =>
-  `${p.title} ${p.brand} ${p.category} ${p.sku} ${p.specsSummary.join(' ')} ${
-    CATEGORY_TERMS[p.category] ?? ''
-  }`.toLowerCase()
+const result = computed(() => recommend(query.value, 6))
 
-const results = computed(() => {
+const fallback = computed(() => {
   const q = query.value.trim().toLowerCase()
   if (!q) return products.slice(0, 6)
-  return products.filter((p) => haystack(p).includes(q)).slice(0, 8)
+  return products
+    .filter((p) =>
+      `${p.title} ${p.brand} ${p.sku} ${p.specsSummary.join(' ')}`.toLowerCase().includes(q),
+    )
+    .slice(0, 8)
 })
+
+const rows = computed(() =>
+  isSentence.value && result.value.items.length
+    ? result.value.items
+    : fallback.value.map((product) => ({ product, reasons: [] as string[] })),
+)
+
+const understood = computed(() => (isSentence.value ? result.value.understood : []))
 
 watch(query, () => (cursor.value = 0))
 watch(
@@ -54,8 +66,12 @@ watch(
   },
 )
 
+function open(id: string) {
+  router.push(`/product/${id}`)
+  ui.closeSearch()
+}
+
 function onKeydown(event: KeyboardEvent) {
-  // ⌘K / Ctrl+K opens from anywhere on the page.
   if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
     event.preventDefault()
     ui.toggleSearch()
@@ -63,24 +79,20 @@ function onKeydown(event: KeyboardEvent) {
   }
   if (!ui.searchOpen) return
 
+  const count = Math.max(rows.value.length, 1)
   if (event.key === 'ArrowDown') {
     event.preventDefault()
-    cursor.value = (cursor.value + 1) % Math.max(results.value.length, 1)
+    cursor.value = (cursor.value + 1) % count
   } else if (event.key === 'ArrowUp') {
     event.preventDefault()
-    cursor.value = (cursor.value - 1 + results.value.length) % Math.max(results.value.length, 1)
+    cursor.value = (cursor.value - 1 + count) % count
   } else if (event.key === 'Enter') {
-    const picked = results.value[cursor.value]
+    const picked = rows.value[cursor.value]
     if (picked) {
       event.preventDefault()
-      open(picked.id)
+      open(picked.product.id)
     }
   }
-}
-
-function open(id: string) {
-  router.push(`/product/${id}`)
-  ui.closeSearch()
 }
 
 onMounted(() => document.addEventListener('keydown', onKeydown))
@@ -97,7 +109,7 @@ onUnmounted(() => document.removeEventListener('keydown', onKeydown))
     >
       <div
         v-if="ui.searchOpen"
-        class="fixed inset-0 z-[80] flex items-start justify-center bg-void/80 px-4 pt-[12vh] backdrop-blur-sm"
+        class="fixed inset-0 z-[80] flex items-start justify-center bg-black/70 px-4 pt-[10vh] backdrop-blur-sm"
         @click.self="ui.closeSearch()"
       >
         <div
@@ -107,51 +119,83 @@ onUnmounted(() => document.removeEventListener('keydown', onKeydown))
           aria-label="Product search"
           class="w-full max-w-2xl overflow-hidden rounded-card border border-border-hairline bg-surface-1 shadow-2xl shadow-black/60"
         >
-          <!-- Terminal-style input line -->
           <div class="flex items-center gap-3 border-b border-border-hairline px-4 py-3.5">
             <Search class="h-4 w-4 shrink-0 text-text-secondary" aria-hidden="true" />
             <input
               v-model="query"
               type="text"
-              placeholder="Search products, brands or SKU"
-              aria-label="Search products"
+              placeholder="Search, or describe what you need…"
+              aria-label="Search products, or describe what you need"
               class="w-full bg-transparent text-sm text-text-primary placeholder:text-text-muted focus:outline-none"
             />
-            <kbd class="shrink-0 rounded border border-border-hairline px-1.5 py-0.5 text-[10px] text-text-muted">Esc</kbd>
+            <kbd
+              class="shrink-0 rounded border border-border-hairline px-1.5 text-[10px] leading-4 text-text-muted"
+            >
+              Esc
+            </kbd>
           </div>
 
-          <!-- Results -->
-          <ul v-if="results.length" class="max-h-[50vh] divide-y divide-border-hairline overflow-y-auto">
-            <li v-for="(item, index) in results" :key="item.id">
-              <button
-                type="button"
-                class="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors"
+          <!-- What the recommender pulled out of the sentence. Showing this is
+               the difference between trusting the results and wondering why a
+               drone came back — and it makes the seam visible when it
+               understood nothing. -->
+          <div
+            v-if="understood.length"
+            class="flex flex-wrap items-center gap-2 border-b border-border-hairline bg-accent/5 px-4 py-2.5"
+          >
+            <Sparkles class="h-3.5 w-3.5 shrink-0 text-accent" aria-hidden="true" />
+            <span class="text-xs text-text-secondary">Looking for</span>
+            <span
+              v-for="item in understood"
+              :key="item"
+              class="rounded-full bg-accent/15 px-2 py-0.5 text-xs font-medium text-accent"
+            >
+              {{ item }}
+            </span>
+          </div>
+
+          <ul
+            v-if="rows.length"
+            class="max-h-[46vh] divide-y divide-border-hairline overflow-y-auto"
+          >
+            <li v-for="(row, index) in rows" :key="row.product.id">
+              <div
+                class="flex w-full items-center gap-3 px-4 py-3 transition-colors"
                 :class="index === cursor ? 'bg-surface-2' : 'hover:bg-surface-2/60'"
                 @mouseenter="cursor = index"
-                @click="open(item.id)"
               >
-                <img
-                  :src="item.media.thumb"
-                  :alt="item.title"
-                  width="44"
-                  height="44"
-                  loading="lazy"
-                  class="h-11 w-11 shrink-0 rounded border border-border-hairline object-cover"
-                />
-                <span class="min-w-0 flex-1">
-                  <span class="block text-xs text-text-secondary">{{ brandName(item.brand) }}</span>
-                  <span class="block truncate text-sm font-medium tracking-tight">
-                    {{ item.title }}
+                <button
+                  type="button"
+                  class="flex min-w-0 flex-1 items-center gap-3 text-left"
+                  @click="open(row.product.id)"
+                >
+                  <img
+                    :src="row.product.media.thumb"
+                    :alt="row.product.title"
+                    width="44"
+                    height="44"
+                    loading="lazy"
+                    class="h-11 w-11 shrink-0 rounded border border-border-hairline object-cover"
+                  />
+                  <span class="min-w-0 flex-1">
+                    <span class="block text-xs text-text-secondary">
+                      {{ brandName(row.product.brand) }}
+                    </span>
+                    <span class="block truncate text-sm font-medium">{{ row.product.title }}</span>
+                    <span v-if="row.reasons.length" class="block truncate text-xs text-accent">
+                      {{ row.reasons[0] }}
+                    </span>
                   </span>
-                </span>
-                <span class="nums shrink-0 text-sm font-medium">
-                  {{ formatPrice(item.price) }}
-                </span>
+                  <span class="nums shrink-0 text-sm font-medium">
+                    {{ formatPrice(row.product.price) }}
+                  </span>
+                </button>
+
                 <button
                   type="button"
                   class="shrink-0 rounded bg-surface-2 px-2.5 py-1.5 text-xs font-medium text-text-secondary transition-colors hover:bg-accent hover:text-white"
-                  :aria-label="`Add ${item.title} to cart`"
-                  @click.stop="cart.add(item)"
+                  :aria-label="`Add ${row.product.title} to cart`"
+                  @click="cart.add(row.product)"
                 >
                   Add
                 </button>
@@ -160,20 +204,33 @@ onUnmounted(() => document.removeEventListener('keydown', onKeydown))
                   class="h-3.5 w-3.5 shrink-0 text-accent"
                   aria-hidden="true"
                 />
-              </button>
+              </div>
             </li>
           </ul>
 
-          <p v-else class="px-4 py-10 text-center text-sm text-text-secondary">
-            No matches. Try &ldquo;drone&rdquo;, &ldquo;keyboard&rdquo; or &ldquo;Sony&rdquo;.
-          </p>
+          <div v-else class="px-4 py-8 text-center">
+            <p class="text-sm text-text-secondary">
+              Nothing matched. Try describing what you need:
+            </p>
+            <div class="mt-3 flex flex-wrap justify-center gap-2">
+              <button
+                v-for="example in EXAMPLES"
+                :key="example"
+                type="button"
+                class="rounded-full border border-border-hairline px-3 py-1 text-xs text-text-secondary transition-colors hover:border-accent hover:text-accent"
+                @click="query = example"
+              >
+                {{ example }}
+              </button>
+            </div>
+          </div>
 
           <footer
             class="flex items-center gap-4 border-t border-border-hairline px-4 py-2.5 text-xs text-text-muted"
           >
             <span>↑↓ to navigate</span>
             <span>↵ to open</span>
-            <span class="nums ml-auto">{{ results.length }} results</span>
+            <span class="nums ml-auto">{{ rows.length }} results</span>
           </footer>
         </div>
       </div>
