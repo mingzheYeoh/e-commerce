@@ -56,15 +56,15 @@
   }
 }
 
-/* Motion kill switch. useReducedMotion() handles the JS side (Lenis, GSAP);
-   this covers every CSS animation and transition in one place. */
-@media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
-    scroll-behavior: auto !important;
-  }
+/* Motion kill switch. useReducedMotion() owns [data-motion] and is the only
+   writer; keying off it rather than the media query directly means the
+   ?motion=on override reaches CSS animations too. */
+[data-motion='reduced'],
+[data-motion='reduced'] *,
+[data-motion='reduced'] *::before,
+[data-motion='reduced'] *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
 }

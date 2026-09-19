@@ -52,7 +52,8 @@ export interface Category {
   id: CategoryId
   label: string
   blurb: string
-  productCount: number
+  /** Total units on hand across the category, not the number of SKUs. */
+  unitsInStock: number
   fromPrice: number
   image: string
   /** Bento placement. `large` anchors the grid; the rest fill around it. */

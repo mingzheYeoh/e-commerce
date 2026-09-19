@@ -3,8 +3,12 @@ import NavBar from '@/components/layout/NavBar.vue'
 import CartDrawer from '@/components/layout/CartDrawer.vue'
 import SearchPalette from '@/components/layout/SearchPalette.vue'
 import HeroViewport from '@/components/sections/HeroViewport.vue'
+import BrandMatrix from '@/components/sections/BrandMatrix.vue'
+import CategoryLaunchpad from '@/components/sections/CategoryLaunchpad.vue'
  import { useLenis } from '@/composables/useLenis'
+import { useReducedMotion } from '@/composables/useReducedMotion'
 
+useReducedMotion()
 useLenis()
 </script>
 
@@ -22,5 +26,7 @@ useLenis()
 
   <main id="main" class="bg-void">
     <HeroViewport />
+    <BrandMatrix />
+    <CategoryLaunchpad />
   </main>
 </template>
