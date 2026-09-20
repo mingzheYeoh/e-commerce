@@ -231,7 +231,12 @@ describe('placeOrder addresses', () => {
   it('requires an empty subdivision where the country has none', async () => {
     const { env } = fakeD1()
     expect((await placeOrder(env, at({ country: 'SG', state: '', postal: '238839' }))).status).toBe(200)
-    expect((await placeOrder(env, at({ country: 'SG', state: 'CA', postal: '238839' }))).status).toBe(400)
+
+    const res = await placeOrder(env, at({ country: 'SG', state: 'CA', postal: '238839' }))
+    expect(res.status).toBe(400)
+    // And says which fault it was. "bad region" for a country that has no
+    // regions points the caller at a field that should not have been sent.
+    expect((res.body as { error: string }).error).toMatch(/carry no state/)
   })
 
   it('holds the postcode to the destination format', async () => {

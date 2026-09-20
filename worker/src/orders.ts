@@ -121,7 +121,17 @@ export async function placeOrder(
   // not `str`, which treats an empty string as missing.
   const state = typeof a.state === 'string' ? a.state.trim().toUpperCase() : ''
   if (!validSubdivision(country.code, state)) {
-    return { status: 400, body: { error: `bad ${country.subdivisionLabel?.toLowerCase() ?? 'region'}` } }
+    return {
+      status: 400,
+      body: {
+        // Two different faults wearing one status code. "bad region" for a
+        // country that has no regions tells the caller to fix a field that
+        // should not have been sent at all.
+        error: country.subdivisions
+          ? `bad ${country.subdivisionLabel!.toLowerCase()}`
+          : `${country.name} addresses carry no state`,
+      },
+    }
   }
 
   const postal = str(a.postal, 12)

@@ -33,18 +33,28 @@ const fromB64 = (text: string): Uint8Array =>
   Uint8Array.from(atob(text), (c) => c.charCodeAt(0))
 
 /**
- * PBKDF2-HMAC-SHA256.
+ * PBKDF2-HMAC-SHA256, at the highest iteration count this runtime allows.
  *
  * Not bcrypt or argon2: neither exists in the Workers runtime, and shipping a
  * WASM build of one to hash a demo store's passwords is a larger risk surface
  * than the thing it protects. PBKDF2 is the strongest primitive available here
  * natively, which makes the iteration count the only real dial.
  *
- * ponytail: 210k is the OWASP floor for this algorithm, chosen against the
- * Workers CPU budget. It is recorded per user rather than assumed, so raising
- * it later re-hashes people as they sign in instead of locking them out.
+ * And the dial does not go as far as it should. Workers refuses outright above
+ * 100,000 — `NotSupportedError: Pbkdf2 failed: iteration counts above 100000
+ * are not supported` — which is below OWASP's current guidance for this
+ * algorithm. There is no configuration for it; it is the platform's ceiling.
+ *
+ * ponytail: 100k because the runtime rejects more. Real protection at this
+ * point means a different KDF, which on Workers means WASM — worth it for
+ * credentials that matter, not for a demo store that tells people not to reuse
+ * a password. The count is stored per user, so the day that changes, everyone
+ * is re-hashed as they sign in rather than locked out.
  */
-const PBKDF2_ITERATIONS = 210_000
+const PBKDF2_ITERATIONS = 100_000
+
+/** What the runtime will accept. Above this, `deriveBits` throws. */
+export const MAX_PBKDF2_ITERATIONS = 100_000
 
 async function derive(password: string, salt: Uint8Array, iterations: number): Promise<Uint8Array> {
   const key = await crypto.subtle.importKey('raw', encoder.encode(password), 'PBKDF2', false, [

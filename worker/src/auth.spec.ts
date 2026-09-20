@@ -1,5 +1,13 @@
 import { describe, it, expect } from 'vitest'
-import { register, login, logout, sessionUser, readCookie, SESSION_COOKIE } from './auth'
+import {
+  register,
+  login,
+  logout,
+  sessionUser,
+  readCookie,
+  SESSION_COOKIE,
+  MAX_PBKDF2_ITERATIONS,
+} from './auth'
 
 /**
  * A notebook standing in for D1, same idea as the orders fake: what matters is
@@ -228,5 +236,23 @@ describe('readCookie', () => {
 
   it('returns empty when there are no cookies at all', () => {
     expect(readCookie(new Request('https://api.test/'), SESSION_COOKIE)).toBe('')
+  })
+})
+
+describe('the iteration count', () => {
+  it('stays at or under what the runtime will actually run', async () => {
+    /*
+     * Workers refuses PBKDF2 above 100,000 outright — not slowly, not with a
+     * CPU warning, but `NotSupportedError: iteration counts above 100000 are
+     * not supported`. It was set to OWASP's 210,000 first and every signup
+     * returned a 500 that said nothing about why.
+     *
+     * The count is written onto each row, so this reads it back from a real
+     * registration rather than from the constant it is asserting about.
+     */
+    const { env, users } = fakeDb()
+    const res = await register(env, { name: 'Ada', email: 'ada@example.com', password: 'a'.repeat(12) })
+    expect(res.status).toBe(200)
+    expect(users[0].iterations).toBeLessThanOrEqual(MAX_PBKDF2_ITERATIONS)
   })
 })

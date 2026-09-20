@@ -7,7 +7,7 @@
  * most common reason a basket is abandoned.
  */
 import { computed } from 'vue'
-import { SHIPPING, taxRate, taxLabel, type ShipMethod } from '@/lib/money'
+import { SHIPPING, taxRate, taxLabel, TAX_POLICY, type ShipMethod } from '@/lib/money'
 import { findCountry } from '@/lib/regions'
 import { useCurrency } from '@/composables/useCurrency'
 import { lineKey, type CartLine } from '@/stores/cart'
@@ -47,9 +47,13 @@ const taxNote = computed(() => {
   if (!info) return 'Added once we have your address'
 
   const sub = (props.state ?? '').trim().toUpperCase()
-  // A country taxed per state cannot answer until the state is known, and
-  // saying so is better than showing a national average nobody is charged.
-  if (info.subdivisions && !sub) {
+  /*
+   * Whether the answer has to wait is a question about the TAX, not about the
+   * geography. Malaysia has states and a single national rate; keying this off
+   * `info.subdivisions` printed "Added once we have your state" directly above
+   * a tax line that already read $191.84.
+   */
+  if (TAX_POLICY[country]?.bySubdivision && !sub) {
     return `Added once we have your ${info.subdivisionLabel?.toLowerCase() ?? 'region'}`
   }
 
