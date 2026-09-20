@@ -51,6 +51,13 @@ function fakeDb() {
     } else if (sql.includes('DELETE FROM sessions')) {
       const i = sessions.findIndex((s) => s.token_hash === args[0])
       if (i >= 0) sessions.splice(i, 1)
+    } else if (sql.includes('DELETE FROM email_tokens WHERE user_id')) {
+      for (let i = tokens.length - 1; i >= 0; i--) {
+        if (tokens[i].user_id === args[0]) tokens.splice(i, 1)
+      }
+    } else if (sql.includes('DELETE FROM users WHERE id')) {
+      const i = users.findIndex((u) => u.id === args[0])
+      if (i >= 0) users.splice(i, 1)
     } else if (sql.includes('UPDATE email_tokens SET used_at')) {
       const token = tokens.find((t) => t.token_hash === args[0])
       if (token) token.used_at = args[1]
@@ -138,6 +145,14 @@ beforeEach(() => {
 })
 
 afterEach(() => vi.unstubAllGlobals())
+
+/** Makes the stubbed provider refuse, the way an unverified domain does. */
+function refuseSends() {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => new Response('{"message":"You can only send to your own address"}', { status: 403 })),
+  )
+}
 
 function envWith(over: Partial<AuthEnv> = {}) {
   const { db, users, sessions, tokens } = fakeDb()
@@ -241,6 +256,63 @@ describe('register', () => {
     expect((await register(env, { ...account, password: 'short' }, req())).status).toBe(400)
     expect((await register(env, { ...account, email: 'ada' }, req())).status).toBe(400)
     expect(users).toHaveLength(0)
+  })
+
+
+  it('does not claim to have sent an email it could not send', async () => {
+    /*
+     * Found with no sending domain, which is what an unverified provider
+     * account gives you: every send is refused and the return value was
+     * ignored. The shopper was told "check your email" and refreshed an inbox
+     * that would never receive anything.
+     */
+    const { env, users } = envWith()
+    refuseSends()
+
+    const result = await register(env, account, req())
+    expect(result.status).toBe(503)
+    expect((result.body as { error: string }).error).toMatch(/could not send/i)
+
+    /*
+     * And the half-made account is undone. Left behind, the address is taken:
+     * trying again hits the unique constraint, so the shopper is locked out of
+     * their own email address by a message they never got.
+     */
+    expect(users).toHaveLength(0)
+  })
+
+  it('lets a retry succeed once the transport works again', async () => {
+    const { env, users } = envWith()
+    refuseSends()
+    await register(env, account, req())
+    expect(users).toHaveLength(0)
+
+    // Transport restored by the ordinary beforeEach stub.
+    sent = []
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (_url: string, init: RequestInit) => {
+        const body = JSON.parse(String(init.body)) as { to: string[]; subject: string; text: string }
+        sent.push({ to: body.to[0], subject: body.subject, text: body.text })
+        return new Response('{}', { status: 200 })
+      }),
+    )
+
+    expect((await register(env, account, req())).status).toBe(200)
+    expect(users).toHaveLength(1)
+  })
+
+  it('says the same thing about an undeliverable new address and an existing one', async () => {
+    // The failure belongs to the recipient, not to the account, so it must not
+    // become a way to tell the two apart.
+    const { env } = envWith()
+    await register(env, account, req())
+    refuseSends()
+
+    const taken = await register(env, account, req())
+    const fresh = await register(env, { ...account, email: 'someone@example.com' }, req())
+    expect(fresh.status).toBe(taken.status)
+    expect(fresh.body).toEqual(taken.body)
   })
 
   it('refuses when the signup limiter says so, before touching anything', async () => {

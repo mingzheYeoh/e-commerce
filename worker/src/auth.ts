@@ -361,11 +361,27 @@ export async function register(
     .bind(email)
     .first<{ id: string }>()
 
+  /*
+   * What to say when the message could not be sent.
+   *
+   * "Check your email" is only true if something was sent. A provider that
+   * refuses — an unverified sending domain, a quota, an outage — otherwise
+   * produces a registration that looks finished and leaves the shopper
+   * refreshing an inbox that will never receive anything.
+   *
+   * It is the same answer whether or not the address already had an account,
+   * because the failure is a property of the recipient, not of the account.
+   */
+  const UNDELIVERABLE = {
+    status: 503 as const,
+    body: { error: 'We could not send the confirmation email. Try again shortly.' },
+  }
+
   if (existing) {
     // Identical response, different email. The owner of the address finds out;
     // whoever typed it does not.
     const mail = alreadyRegisteredEmail(`${site}/account`)
-    await mailer.send({ to: email, ...mail })
+    if (!(await mailer.send({ to: email, ...mail }))) return UNDELIVERABLE
     return { status: 200, body: REGISTRATION_ACCEPTED }
   }
 
@@ -393,7 +409,19 @@ export async function register(
   }
 
   const mail = verificationEmail(`${site}/verify?token=${encodeURIComponent(token)}`)
-  await mailer.send({ to: email, ...mail })
+  if (!(await mailer.send({ to: email, ...mail }))) {
+    /*
+     * Undo it. An account whose only key was in an email that never arrived is
+     * unreachable AND in the way: the address is taken, so trying again hits
+     * the unique constraint and the shopper is locked out of their own email
+     * address by a message they never got.
+     */
+    await env.ORDERS.batch([
+      env.ORDERS.prepare(`DELETE FROM email_tokens WHERE user_id = ?1`).bind(id),
+      env.ORDERS.prepare(`DELETE FROM users WHERE id = ?1`).bind(id),
+    ])
+    return UNDELIVERABLE
+  }
 
   // No session yet. The account exists but is not usable until the link is
   // clicked, which is what makes the address verified rather than merely typed.
