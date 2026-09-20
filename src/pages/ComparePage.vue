@@ -61,10 +61,19 @@ watch(
 )
 
 const rows = computed(() => buildRows(compare.items))
-const visibleRows = computed(() =>
-  differencesOnly.value ? rows.value.filter((r) => !r.same) : rows.value,
+
+/*
+ * "Differences only" also drops rows a single product answers alone. Those read
+ * as a difference but are an absence, and the published-spec union is mostly
+ * made of them — four peripherals produce 27 labels, none answered by all four.
+ */
+const shown = computed(() =>
+  differencesOnly.value ? rows.value.filter((r) => !r.same && r.comparable) : rows.value,
 )
-const sameCount = computed(() => rows.value.filter((r) => r.same).length)
+const measured = computed(() => shown.value.filter((r) => r.group === 'measured'))
+const published = computed(() => shown.value.filter((r) => r.group === 'spec'))
+const foldable = computed(() => rows.value.filter((r) => r.same || !r.comparable).length)
+const specCount = computed(() => rows.value.filter((r) => r.group === 'spec').length)
 
 const categoryLabel = computed(
   () => categories.find((c) => c.id === compare.category)?.label ?? 'products',
@@ -103,11 +112,15 @@ const cell = (value: number | string | null, money: boolean, unit?: string) => {
           <p class="text-sm text-text-secondary">
             {{ compare.items.length }} {{ categoryLabel.toLowerCase() }}, on their published figures
           </p>
-          <label v-if="sameCount > 0" class="flex cursor-pointer items-center gap-2 text-sm">
+          <label
+            v-if="foldable > 0"
+            class="flex cursor-pointer items-center gap-2 text-sm"
+            title="Hides rows where every column agrees, and rows only one product answers"
+          >
             <input v-model="differencesOnly" type="checkbox" class="accent-accent" />
             <span class="text-text-secondary">
               Differences only
-              <span class="nums text-text-muted">({{ sameCount }} identical)</span>
+              <span class="nums text-text-muted">(folds {{ foldable }} of {{ rows.length }})</span>
             </span>
           </label>
         </div>
@@ -164,8 +177,8 @@ const cell = (value: number | string | null, money: boolean, unit?: string) => {
 
             <tbody>
               <tr
-                v-for="row in visibleRows"
-                :key="row.label"
+                v-for="row in measured"
+                :key="`measured-${row.label}`"
                 class="border-t border-border-hairline"
               >
                 <th
@@ -196,13 +209,54 @@ const cell = (value: number | string | null, money: boolean, unit?: string) => {
                 </td>
               </tr>
             </tbody>
+
+            <!--
+              The manufacturers' own lines, verbatim. Kept apart from the rows
+              above because a label can honestly appear in both — "Storage" is a
+              number up there and "256GB / 512GB / 1TB / 2TB" down here — and
+              running them together would read as the table contradicting
+              itself.
+            -->
+            <tbody v-if="published.length">
+              <tr class="border-t border-border-hairline">
+                <th
+                  scope="colgroup"
+                  :colspan="compare.items.length + 1"
+                  class="p-3 pt-8 text-left text-xs font-semibold uppercase tracking-wide text-text-muted"
+                >
+                  All published specifications
+                </th>
+              </tr>
+              <tr
+                v-for="row in published"
+                :key="`spec-${row.label}`"
+                class="border-t border-border-hairline"
+              >
+                <th
+                  scope="row"
+                  class="sticky left-0 z-10 bg-void p-3 text-left align-top font-medium text-text-secondary"
+                >
+                  {{ row.label }}
+                </th>
+                <td
+                  v-for="(c, i) in row.cells"
+                  :key="i"
+                  class="p-3 align-top leading-relaxed"
+                  :class="c.value === null ? 'text-text-muted' : 'text-text-secondary'"
+                >
+                  {{ c.value ?? '—' }}
+                </td>
+              </tr>
+            </tbody>
           </table>
         </div>
 
         <p class="mt-6 max-w-2xl text-xs text-text-muted">
           A dash means the manufacturer publishes no figure for that row — not that the product
           lacks it. Highlights mark the best value only where one direction is genuinely better;
-          screen size, ports and features are shown without a verdict.
+          screen size, ports and free text are shown without a verdict. The
+          {{ specCount }} published rows are reproduced as written, so two makers describing the
+          same part differently get two rows rather than a guess that they meant the same thing.
         </p>
 
         <div class="mt-6 flex flex-wrap gap-3">

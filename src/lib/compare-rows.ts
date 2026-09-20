@@ -1,9 +1,16 @@
 /**
  * Which rows a comparison shows, and which of them have a winner.
  *
- * Rows are curated per category rather than unioned from every `specs` entry:
- * three phones union to twenty-odd rows, most of them free text like
- * "Chip: A20 Pro" that does not compare across columns.
+ * Two groups, because they answer different questions.
+ *
+ * `measured` rows are normalised figures with a direction, so they can carry a
+ * verdict. `spec` rows are the union of every line the manufacturers publish,
+ * verbatim — complete, but free text that mostly cannot be ranked.
+ *
+ * The union is large and thin: four peripherals produce 27 rows and *none* of
+ * them is answered by all four. That is a property of the catalogue, not a bug,
+ * and it is why union rows are ordered by how many products answer them and why
+ * "differences only" also hides rows a single product answers alone.
  */
 import { extractFacts, type ProductFacts } from './extract-facts'
 import { brandName } from '@/data/brands'
@@ -116,6 +123,15 @@ export interface RenderedRow {
   cells: RenderedCell[]
   /** Every column agrees, so the row can be folded away. */
   same: boolean
+  /**
+   * At least two products publish something here.
+   *
+   * One value against three blanks reads as a difference but is really an
+   * absence, and on a 27-row table those crowd out the rows that do compare.
+   */
+  comparable: boolean
+  /** `measured` rows can carry a verdict; `spec` rows are published text. */
+  group: 'measured' | 'spec'
 }
 
 /**
@@ -143,31 +159,84 @@ function bestIndices(values: (number | string | null)[], direction: Direction): 
   return new Set(numeric.filter((x) => x.v === target).map((x) => x.i))
 }
 
+const render = (
+  label: string,
+  values: (number | string | null)[],
+  opts: { group: 'measured' | 'spec'; unit?: string; money?: boolean; direction?: Direction },
+): RenderedRow => {
+  const best = bestIndices(values, opts.direction ?? null)
+  return {
+    label,
+    unit: opts.unit,
+    money: Boolean(opts.money),
+    group: opts.group,
+    cells: values.map((value, i) => ({ value, best: best.has(i) })),
+    same: values.every((v) => v === values[0]),
+    comparable: values.filter((v) => v !== null).length >= 2,
+  }
+}
+
 /**
- * Builds the table body for a set of products, which the caller has already
- * confirmed share a category.
+ * The normalised figures, which are the only rows that can carry a verdict.
  *
  * A row no product publishes is dropped entirely. A line of dashes is not
  * information, and six of them push the rows that do compare off the screen.
  */
-export function buildRows(items: Product[]): RenderedRow[] {
-  if (!items.length) return []
+function measuredRows(items: Product[]): RenderedRow[] {
   const facts = items.map(extractFacts)
-  const rows = [...UNIVERSAL, ...BY_CATEGORY[items[0].category]]
-
-  return rows.flatMap((row) => {
+  return [...UNIVERSAL, ...BY_CATEGORY[items[0].category]].flatMap((row) => {
     const values = items.map((p, i) => row.get(p, facts[i]))
     if (values.every((v) => v === null)) return []
-
-    const best = bestIndices(values, row.direction)
-    return [
-      {
-        label: row.label,
-        unit: row.unit,
-        money: Boolean(row.money),
-        cells: values.map((value, i) => ({ value, best: best.has(i) })),
-        same: values.every((v) => v === values[0]),
-      },
-    ]
+    return [render(row.label, values, { group: 'measured', unit: row.unit, money: row.money, direction: row.direction })]
   })
+}
+
+/**
+ * Every specification line any of the products publishes, verbatim.
+ *
+ * Labels are matched case-insensitively so "Battery" and "battery" are one row,
+ * but they are otherwise left exactly as written. Mapping "Chip" onto
+ * "Processor" would be guessing at whether two manufacturers mean the same
+ * thing, and a wrong merge silently compares two different figures.
+ *
+ * Ordered by how many products answer the row. A union across four products is
+ * mostly holes — four peripherals produce 27 labels and none is answered by all
+ * four — so the rows everyone fills in come first and the ones a single product
+ * has sink to the bottom, where they read as the footnotes they are.
+ */
+function specRows(items: Product[]): RenderedRow[] {
+  const display = new Map<string, string>()
+  const order: string[] = []
+
+  for (const p of items) {
+    for (const spec of p.specs) {
+      const key = spec.label.trim().toLowerCase()
+      if (!key || display.has(key)) continue
+      display.set(key, spec.label.trim())
+      order.push(key)
+    }
+  }
+
+  const find = (p: Product, key: string) =>
+    p.specs.find((s) => s.label.trim().toLowerCase() === key)?.value ?? null
+
+  return order
+    .map((key) => {
+      const values = items.map((p) => find(p, key))
+      // Published text, so no unit and never a verdict.
+      return render(display.get(key)!, values, { group: 'spec' })
+    })
+    .map((row, i) => ({ row, i, filled: row.cells.filter((c) => c.value !== null).length }))
+    // Stable within equal coverage, so a manufacturer's own ordering survives.
+    .sort((a, b) => b.filled - a.filled || a.i - b.i)
+    .map((x) => x.row)
+}
+
+/**
+ * The full table for a set of products the caller has confirmed share a
+ * category: the comparable figures first, then every published spec line.
+ */
+export function buildRows(items: Product[]): RenderedRow[] {
+  if (!items.length) return []
+  return [...measuredRows(items), ...specRows(items)]
 }

@@ -62,9 +62,30 @@ Universal rows: price, brand, rating. Then rows chosen per category:
 Typed as `Record<CategoryId, Row[]>` so adding a category without giving it rows
 is a compile error, the way `CATEGORY_WORDS` already is.
 
-Curated rows rather than the union of every `specs` entry: three phones union to
-twenty-odd rows, most of them free text like "Chip: A20 Pro" that does not
-compare across columns.
+**Then every specification line any of the products publishes, verbatim,** under
+an "All published specifications" heading. Curated rows alone were the first
+design; it was changed on request to show everything.
+
+The two groups are kept apart because they answer different questions and a
+label can honestly appear in both. "Battery life" above is normalised to
+`1680h / 360h / 100h` and ranks; "Battery" below reads "70 days, 1 min charge =
+3 hours" against "15 days lit, 10 months unlit" and cannot. Merged into one
+list, the table would look like it was contradicting itself.
+
+Labels are matched case-insensitively and trimmed, so `Battery` and ` battery `
+are one row. They are not otherwise normalised: mapping "Chip" onto "Processor"
+is a guess about whether two manufacturers mean the same part, and a wrong merge
+silently compares two different figures.
+
+The union is wide and thin — four peripherals produce 27 labels and **none** is
+answered by all four — which drives two decisions:
+
+- Union rows are ordered by how many products answer them, so the rows everyone
+  fills come first and single-product rows sink to the bottom as the footnotes
+  they are.
+- "Differences only" hides rows where every column agrees **and** rows only one
+  product answers. One value against three blanks reads as a difference but is
+  an absence. On the three-peripheral comparison this folds 15 of 23 rows.
 
 ### Three rules for the cells
 
@@ -81,9 +102,11 @@ conclusion the catalogue does not support. Rows with no direction are rendered
 plainly, and a row where every value is equal has no winner either — marking all
 four best is noise.
 
-**3. Identical rows can be folded away.**
-A "Differences only" toggle hides rows where every column agrees, because the
-differences are what the shopper opened the page for.
+**3. Identical and unanswerable rows can be folded away.**
+A "Differences only" toggle hides rows where every column agrees, and rows only
+one product answers, because the differences are what the shopper opened the
+page for. Published rows never carry a verdict at all — free text has no
+direction, and "Snapdragon 8 Elite Gen 5" does not beat "A20 Pro".
 
 ## URL and persistence
 
@@ -122,6 +145,7 @@ The tray hides itself on `/compare`, where it would duplicate the page.
 
 ## Deliberately not included
 
+- Normalising synonymous spec labels across manufacturers.
 - Comparing across categories, including a "generic rows only" fallback.
 - Persisting comparisons server-side. The URL already makes one shareable.
 - Pulling comparison candidates from the graph's `COMPETES_WITH` edges. The

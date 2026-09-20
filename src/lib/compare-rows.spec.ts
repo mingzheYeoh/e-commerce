@@ -94,3 +94,74 @@ describe('buildRows', () => {
     expect(buildRows([])).toEqual([])
   })
 })
+
+describe('the published-spec union', () => {
+  const specRows = (items: Product[]) => buildRows(items).filter((r) => r.group === 'spec')
+
+  it('carries every label any product publishes', () => {
+    const items = products.filter((p) => p.category === 'phones').slice(0, 4)
+    const published = new Set(items.flatMap((p) => p.specs.map((s) => s.label.trim().toLowerCase())))
+    const rendered = new Set(specRows(items).map((r) => r.label.toLowerCase()))
+    expect(rendered).toEqual(published)
+  })
+
+  it('keeps a label only one product publishes, and marks it uncomparable', () => {
+    // The point of "everything": a spec nobody else states is still worth
+    // seeing. It just cannot be compared, and says so.
+    const a = { ...byId('iphone-18-pro'), specs: [{ label: 'Unique Thing', value: 'yes' }] } as Product
+    const b = { ...byId('iphone-18-pro'), id: 'b', specs: [] } as Product
+    const row = specRows([a, b]).find((r) => r.label === 'Unique Thing')!
+    expect(row.cells.map((c) => c.value)).toEqual(['yes', null])
+    expect(row.comparable).toBe(false)
+  })
+
+  it('never puts a verdict on published text', () => {
+    // Free text has no direction. "Snapdragon 8 Elite Gen 5" does not beat
+    // "A20 Pro", and nothing here should imply that it does.
+    const items = products.filter((p) => p.category === 'computing').slice(0, 4)
+    for (const row of specRows(items)) {
+      expect(row.cells.every((c) => !c.best), `${row.label} must carry no winner`).toBe(true)
+    }
+  })
+
+  it('puts the rows every product answers first', () => {
+    // A union across four products is mostly holes — four peripherals give 27
+    // labels, none answered by all four — so coverage decides the order or the
+    // useful rows are buried.
+    const items = products.filter((p) => p.category === 'imaging').slice(0, 4)
+    const filled = specRows(items).map((r) => r.cells.filter((c) => c.value !== null).length)
+    expect(filled).toEqual([...filled].sort((a, b) => b - a))
+  })
+
+  it('treats labels that differ only in case or padding as one row', () => {
+    const a = { ...byId('iphone-18-pro'), specs: [{ label: 'Battery', value: 'A' }] } as Product
+    const b = { ...byId('iphone-18-pro'), id: 'b', specs: [{ label: ' battery ', value: 'B' }] } as Product
+    const rows = specRows([a, b]).filter((r) => r.label.toLowerCase() === 'battery')
+    expect(rows).toHaveLength(1)
+    expect(rows[0].cells.map((c) => c.value)).toEqual(['A', 'B'])
+  })
+
+  it('does not merge labels that merely look related', () => {
+    // "Chip" and "Processor" may well mean the same part, but deciding that is
+    // guessing, and a wrong merge silently compares two different figures.
+    const a = { ...byId('iphone-18-pro'), specs: [{ label: 'Chip', value: 'A20' }] } as Product
+    const b = { ...byId('iphone-18-pro'), id: 'b', specs: [{ label: 'Processor', value: 'X2' }] } as Product
+    expect(specRows([a, b]).map((r) => r.label)).toEqual(['Chip', 'Processor'])
+  })
+
+  it('keeps the comparable figures above the published text', () => {
+    const groups = buildRows(products.filter((p) => p.category === 'phones').slice(0, 3)).map(
+      (r) => r.group,
+    )
+    expect(groups.indexOf('spec')).toBeGreaterThan(groups.lastIndexOf('measured'))
+  })
+
+  it('lets a label appear in both groups without collapsing them', () => {
+    // "Storage" is a number above and "256GB / 512GB / 1TB / 2TB" below. Both
+    // are true; running them together would read as a contradiction.
+    const rows = buildRows(products.filter((p) => p.category === 'phones').slice(0, 4))
+    const storage = rows.filter((r) => r.label.toLowerCase() === 'storage')
+    expect(storage.length).toBeGreaterThan(1)
+    expect(new Set(storage.map((r) => r.group))).toEqual(new Set(['measured', 'spec']))
+  })
+})
