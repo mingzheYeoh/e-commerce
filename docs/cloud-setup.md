@@ -95,10 +95,15 @@ database is a projection of it, never the other way round.
 The credentials file is the source of truth, and on a current instance it reads:
 
 ```
-NEO4J_URI=neo4j+s://a70f8c71.databases.neo4j.io
-NEO4J_USERNAME=a70f8c71        <- the instance id, not "neo4j"
-NEO4J_DATABASE=a70f8c71        <- likewise
+NEO4J_URI=neo4j+s://<instance-id>.databases.neo4j.io
+NEO4J_USERNAME=<instance-id>        <- the instance id, not "neo4j"
+NEO4J_DATABASE=<instance-id>        <- likewise
 ```
+
+The id is written as a placeholder here rather than quoted from a real file.
+It is not a credential, but the hostname is built from it, so publishing it
+hands out the endpoint that `NEO4J_URI` is kept a secret to withhold — the
+address a credential opens, rather than the credential.
 
 Assuming `neo4j` for either fails in a way that looks like something else:
 the wrong user returns `401 Invalid credential` as though the password were
