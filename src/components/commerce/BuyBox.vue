@@ -1,15 +1,21 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { Check, Star, Truck, RotateCcw, ShieldCheck, Minus, Plus } from 'lucide-vue-next'
+import { Check, Star, Truck, RotateCcw, ShieldCheck, Minus, Plus, Scale } from 'lucide-vue-next'
 import PriceTag from './PriceTag.vue'
 import { useCartStore } from '@/stores/cart'
+import { useCompareStore } from '@/stores/compare'
 import { brandName } from '@/data/brands'
 import type { Product } from '@/types'
 
 const props = defineProps<{ product: Product }>()
 
 const cart = useCartStore()
+const compare = useCompareStore()
 const variant = ref(props.product.colorways[0])
+
+const comparing = computed(() => compare.has(props.product.id))
+/** Refused by the store when the comparison is full or holds another category. */
+const cannotCompare = computed(() => !compare.canAdd(props.product))
 const qty = ref(1)
 const added = ref(false)
 
@@ -116,6 +122,23 @@ const assurances = [
         <span v-else>Add to cart</span>
       </button>
     </div>
+
+    <button
+      type="button"
+      class="btn-ghost mt-3 inline-flex w-full items-center justify-center gap-2 disabled:cursor-not-allowed disabled:opacity-40"
+      :class="comparing && 'border-accent text-accent'"
+      :disabled="cannotCompare"
+      :aria-pressed="comparing"
+      :title="
+        cannotCompare
+          ? 'Comparison is full, or already holds another category'
+          : undefined
+      "
+      @click="compare.toggle(product)"
+    >
+      <Scale class="h-4 w-4" aria-hidden="true" />
+      {{ comparing ? 'In comparison' : 'Compare' }}
+    </button>
 
     <ul class="mt-8 space-y-2.5 border-t border-border-hairline pt-6">
       <li

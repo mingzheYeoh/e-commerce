@@ -7,6 +7,7 @@ export const router = createRouter({
     { path: '/shop', name: 'shop', component: () => import('@/pages/ShopPage.vue') },
     { path: '/ask', name: 'ask', component: () => import('@/pages/AskPage.vue') },
     { path: '/cart', name: 'cart', component: () => import('@/pages/CartPage.vue') },
+    { path: '/compare', name: 'compare', component: () => import('@/pages/ComparePage.vue') },
     { path: '/checkout', name: 'checkout', component: () => import('@/pages/CheckoutPage.vue') },
     {
       path: '/order/:id',

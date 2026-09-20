@@ -1,0 +1,96 @@
+import { describe, it, expect } from 'vitest'
+import { buildRows } from './compare-rows'
+import { products } from '@/data/products'
+import type { Product } from '@/types'
+
+const byId = (id: string) => products.find((p) => p.id === id)!
+const phones = products.filter((p) => p.category === 'phones')
+const row = (rows: ReturnType<typeof buildRows>, label: string) =>
+  rows.find((r) => r.label === label)
+const winners = (rows: ReturnType<typeof buildRows>, label: string) =>
+  row(rows, label)!.cells.flatMap((c, i) => (c.best ? [i] : []))
+
+describe('buildRows', () => {
+  it('picks the cheapest as the winner on price, not the dearest', () => {
+    const items = [phones[0], phones[1], phones[2]]
+    const rows = buildRows(items)
+    const prices = items.map((p) => p.price)
+    const cheapest = prices.indexOf(Math.min(...prices))
+    expect(winners(rows, 'Price')).toEqual([cheapest])
+  })
+
+  it('picks the highest rating', () => {
+    const items = [phones[0], phones[1], phones[2]]
+    const ratings = items.map((p) => p.rating)
+    expect(winners(buildRows(items), 'Rating')).toEqual([ratings.indexOf(Math.max(...ratings))])
+  })
+
+  it('declares no winner on screen size', () => {
+    // The rule this feature exists to get right. A bigger screen is a different
+    // phone, not a better one, and a green tick would be a fabricated verdict.
+    const rows = buildRows(phones.slice(0, 3))
+    const screen = row(rows, 'Screen')!
+    expect(screen.cells.some((c) => c.value !== null)).toBe(true)
+    expect(winners(rows, 'Screen')).toEqual([])
+  })
+
+  it('declares no winner on a row where every column agrees', () => {
+    const one = byId('iphone-18-pro')
+    const rows = buildRows([one, { ...one, id: 'clone', sku: 'CLONE' } as Product])
+    for (const r of rows) {
+      expect(r.cells.every((c) => !c.best), `${r.label} should have no winner`).toBe(true)
+      expect(r.same).toBe(true)
+    }
+  })
+
+  it('does not crown a lone published figure', () => {
+    // One product naming a number does not beat three that stay silent; that
+    // reports the others as worse when they are only unknown.
+    const base = byId('iphone-18-pro')
+    const withFigure = { ...base, specs: [{ label: 'Charging', value: '120W wired' }] } as Product
+    const without = { ...base, id: 'b', specs: [], specsSummary: [] } as Product
+    const rows = buildRows([withFigure, without])
+    const charging = row(rows, 'Charging')
+    if (charging) expect(charging.cells.every((c) => !c.best)).toBe(true)
+  })
+
+  it('renders an unpublished figure as null rather than zero', () => {
+    // An omitted field read as zero is a defect this project has shipped once:
+    // the assistant called a battery "smaller" where none was published.
+    const bare = { ...byId('iphone-18-pro'), specs: [], specsSummary: [] } as Product
+    const rows = buildRows([byId('iphone-18-pro'), bare])
+    for (const r of rows) {
+      for (const cell of r.cells) {
+        expect(cell.value, `${r.label} must not fabricate a zero`).not.toBe(0)
+      }
+    }
+  })
+
+  it('drops a row no product in the comparison publishes', () => {
+    const bare = [
+      { ...byId('iphone-18-pro'), specs: [], specsSummary: [] } as Product,
+      { ...byId('iphone-18-pro'), id: 'b', specs: [], specsSummary: [] } as Product,
+    ]
+    const labels = buildRows(bare).map((r) => r.label)
+    // Price and brand always resolve; a spec nobody states should not appear as
+    // a line of dashes pushing real rows off the screen.
+    expect(labels).toContain('Price')
+    expect(labels).not.toContain('Refresh rate')
+  })
+
+  it('gives every category a set of rows that actually resolve', () => {
+    // Guards the Record<CategoryId, …> table against a category whose rows all
+    // read fields its products never publish — which compiles, and renders an
+    // empty comparison.
+    for (const category of ['phones', 'computing', 'audio', 'imaging', 'peripherals'] as const) {
+      const items = products.filter((p) => p.category === category).slice(0, 3)
+      const rows = buildRows(items)
+      const specRows = rows.filter((r) => !['Price', 'Brand', 'Rating'].includes(r.label))
+      expect(specRows.length, `${category} resolved no spec rows`).toBeGreaterThan(0)
+    }
+  })
+
+  it('returns nothing for an empty comparison', () => {
+    expect(buildRows([])).toEqual([])
+  })
+})

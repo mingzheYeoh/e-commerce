@@ -1,17 +1,33 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { RouterLink } from 'vue-router'
-import { Check, Star } from 'lucide-vue-next'
+import { Check, Star, Scale } from 'lucide-vue-next'
 import StockBadge from './StockBadge.vue'
 import PriceTag from './PriceTag.vue'
 import { useCartStore } from '@/stores/cart'
+import { useCompareStore } from '@/stores/compare'
 import { brandName } from '@/data/brands'
 import type { Product } from '@/types'
 
 const props = defineProps<{ product: Product }>()
 
 const cart = useCartStore()
+const compare = useCompareStore()
 const added = ref(false)
+
+const selected = computed(() => compare.has(props.product.id))
+/**
+ * Greyed out when the comparison already holds another category, or is full.
+ * The store refuses either case anyway; this is so the shopper sees it coming
+ * rather than clicking a control that silently does nothing.
+ */
+const blocked = computed(() => !compare.canAdd(props.product))
+const reason = computed(() => {
+  if (!blocked.value) return `Compare ${props.product.title}`
+  return compare.full
+    ? `Comparison is full — remove one to add ${props.product.title}`
+    : `Already comparing ${compare.category === 'computing' ? 'laptops' : compare.category}`
+})
 let resetTimer: number | undefined
 
 function addToCart() {
@@ -54,6 +70,28 @@ function addToCart() {
       <div class="absolute left-3 top-3">
         <StockBadge :product="product" />
       </div>
+
+      <!--
+        The card's root element is a RouterLink, so this has to stop the click
+        from reaching it. Without .prevent, ticking the box navigates away to
+        the product page and the selection is never seen.
+      -->
+      <button
+        type="button"
+        class="absolute right-3 top-3 flex items-center gap-1.5 rounded border px-2 py-1 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40"
+        :class="
+          selected
+            ? 'border-accent bg-accent text-white'
+            : 'border-border-hairline bg-void/80 text-text-secondary backdrop-blur hover:text-text-primary'
+        "
+        :disabled="blocked"
+        :aria-pressed="selected"
+        :title="reason"
+        @click.stop.prevent="compare.toggle(product)"
+      >
+        <Scale class="h-3 w-3" aria-hidden="true" />
+        <span>{{ selected ? 'Comparing' : 'Compare' }}</span>
+      </button>
 
       <div v-if="product.colorways.length > 1" class="absolute bottom-3 left-3 flex gap-1.5">
         <span
