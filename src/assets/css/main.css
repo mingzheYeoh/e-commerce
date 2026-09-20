@@ -35,7 +35,31 @@
 @layer components {
   /* Standard retail card: soft surface, hairline edge, gentle radius. */
   .card {
-    @apply rounded-card border border-border-hairline bg-surface-1;
+    @apply relative rounded-card border border-border-hairline bg-surface-1;
+  }
+
+  /*
+   * Pointer-tracked 3D tilt. The transform itself is written per-frame by
+   * useTilt; this owns the easing and the return to rest.
+   *
+   * The transition is asymmetric on purpose. Following the pointer has to feel
+   * immediate, so a frame's worth of easing is all it gets; letting go should
+   * settle rather than snap, and the longer curve on `transform` covers both
+   * because the inline style is cleared on leave and the element eases home
+   * from wherever it was.
+   */
+  .tilt {
+    transform-origin: center;
+    transition:
+      transform 400ms cubic-bezier(0.22, 1, 0.36, 1),
+      border-color 200ms ease;
+    will-change: transform;
+  }
+
+  .tilt:hover {
+    transition:
+      transform 80ms linear,
+      border-color 200ms ease;
   }
 
   .label {
@@ -84,6 +108,13 @@
 /* Motion kill switch. useReducedMotion() owns [data-motion] and is the only
    writer; keying off it rather than the media query directly means the
    ?motion=on override reaches CSS animations too. */
+/* The tilt is an inline style, so the transition kill switch below cannot
+   reach it. Overriding the transform is what actually keeps the card flat. */
+[data-motion='reduced'] .tilt {
+  transform: none !important;
+  will-change: auto;
+}
+
 [data-motion='reduced'],
 [data-motion='reduced'] *,
 [data-motion='reduced'] *::before,
