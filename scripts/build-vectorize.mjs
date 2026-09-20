@@ -45,32 +45,9 @@ async function loadModule(entry) {
 }
 
 const { products } = await loadModule('src/data/products.ts')
-const { extractFacts } = await loadModule('src/lib/extract-facts.ts')
-
-/**
- * The passage a retrieved hit shows the model.
- *
- * It has to read as prose, not as a row dump: the answer is generated from this
- * text, so anything the model needs to cite must be legible in it. Extracted
- * facts are appended because a question like "which charges fastest" is answered
- * by the number, not by the marketing line.
- */
-function passageFor(p) {
-  const f = extractFacts(p)
-  const numbers = Object.entries(f)
-    .filter(([, v]) => typeof v === 'number')
-    .map(([k, v]) => `${k} ${v}`)
-  return [
-    `${p.title} by ${p.brand.toLowerCase().replace(/_/g, ' ')}, ${p.category}, $${p.price}.`,
-    p.specsSummary.join('. ') + '.',
-    p.specs.map((s) => `${s.label}: ${s.value}`).join('. ') + '.',
-    f.features.length ? `Features: ${f.features.join(', ')}.` : '',
-    f.ports.length ? `Ports: ${f.ports.join(', ')}.` : '',
-    numbers.length ? `Figures: ${numbers.join(', ')}.` : '',
-  ]
-    .filter(Boolean)
-    .join(' ')
-}
+// Shared with the on-device builder and the evaluation, so the text scored in
+// an ablation is the text that actually went into the index.
+const { passageFor } = await loadModule('src/lib/passages.ts')
 
 console.log(`embedding ${products.length} products with ${MODEL} (pooling: ${POOLING}) …`)
 const embed = await pipeline('feature-extraction', MODEL, { dtype: 'q8' })

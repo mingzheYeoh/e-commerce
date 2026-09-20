@@ -10,16 +10,31 @@
  * runs on the device. That also means search keeps working offline once the
  * model is cached, and no shopper's query is sent anywhere.
  *
- * Measured on the 22-query evaluation set in search-eval.json:
+ * Measured on the 22-query evaluation set in search-eval.json
+ * (`node scripts/eval-search.mjs`):
  *
  *   strategy   precision@3   recall@5     MRR
  *   keyword        33.3%       65.0%     58.6%
- *   semantic       40.9%       78.3%     74.8%
- *   hybrid         40.9%       70.7%     75.8%
+ *   semantic       40.9%       79.8%     73.3%
+ *   hybrid         40.9%       70.7%     72.7%
  *
- * Hybrid ships because the keyword engine still wins the queries where hand-
- * written domain knowledge beats general language understanding — it knows a
- * wedding needs a camera, and the model does not.
+ * Hybrid no longer earns its place on these numbers. It was added when fusion
+ * beat semantic alone; re-measured after the catalogue grew to 45 products it
+ * costs 9 points of recall@5 and matches on MRR within the noise of a 22-query
+ * set (repeat runs move MRR by ~1 point on identical inputs, because q8
+ * quantisation is not bit-identical between runs).
+ *
+ * It is still here because the aggregate hides the shape: on 7 of 22 queries
+ * the keyword engine outranks the embeddings outright — it knows a wedding
+ * needs a camera and the model does not — and fusion is what keeps those from
+ * collapsing. Whether trading tail robustness for mean recall is the right call
+ * is a product decision, and it should be made against the table, not against
+ * the memory of an older one.
+ *
+ * The hosted index (bge-small-en-v1.5 over Vectorize) scores 88.4% MRR on the
+ * same set and is what /api/ask and /api/chat retrieve from. It is not used
+ * here because this path answers in ~11 ms on-device against ~330 ms over the
+ * network, and a search box that stutters is a worse search box.
  */
 import { products } from '@/data/products'
 import { recommend } from './recommend'

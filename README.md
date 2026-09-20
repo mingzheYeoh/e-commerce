@@ -92,28 +92,64 @@ a real model behind a serverless function later is a change to that file alone.
 
 Three layers, each answering a question the one below it could not.
 
-### 1. Hybrid retrieval, measured
+### 1. Retrieval, measured two ways
 
-Product vectors are precomputed at build time and ship as a 67 KB binary. Only
-the *query* is embedded at runtime, on the visitor's device, so there is no key
-to leak and no search term leaves the browser.
+Two retrieval stacks run against the same 22-query hand-judged set
+(`npm run eval:search -- --remote --ablate`):
 
-Keyword and semantic rankings are fused with **Reciprocal Rank Fusion** (k=60)
-— positions, not scores, because a keyword engine's point scale and a cosine are
-not commensurable.
+| strategy | where | precision@3 | recall@5 | MRR |
+|---|---|---|---|---|
+| keyword | device, no model | 33.3% | 65.0% | 58.6% |
+| semantic | device, MiniLM-L6 | 40.9% | 79.8% | 73.3% |
+| hybrid (RRF) | device, both | 40.9% | 70.7% | 72.7% |
+| **vector** | **Cloudflare, bge-small + Vectorize** | **45.5%** | **82.3%** | **88.4%** |
+| vector + keyword | RRF of the two | 45.5% | 77.5% | 72.3% |
 
-Scored over a 22-query hand-judged set (`npm run eval:search`):
+Two results worth more than the winning row:
 
-| strategy | precision@3 | recall@5 | MRR |
-|---|---|---|---|
-| keyword | 33.3% | 65.0% | 58.6% |
-| semantic | 40.9% | 78.3% | 74.8% |
-| **hybrid** | **40.9%** | 70.7% | **75.8%** |
+**Reciprocal Rank Fusion helps a weak retriever and hurts a strong one.** Fusing
+keyword into the hosted index costs **16 points of MRR** — RRF fuses positions,
+so a confident correct hit at rank 1 gets dragged down by a second ranker that
+disagrees. Hybrid is a fix for a retriever that misses, not an upgrade for one
+that does not.
 
-Hybrid ships because the keyword engine still wins the queries where hand-written
-domain knowledge beats general language understanding: it knows a wedding needs a
-camera, and the model does not. `src/lib/retrieval.ts` is imported by both the
-eval script and live search, so the table above describes shipped code.
+**The hosted stack changed two things at once,** the model *and* the text each
+product is embedded as, so the headline gap was unattributable until both were
+varied separately (`--ablate`, exact cosine, no ANN index):
+
+| model | document text | precision@3 | recall@5 | MRR |
+|---|---|---|---|---|
+| MiniLM-L6 | specs only | 42.4% | 75.2% | 72.9% |
+| MiniLM-L6 | prose + facts | 43.9% | 79.2% | 76.3% |
+| bge-small | specs only | 47.0% | **87.3%** | 79.9% |
+| bge-small | prose + facts | 45.5% | 84.5% | **88.4%** |
+
+Both changes pay, and they compound: the richer text is worth 3.4 MRR points to
+MiniLM and 8.5 to bge-small. A better model extracts more from better text than
+a weaker one does, so "swap the model" and "improve the corpus" are not
+independent line items. Note also that bge-small on *specs only* has the best
+recall@5 of any cell — the prose passages sharpen the top of the ranking and
+cost a little breadth.
+
+That last row is the deployed configuration, and the eval reaches it twice by
+different routes: once locally with an exact scan, once through the live
+endpoint. They agree on precision@3 and MRR to the decimal, which is what makes
+the remote number trustworthy rather than merely favourable. **Vectorize's
+approximate search costs 2.3 points of recall@5 and nothing at all at the top of
+the ranking.** The run fails loudly if those two ever drift apart, because the
+most likely cause is a deployed index built from stale data — which is exactly
+the defect this comparison found the first time it ran.
+
+Latency is why the slower stack did not simply take over. On-device embedding
+answers in **11 ms** (p50, excluding the one-off model download); the hosted
+round trip is **328 ms**, of which 102 ms is the embedding and 193 ms is
+Vectorize. The search box stays on-device; `/api/ask` and `/api/chat`, where a
+model is about to spend a second thinking anyway, retrieve from the hosted
+index.
+
+`src/lib/retrieval.ts` is imported by both the eval script and live search, and
+`src/lib/passages.ts` by both index builders and the ablation, so every number
+above describes shipped code rather than a copy of it.
 
 ### 2. Grounded answers, and a knowledge graph for what embeddings cannot do
 

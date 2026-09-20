@@ -6,7 +6,7 @@
  * as static files and answer most queries on-device — this handles the calls
  * that need a server, and nothing else.
  */
-import { ask, type Env as RagEnv } from './rag'
+import { ask, search, type Env as RagEnv } from './rag'
 import { facts, queryOrError } from './graph'
 import { converse } from './agent'
 import { placeOrder, getOrder, type OrdersEnv } from './orders'
@@ -59,6 +59,19 @@ export default {
           return json({ error: 'question is required' }, { status: 400, headers })
         }
         return json(await ask(env, question), { headers })
+      }
+
+      /*
+       * Retrieval with no model in the loop, so the hosted index can be scored
+       * against the same evaluation set as the on-device one.
+       */
+      if (url.pathname === '/api/search' && request.method === 'GET') {
+        const q = (url.searchParams.get('q') ?? '').trim().slice(0, 500)
+        if (!q) return json({ error: 'q is required' }, { status: 400, headers })
+        // Clamped: topK is a cost, and an unbounded one is a free way to make
+        // this endpoint expensive for someone else.
+        const k = Math.min(Math.max(Number(url.searchParams.get('k')) || 20, 1), 50)
+        return json(await search(env, q, k), { headers })
       }
 
       /*

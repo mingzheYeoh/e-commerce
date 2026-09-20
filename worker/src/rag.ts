@@ -114,6 +114,46 @@ async function vectorPassages(env: Env, question: string, topK = 5): Promise<Pas
   }))
 }
 
+export interface SearchResult {
+  ids: string[]
+  scores: number[]
+  /** Milliseconds spent embedding the query, and querying the index. */
+  timing: { embed: number; query: number }
+}
+
+/**
+ * Retrieval on its own, with no model in the loop.
+ *
+ * Exists so the hosted index can be scored against the same 22-query set as the
+ * on-device one (scripts/eval-search.mjs --remote). Generation would dominate
+ * both the latency and the failure modes, and neither says anything about
+ * whether the right products came back.
+ *
+ * The two timings are separated because they are different bets: the embedding
+ * is a model call that a bigger model would slow down, the query is an ANN
+ * lookup that more products would slow down. A single number hides which one
+ * moved.
+ *
+ * Workers pin `Date.now()` between I/O operations, so these measure the awaits
+ * they bracket and nothing else — which is exactly what is wanted here, and is
+ * also why there is no third number for the arithmetic in between.
+ */
+export async function search(env: Env, question: string, topK = 20): Promise<SearchResult> {
+  const t0 = Date.now()
+  const vector = await embedOne(env, question)
+  const t1 = Date.now()
+  if (!vector) return { ids: [], scores: [], timing: { embed: t1 - t0, query: 0 } }
+
+  const hits = await env.VECTORIZE.query(vector, { topK })
+  const t2 = Date.now()
+
+  return {
+    ids: hits.matches.map((m) => String(m.id)),
+    scores: hits.matches.map((m) => m.score),
+    timing: { embed: t1 - t0, query: t2 - t1 },
+  }
+}
+
 /** Graph rows rendered as passages, so the model sees one uniform context. */
 async function graphPassages(env: Env, question: string): Promise<Passage[]> {
   const intent = numericIntent(question)

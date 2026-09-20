@@ -23,21 +23,27 @@ const OUT_DIR = 'public/media/search'
 const SRC = 'src/data/products.ts'
 
 /**
- * What a product "means", as a sentence.
+ * Bundles a TS module (resolving the `@/` alias) so Node can import it.
  *
- * Titles alone embed poorly — "Q3 Max QMK Custom" carries no signal about
- * keyboards. Folding in the brand, the category and the spec lines gives the
- * model the vocabulary a shopper would actually type, which is the whole point
- * of moving off keyword matching.
+ * `loadProducts` below only needs type-stripping because products.ts imports
+ * nothing at runtime; anything with real imports has to be bundled.
  */
-function documentFor(p) {
-  return [
-    p.title,
-    p.brand.toLowerCase().replace(/_/g, ' '),
-    p.category,
-    ...p.specsSummary,
-    ...p.specs.map((s) => `${s.label}: ${s.value}`),
-  ].join('. ')
+async function loadShared(entry) {
+  const out = path.join(os.tmpdir(), `nexus-shared-${Date.now()}.mjs`)
+  await esbuild.build({
+    entryPoints: [entry],
+    bundle: true,
+    format: 'esm',
+    platform: 'node',
+    outfile: out,
+    alias: { '@': path.join(process.cwd(), 'src') },
+    logLevel: 'silent',
+  })
+  try {
+    return await import(pathToFileURL(out).href)
+  } finally {
+    await fs.rm(out, { force: true })
+  }
 }
 
 /**
@@ -63,6 +69,7 @@ async function loadProducts() {
   }
 }
 
+const { documentFor } = await loadShared('src/lib/passages.ts')
 const drafts = await loadProducts()
 if (!drafts?.length) throw new Error('loaded no products')
 console.log(`products: ${drafts.length}`)
