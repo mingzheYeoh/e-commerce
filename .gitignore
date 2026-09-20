@@ -3,6 +3,7 @@ dist
 .DS_Store
 *.local
 .vite
+.claude
 
 # Transformers.js caches model weights here during build-time embedding runs.
 .cache/
