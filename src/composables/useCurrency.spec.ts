@@ -41,3 +41,17 @@ describe('useCurrency', () => {
     expect(at('USD').formatPrice(1200)).toBe('$1,200.00')
   })
 })
+
+describe('currency validation', () => {
+  it('ignores a code that has no rate instead of rendering NaN', () => {
+    // Found by accident: a stray `change` on the currency select set it to a US
+    // state code. The cast in the template (`as CurrencyCode`) is a promise to
+    // the compiler that nothing enforces at runtime, and the result was every
+    // price on the site reading "undefinedNaN" with no error anywhere.
+    const ui = useUiStore()
+    ui.setCurrency('MYR')
+    ui.setCurrency('CA' as unknown as CurrencyCode)
+    expect(ui.currency).toBe('MYR')
+    expect(useCurrency().formatPrice(100)).toMatch(/^RM/)
+  })
+})

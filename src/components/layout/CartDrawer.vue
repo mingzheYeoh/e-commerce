@@ -1,20 +1,29 @@
 <script setup lang="ts">
 import { computed, ref, toRef } from 'vue'
 import { X, Minus, Plus, Trash2, Lock } from 'lucide-vue-next'
+import { useRouter } from 'vue-router'
 import { useCartStore } from '@/stores/cart'
 import { useCurrency } from '@/composables/useCurrency'
+import { SHIPPING } from '@/lib/money'
 import { useFocusTrap } from '@/composables/useFocusTrap'
 import { brandName } from '@/data/brands'
 
 const cart = useCartStore()
 const { format } = useCurrency()
 
+const router = useRouter()
 const panel = ref<HTMLElement | null>(null)
+
+function toCheckout() {
+  cart.close()
+  router.push('/checkout')
+}
 useFocusTrap(panel, toRef(cart, 'isOpen'), () => cart.close())
 
-// Free delivery over $200, shown as a live progress bar — a cart that tells you
-// how close you are converts better than one that doesn't.
-const FREE_DELIVERY_CENTS = 20000
+// Read from the shipping table rather than repeated here: the drawer promising
+// one threshold while checkout charged against another is how a storefront ends
+// up lying to its customers in a way nobody notices.
+const FREE_DELIVERY_CENTS = SHIPPING.standard.freeAbove ?? 0
 const remaining = computed(() => Math.max(0, FREE_DELIVERY_CENTS - cart.subtotalCents))
 const progress = computed(() =>
   Math.min(100, Math.round((cart.subtotalCents / FREE_DELIVERY_CENTS) * 100)),
@@ -159,10 +168,12 @@ const progress = computed(() =>
             <p class="nums shrink-0 text-2xl font-bold">{{ format(cart.subtotalCents) }}</p>
           </div>
 
-          <button type="button" disabled class="btn-primary mt-4 w-full">Checkout</button>
+          <button type="button" class="btn-primary mt-4 w-full" @click="toCheckout">
+            Checkout
+          </button>
           <p class="mt-2 flex items-center justify-center gap-1.5 text-xs text-text-muted">
             <Lock class="h-3 w-3" aria-hidden="true" />
-            Demo store — checkout is not enabled
+            Demo store — no card is charged
           </p>
         </footer>
       </aside>

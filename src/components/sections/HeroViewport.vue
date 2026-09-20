@@ -10,7 +10,7 @@ const cart = useCartStore()
 const { formatPrice } = useCurrency()
 
 const assurances = [
-  { icon: Truck, text: 'Free express delivery over $200' },
+  { icon: Truck, text: 'Free standard delivery over $75' },
   { icon: RotateCcw, text: '30-day returns' },
   { icon: ShieldCheck, text: '2-year warranty' },
 ]

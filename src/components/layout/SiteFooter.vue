@@ -37,7 +37,7 @@ const photographers = computed(() => {
 const guarantees = [
   { icon: ShieldCheck, label: 'Secure payments', detail: 'Encrypted checkout, PCI-DSS compliant' },
   { icon: BadgeCheck, label: '2-year warranty', detail: 'Parts and labour on every product' },
-  { icon: Truck, label: 'Free express delivery', detail: 'On orders over $200, ships in 48h' },
+  { icon: Truck, label: 'Free standard delivery', detail: 'On orders over $75, 3-5 business days' },
 ]
 </script>
 
@@ -155,7 +155,7 @@ const guarantees = [
       >
         <p>© {{ YEAR }} NEXUS — demo storefront, not a real retailer.</p>
         <p class="flex flex-wrap gap-x-5 gap-y-1">
-          <span>Free delivery over $200</span>
+          <span>Free delivery over $75</span>
           <span>30-day returns</span>
           <span>Secure checkout</span>
         </p>

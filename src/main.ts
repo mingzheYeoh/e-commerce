@@ -8,4 +8,18 @@ import './assets/css/main.css'
 
 gsap.registerPlugin(ScrollTrigger)
 
-createApp(App).use(createPinia()).use(router).mount('#app')
+const pinia = createPinia()
+
+/**
+ * Mirrors the cart to storage after every mutation.
+ *
+ * A plugin rather than a call inside each action: `add`, `setQty` and `remove`
+ * would each have to remember, and the one that forgot would lose a basket
+ * silently. Subscribing catches every future action too.
+ */
+pinia.use(({ store }) => {
+  if (store.$id !== 'cart') return
+  store.$subscribe(() => store.persist(), { detached: true })
+})
+
+createApp(App).use(pinia).use(router).mount('#app')

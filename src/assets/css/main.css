@@ -55,6 +55,19 @@
   .btn-secondary {
     @apply rounded border border-border-strong px-4 py-2.5 text-sm font-medium text-text-primary transition-colors hover:border-text-secondary hover:bg-surface-2;
   }
+
+  /* Quieter than btn-secondary: for "Back", which should not compete with the
+     action that moves the order forward. */
+  .btn-ghost {
+    @apply rounded border border-border-hairline px-4 py-2.5 text-sm font-medium text-text-secondary transition-colors hover:border-border-strong hover:text-text-primary;
+  }
+
+  /* One class for every field in checkout. A form where inputs disagree about
+     their height or focus ring reads as unfinished, which is not what you want
+     from the page that asks for a card number. */
+  .input {
+    @apply h-10 w-full rounded border border-border-hairline bg-surface-2 px-3 text-sm text-text-primary transition-colors placeholder:text-text-muted focus:border-accent focus:outline-none;
+  }
 }
 
 @layer utilities {

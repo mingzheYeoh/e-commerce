@@ -12,12 +12,40 @@ export interface CartLine {
   stockCount: number
 }
 
+const CART_KEY = 'nexus:cart'
+
+/**
+ * Storage that cannot throw.
+ *
+ * Private windows and blocked site data raise on access, and a storefront that
+ * cannot remember a basket must still render one.
+ */
+const stored = {
+  read(): CartLine[] {
+    try {
+      const raw = localStorage.getItem(CART_KEY)
+      return raw ? (JSON.parse(raw) as CartLine[]) : []
+    } catch {
+      return []
+    }
+  },
+  write(items: CartLine[]) {
+    try {
+      localStorage.setItem(CART_KEY, JSON.stringify(items))
+    } catch {
+      /* the basket still works for this session */
+    }
+  },
+}
+
 const toCents = (price: number) => Math.round(price * 100)
 const clamp = (value: number, max: number) => Math.min(Math.max(value, 0), max)
 
 export const useCartStore = defineStore('cart', {
   state: () => ({
-    items: [] as CartLine[],
+    // Restored on load. Without this the cart evaporated on refresh — merely
+    // annoying while browsing, and fatal on the third step of checkout.
+    items: stored.read(),
     isOpen: false,
   }),
 
@@ -63,6 +91,11 @@ export const useCartStore = defineStore('cart', {
 
     remove(sku: string) {
       this.items = this.items.filter((line) => line.sku !== sku)
+    },
+
+    /** Mirrors the basket to storage. Called after every mutation. */
+    persist() {
+      stored.write(this.items)
     },
 
     open() {
