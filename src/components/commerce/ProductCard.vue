@@ -3,6 +3,7 @@ import { computed, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import { Check, Star, Scale } from 'lucide-vue-next'
 import StockBadge from './StockBadge.vue'
+import CardGallery from './CardGallery.vue'
 import PriceTag from './PriceTag.vue'
 import { useCartStore } from '@/stores/cart'
 import { useCompareStore } from '@/stores/compare'
@@ -16,15 +17,20 @@ const cart = useCartStore()
 const compare = useCompareStore()
 const added = ref(false)
 
-/**
- * The hover image is gallery[1], which the pipeline does not always find — and
- * a missing asset does not 404 here, it serves the SPA shell, so the browser
- * gets HTML where it wanted a picture. Hiding it on error leaves the hero
- * showing, which is what a card with one photograph should look like.
- */
-const hoverBroken = ref(false)
-
 const { transform, glare, onMove, onLeave } = useTilt()
+
+/**
+ * A drag inside the photo strip must not also tilt the card. Two transforms
+ * answering one pointer is not depth, it is a wobble.
+ */
+const swiping = ref(false)
+function onDragging(active: boolean) {
+  swiping.value = active
+  if (active) onLeave()
+}
+const tiltMove = (event: PointerEvent) => {
+  if (!swiping.value) onMove(event)
+}
 
 const selected = computed(() => compare.has(props.product.id))
 /**
@@ -58,7 +64,7 @@ function addToCart() {
     :to="`/product/${product.id}`"
     class="card tilt group flex flex-col overflow-hidden transition-colors hover:border-border-strong"
     :style="transform ? { transform } : undefined"
-    @pointermove="onMove"
+    @pointermove="tiltMove"
     @pointerleave="onLeave"
   >
     <!--
@@ -76,24 +82,10 @@ function addToCart() {
       }"
     />
     <div class="relative aspect-[4/3] overflow-hidden bg-surface-2">
-      <img
-        :src="product.media.heroImage"
+      <CardGallery
+        :images="product.media.gallery"
         :alt="product.title"
-        width="600"
-        height="450"
-        loading="lazy"
-        class="absolute inset-0 h-full w-full object-cover transition-opacity duration-500 group-hover:opacity-0"
-      />
-      <img
-        v-if="product.media.hoverImage && !hoverBroken"
-        :src="product.media.hoverImage"
-        @error="hoverBroken = true"
-        alt=""
-        aria-hidden="true"
-        width="600"
-        height="450"
-        loading="lazy"
-        class="absolute inset-0 h-full w-full scale-105 object-cover opacity-0 transition-all duration-500 group-hover:scale-100 group-hover:opacity-100"
+        @dragging="onDragging"
       />
 
       <div class="absolute left-3 top-3">
