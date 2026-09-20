@@ -1,0 +1,235 @@
+/**
+ * Order persistence in D1.
+ *
+ * The browser already wrote a receipt to localStorage before this is called, so
+ * nothing here is on the critical path of a purchase — its job is to make an
+ * order exist somewhere other than the device that placed it, which is what
+ * lets /order/NX-4K2P9 open on a phone the shopper did not check out on.
+ *
+ * Prices and totals are NOT taken from the request. The catalogue and the
+ * arithmetic are imported from the same modules the storefront uses, so the
+ * server reaches its own number and stores that. A request that posts a $1
+ * MacBook gets an order for the real price, not an argument.
+ */
+import { products } from '../../src/data/products'
+import { SHIPPING, totalCents, type ShipMethod } from '../../src/lib/money'
+
+export interface OrdersEnv {
+  ORDERS: D1Database
+}
+
+/** sku -> price in cents, built once per isolate rather than per request. */
+const PRICE_BY_SKU = new Map(products.map((p) => [p.sku, Math.round(p.price * 100)]))
+const TITLE_BY_SKU = new Map(products.map((p) => [p.sku, p.title]))
+
+const PAYMENT_CODES = ['succeeded', 'card_declined', 'insufficient_funds', 'expired_card'] as const
+type PaymentCode = (typeof PAYMENT_CODES)[number]
+
+export interface OrderPayload {
+  id: string
+  address: { name: string; email: string; line1: string; city: string; state: string; postal: string }
+  method: string
+  lines: { sku: string; qty: number }[]
+  paymentCode: string
+  currency?: string
+}
+
+export type PlaceResult =
+  | { status: 200; body: { id: string; total: number } }
+  | { status: 400 | 409 | 503; body: { error: string } }
+
+const str = (v: unknown, max = 200): string | null =>
+  typeof v === 'string' && v.trim() && v.trim().length <= max ? v.trim() : null
+
+/**
+ * Validates and stores one order.
+ *
+ * Every field is checked rather than trusted: this is a public endpoint, and
+ * the only thing standing between it and the table is this function.
+ */
+export async function placeOrder(env: OrdersEnv, body: unknown): Promise<PlaceResult> {
+  if (typeof body !== 'object' || body === null) return { status: 400, body: { error: 'bad request' } }
+  const p = body as Partial<OrderPayload>
+
+  const id = str(p.id, 32)
+  // The same alphabet the client draws from. A free-form id would let a caller
+  // choose one that looks like someone else's.
+  if (!id || !/^NX-[A-HJ-NP-Z2-9]{5}$/.test(id)) return { status: 400, body: { error: 'bad order id' } }
+
+  const method = str(p.method, 20)
+  if (!method || !(method in SHIPPING)) return { status: 400, body: { error: 'bad shipping method' } }
+
+  const paymentCode = str(p.paymentCode, 40)
+  if (!paymentCode || !PAYMENT_CODES.includes(paymentCode as PaymentCode)) {
+    return { status: 400, body: { error: 'bad payment code' } }
+  }
+
+  const a = p.address
+  if (typeof a !== 'object' || a === null) return { status: 400, body: { error: 'address is required' } }
+  const address = {
+    name: str(a.name, 120),
+    email: str(a.email, 200),
+    line1: str(a.line1, 200),
+    city: str(a.city, 120),
+    state: str(a.state, 2),
+    postal: str(a.postal, 10),
+  }
+  if (Object.values(address).some((v) => v === null)) {
+    return { status: 400, body: { error: 'address is incomplete' } }
+  }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(address.email!)) {
+    return { status: 400, body: { error: 'bad email' } }
+  }
+
+  if (!Array.isArray(p.lines) || p.lines.length === 0 || p.lines.length > 50) {
+    return { status: 400, body: { error: 'lines are required' } }
+  }
+
+  // Resolve each line against the catalogue. An unknown sku is refused rather
+  // than stored at whatever price the caller suggested.
+  const seen = new Set<string>()
+  const lines: { sku: string; title: string; qty: number; unit: number }[] = []
+  for (const raw of p.lines) {
+    const sku = str(raw?.sku, 40)
+    const unit = sku ? PRICE_BY_SKU.get(sku) : undefined
+    if (!sku || unit === undefined) return { status: 400, body: { error: 'unknown sku' } }
+    if (seen.has(sku)) return { status: 400, body: { error: 'duplicate sku' } }
+    seen.add(sku)
+
+    const qty = raw?.qty
+    if (!Number.isInteger(qty) || (qty as number) < 1 || (qty as number) > 99) {
+      return { status: 400, body: { error: 'bad quantity' } }
+    }
+    lines.push({ sku, title: TITLE_BY_SKU.get(sku)!, qty: qty as number, unit })
+  }
+
+  const subtotal = lines.reduce((sum, l) => sum + l.unit * l.qty, 0)
+  const totals = totalCents({ subtotal, method: method as ShipMethod, state: address.state! })
+
+  // Currency is a display choice; the ledger is in USD cents either way.
+  const currency = str(p.currency, 3) ?? 'USD'
+
+  try {
+    await env.ORDERS.batch([
+      env.ORDERS.prepare(
+        `INSERT INTO orders (id, email, ship_name, ship_line1, ship_city, ship_state, ship_postal,
+                             method, currency, subtotal_cents, shipping_cents, tax_cents, total_cents,
+                             payment_status)
+         VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14)`,
+      ).bind(
+        id,
+        address.email,
+        address.name,
+        address.line1,
+        address.city,
+        address.state!.toUpperCase(),
+        address.postal,
+        method,
+        currency.toUpperCase(),
+        totals.subtotal,
+        totals.shipping,
+        totals.tax,
+        totals.total,
+        paymentCode,
+      ),
+      ...lines.map((l) =>
+        env.ORDERS.prepare(
+          `INSERT INTO order_lines (order_id, sku, title, qty, unit_price_cents) VALUES (?1,?2,?3,?4,?5)`,
+        ).bind(id, l.sku, l.title, l.qty, l.unit),
+      ),
+    ])
+  } catch (err) {
+    const message = String(err)
+    // A repeated id is a retry or a double-click, not a server fault, and the
+    // caller already holds a receipt for it.
+    if (/UNIQUE|PRIMARY KEY/i.test(message)) return { status: 409, body: { error: 'order already exists' } }
+    console.error('order insert failed', err)
+    return { status: 503, body: { error: 'could not store order' } }
+  }
+
+  return { status: 200, body: { id, total: totals.total } }
+}
+
+export interface StoredOrder {
+  id: string
+  placedAt: string
+  email: string
+  address: { name: string; line1: string; city: string; state: string; postal: string }
+  method: string
+  currency: string
+  totals: { subtotal: number; shipping: number; tax: number; total: number }
+  paymentCode: string
+  lines: { sku: string; title: string; qty: number; unitPriceCents: number }[]
+}
+
+/**
+ * Reads one order back.
+ *
+ * The email is masked. An order id is short enough to read over the phone,
+ * which is the same thing as saying it is short enough to guess, and a receipt
+ * link should not hand a stranger a working address book entry.
+ */
+export async function getOrder(env: OrdersEnv, id: string): Promise<StoredOrder | null> {
+  if (!/^NX-[A-HJ-NP-Z2-9]{5}$/.test(id)) return null
+
+  const row = await env.ORDERS.prepare(`SELECT * FROM orders WHERE id = ?1`).bind(id).first<{
+    id: string
+    created_at: string
+    email: string
+    ship_name: string
+    ship_line1: string
+    ship_city: string
+    ship_state: string
+    ship_postal: string
+    method: string
+    currency: string
+    subtotal_cents: number
+    shipping_cents: number
+    tax_cents: number
+    total_cents: number
+    payment_status: string
+  }>()
+  if (!row) return null
+
+  const { results } = await env.ORDERS.prepare(
+    `SELECT sku, title, qty, unit_price_cents FROM order_lines WHERE order_id = ?1`,
+  )
+    .bind(id)
+    .all<{ sku: string; title: string; qty: number; unit_price_cents: number }>()
+
+  return {
+    id: row.id,
+    placedAt: row.created_at,
+    email: maskEmail(row.email),
+    address: {
+      name: row.ship_name,
+      line1: row.ship_line1,
+      city: row.ship_city,
+      state: row.ship_state,
+      postal: row.ship_postal,
+    },
+    method: row.method,
+    currency: row.currency,
+    totals: {
+      subtotal: row.subtotal_cents,
+      shipping: row.shipping_cents,
+      tax: row.tax_cents,
+      total: row.total_cents,
+    },
+    paymentCode: row.payment_status,
+    lines: (results ?? []).map((l) => ({
+      sku: l.sku,
+      title: l.title,
+      qty: l.qty,
+      unitPriceCents: l.unit_price_cents,
+    })),
+  }
+}
+
+export function maskEmail(email: string): string {
+  const at = email.lastIndexOf('@')
+  if (at < 1) return '•••'
+  // One character is enough for the owner to recognise and not enough for a
+  // stranger to reconstruct.
+  return `${email[0]}•••${email.slice(at)}`
+}

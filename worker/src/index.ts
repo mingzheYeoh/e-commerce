@@ -9,22 +9,29 @@
 import { ask, type Env as RagEnv } from './rag'
 import { facts, queryOrError } from './graph'
 import { converse } from './agent'
+import { placeOrder, getOrder, type OrdersEnv } from './orders'
 
-export interface Env extends RagEnv {
-  ORDERS: D1Database
+export interface Env extends RagEnv, OrdersEnv {
   ALLOWED_ORIGIN?: string
 }
 
 /**
- * Same-origin in production, permissive in local development. A wildcard on a
- * service that writes orders would let any page place them on a visitor's
- * behalf, so the allowed origin is configuration rather than a default.
+ * A wildcard on a service that writes orders would let any page place them on a
+ * visitor's behalf, so the allowed origins are configuration rather than a
+ * default. It is a list because the deployed site and the dev server are both
+ * real origins and the alternative is editing config to work locally.
+ *
+ * An unrecognised origin gets the first entry echoed back, which is not its own
+ * — the browser then refuses the response, which is the point.
  */
 function cors(env: Env, request: Request): Record<string, string> {
   const origin = request.headers.get('origin') ?? ''
-  const allowed = env.ALLOWED_ORIGIN ?? 'http://localhost:5173'
+  const allowed = (env.ALLOWED_ORIGIN ?? 'http://localhost:5173')
+    .split(',')
+    .map((o) => o.trim())
+    .filter(Boolean)
   return {
-    'access-control-allow-origin': origin === allowed ? origin : allowed,
+    'access-control-allow-origin': allowed.includes(origin) ? origin : allowed[0],
     'access-control-allow-methods': 'GET, POST, OPTIONS',
     'access-control-allow-headers': 'content-type',
     vary: 'origin',
@@ -68,6 +75,22 @@ export default {
           return json({ error: 'question is required' }, { status: 400, headers })
         }
         return json(await converse(env, question, Array.isArray(history) ? history : []), { headers })
+      }
+
+      /*
+       * Orders. The browser has already written its own receipt by the time it
+       * calls this, so a failure here costs the shareable copy and nothing else.
+       */
+      if (url.pathname === '/api/orders' && request.method === 'POST') {
+        const result = await placeOrder(env, await request.json())
+        return json(result.body, { status: result.status, headers })
+      }
+
+      if (url.pathname.startsWith('/api/orders/') && request.method === 'GET') {
+        const order = await getOrder(env, url.pathname.slice('/api/orders/'.length))
+        return order
+          ? json(order, { headers })
+          : json({ error: 'not found' }, { status: 404, headers })
       }
 
       /* Structured lookups, answered by the graph without a model in the loop. */

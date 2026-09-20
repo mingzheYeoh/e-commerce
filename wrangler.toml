@@ -1,0 +1,14 @@
+# The storefront. Static assets only — no `main`, because a site that ships its
+# catalogue, embeddings and graph snapshot as files needs no code at the edge.
+#
+# The API lives in worker/ as a separate script so that this one holds no
+# secrets at all: the thing serving public HTML and the thing holding the Neo4j
+# password have no reason to be the same deployment.
+name = "nexus-tech-collective"
+compatibility_date = "2026-09-01"
+
+[assets]
+directory = "./dist"
+# The router uses history mode, so /order/NX-4K2P9 is a real URL a shopper can
+# reload or share. Without this, the edge looks for a file at that path.
+not_found_handling = "single-page-application"

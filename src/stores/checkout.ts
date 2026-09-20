@@ -2,6 +2,9 @@ import { defineStore } from 'pinia'
 import { useCartStore, type CartLine } from './cart'
 import { charge } from '@/lib/payment'
 import { totalCents, type OrderTotals, type ShipMethod } from '@/lib/money'
+import { saveOrder, fetchOrder } from '@/lib/api'
+import { products } from '@/data/products'
+import { useUiStore } from './ui'
 
 /**
  * Checkout state and order placement.
@@ -79,6 +82,8 @@ export const useCheckoutStore = defineStore('checkout', {
     placing: false,
     error: '',
     orders: safeStorage.read<Order[]>(ORDERS_KEY, []),
+    /** Order id -> whether the durable copy was written. Surfaced on the receipt. */
+    synced: {} as Record<string, boolean>,
   }),
 
   getters: {
@@ -177,7 +182,66 @@ export const useCheckoutStore = defineStore('checkout', {
       this.card = { number: '', expiry: '', cvc: '' }
       this.step = 1
 
+      // The durable copy, so /order/NX-4K2P9 opens on a device that never saw
+      // this checkout. Deliberately not awaited into the result: the receipt
+      // above is already written, and a database outage must not turn a
+      // completed purchase into an error message.
+      void saveOrder({
+        id: order.id,
+        address: order.address,
+        method: order.method,
+        // Skus and quantities only. The server prices the order from its own
+        // catalogue, so there is nothing here worth tampering with.
+        lines: order.lines.map((l) => ({ sku: l.sku, qty: l.qty })),
+        paymentCode: order.paymentCode,
+        currency: useUiStore().currency,
+      }).then((stored) => {
+        this.synced[order.id] = stored
+      })
+
       return { ok: true, id: order.id }
+    },
+
+    /**
+     * The order behind a confirmation URL.
+     *
+     * Local first: the browser that placed it holds the full record, including
+     * the unmasked email. Falling back to the API is what makes the link
+     * shareable rather than a bookmark that only works on one machine.
+     */
+    async loadOrder(id: string): Promise<Order | null> {
+      const local = this.findOrder(id)
+      if (local) return local
+
+      const remote = await fetchOrder(id)
+      if (!remote) return null
+      // It came back from the server, so it is by definition the durable copy.
+      this.synced[id] = true
+
+      const bySku = new Map(products.map((p) => [p.sku, p]))
+      return {
+        id: remote.id,
+        placedAt: remote.placedAt,
+        address: { ...remote.address, email: remote.email },
+        method: remote.method as ShipMethod,
+        lines: remote.lines.map((l) => {
+          // Imagery is catalogue data, not order data, so it is looked up
+          // rather than stored — a product that has since been delisted simply
+          // renders without a thumbnail.
+          const p = bySku.get(l.sku)
+          return {
+            sku: l.sku,
+            title: l.title,
+            brand: p?.brand ?? '',
+            thumb: p?.media.thumb ?? '',
+            unitPriceCents: l.unitPriceCents,
+            qty: l.qty,
+            stockCount: p?.stockCount ?? 0,
+          }
+        }),
+        totals: remote.totals,
+        paymentCode: remote.paymentCode,
+      }
     },
   },
 })

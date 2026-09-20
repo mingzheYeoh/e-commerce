@@ -1,10 +1,19 @@
 # NEXUS
 
-A three-page consumer-electronics storefront: home, shop listing and product
-detail. 12 brands, 35 products, real licensed photography, a working cart and
-filter state that lives in the URL.
+**Live: https://nexus-tech-collective.mingzhe030228.workers.dev**
 
-> Demo project. NEXUS is not a real retailer and nothing here takes payment.
+A multi-brand consumer-electronics storefront built as an AI-engineering
+showcase: 18 brands, 45 products across five categories, real manufacturer
+photography, five currencies, and a checkout that runs from cart to
+confirmation.
+
+The retrieval, question answering and shopping assistant are the point — see
+[AI engineering](#ai-engineering). No third-party model API key exists in the
+project: query embeddings run on the visitor's device, and inference runs on
+Cloudflare Workers AI, where the binding *is* the credential.
+
+> Demo project. NEXUS is not a real retailer, the payment gateway is simulated
+> with Stripe's published test card numbers, and nothing takes money or ships.
 
 ## Run it
 
@@ -27,6 +36,14 @@ npm run assets        # ~2 min, needs network
 | `npm run test` | Vitest — cart store logic |
 | `npm run typecheck` | `vue-tsc --noEmit` |
 | `npm run assets` | Download and re-encode all media |
+| `npm run deploy` | Build and publish the storefront |
+
+The API is a separate deployment, so the thing serving public HTML and the thing
+holding the Neo4j password are not the same script:
+
+```bash
+cd worker && npx wrangler deploy     # https://nexus-api.mingzhe030228.workers.dev
+```
 
 ### Routes
 
@@ -70,6 +87,57 @@ a real model behind a serverless function later is a change to that file alone.
 - `?motion=on` — force animation even when the OS asks for reduced motion
 - `?motion=off` — force the static page
 - `/__viewports.html` — dev rig that renders the site in 390px and 768px iframes side by side
+
+## AI engineering
+
+Three layers, each answering a question the one below it could not.
+
+### 1. Hybrid retrieval, measured
+
+Product vectors are precomputed at build time and ship as a 67 KB binary. Only
+the *query* is embedded at runtime, on the visitor's device, so there is no key
+to leak and no search term leaves the browser.
+
+Keyword and semantic rankings are fused with **Reciprocal Rank Fusion** (k=60)
+— positions, not scores, because a keyword engine's point scale and a cosine are
+not commensurable.
+
+Scored over a 22-query hand-judged set (`npm run eval:search`):
+
+| strategy | precision@3 | recall@5 | MRR |
+|---|---|---|---|
+| keyword | 33.3% | 65.0% | 58.6% |
+| semantic | 40.9% | 78.3% | 74.8% |
+| **hybrid** | **40.9%** | 70.7% | **75.8%** |
+
+Hybrid ships because the keyword engine still wins the queries where hand-written
+domain knowledge beats general language understanding: it knows a wedding needs a
+camera, and the model does not. `src/lib/retrieval.ts` is imported by both the
+eval script and live search, so the table above describes shipped code.
+
+### 2. Grounded answers, and a knowledge graph for what embeddings cannot do
+
+`POST /api/ask` retrieves from Cloudflare Vectorize and answers with Workers AI,
+then **verifies every citation** against what was actually retrieved. A question
+the catalogue does not cover is refused, and refusal is reported as an explicit
+flag rather than string-matched out of the prose — an ungrounded answer and a
+correct refusal look identical in the text and must not look identical on screen.
+
+Constraint queries ("which chargers can power this laptop?") go to a Neo4j graph
+instead. Embeddings rank by similarity; they cannot intersect a wattage with a
+port type. Adding the graph took a 60W query from 3 products to 6.
+
+### 3. A shopping assistant that shows its work
+
+`POST /api/chat` is a bounded tool-calling loop — four tools, `MAX_STEPS=4`, tool
+output truncated, and a final turn with the tools withheld so the loop always
+terminates in prose. The response carries every call it made, and the UI renders
+them: the reasoning is inspectable rather than a black box.
+
+The lessons were all about tool contracts, not prompts. The model passes
+`"MacBook Pro"`, not an id, so tools resolve names. An omitted field read as
+zero once made it claim the XPS 16 "has a smaller battery" when Dell publishes
+none — omitted fields now return `"not published"`.
 
 ## Architecture
 

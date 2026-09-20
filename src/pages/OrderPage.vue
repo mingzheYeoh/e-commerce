@@ -2,14 +2,14 @@
 /**
  * Order confirmation.
  *
- * Reachable by URL and by reload, which is why the order is read from storage
- * rather than from whatever the checkout store happened to hold — this page
- * outlives the session that placed the order.
+ * Reachable by URL, by reload, and from a device that never saw the checkout:
+ * the order is read from this browser first and from the API if it is not here,
+ * so the link is shareable rather than a bookmark that works on one machine.
  */
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import { CheckCircle2, Package } from 'lucide-vue-next'
-import { useCheckoutStore } from '@/stores/checkout'
+import { useCheckoutStore, type Order } from '@/stores/checkout'
 import { SHIPPING } from '@/lib/money'
 import OrderSummary from '@/components/checkout/OrderSummary.vue'
 import NotFoundPage from './NotFoundPage.vue'
@@ -17,7 +17,25 @@ import NotFoundPage from './NotFoundPage.vue'
 const props = defineProps<{ id: string }>()
 
 const checkout = useCheckoutStore()
-const order = computed(() => checkout.findOrder(props.id))
+const order = ref<Order | null>(null)
+/**
+ * Three states, not two. Rendering "no such order" while the lookup is still
+ * in flight tells a shopper their purchase vanished, then takes it back.
+ */
+const status = ref<'loading' | 'found' | 'missing'>('loading')
+
+watch(
+  () => props.id,
+  async (id) => {
+    status.value = 'loading'
+    order.value = await checkout.loadOrder(id)
+    status.value = order.value ? 'found' : 'missing'
+  },
+  { immediate: true },
+)
+
+/** True only for an order this browser placed and the API confirmed storing. */
+const durable = computed(() => checkout.synced[props.id] === true)
 
 const placedOn = computed(() =>
   order.value
@@ -31,7 +49,17 @@ const placedOn = computed(() =>
 </script>
 
 <template>
-  <NotFoundPage v-if="!order" />
+  <div v-if="status === 'loading'" class="pt-16">
+    <div class="mx-auto max-w-3xl px-4 py-14 md:px-8">
+      <div class="h-8 w-56 animate-pulse rounded bg-surface-2"></div>
+      <div class="mt-6 grid gap-3 sm:grid-cols-3">
+        <div v-for="n in 3" :key="n" class="h-20 animate-pulse rounded-card bg-surface-2"></div>
+      </div>
+      <p class="sr-only" role="status">Loading order {{ id }}</p>
+    </div>
+  </div>
+
+  <NotFoundPage v-else-if="!order" />
 
   <div v-else class="pt-16">
     <div class="mx-auto max-w-[1600px] px-4 py-10 md:px-8 md:py-14">
@@ -87,8 +115,13 @@ const placedOn = computed(() =>
         </div>
 
         <p class="mt-6 text-xs text-text-muted">
-          This is a demonstration store. No payment was taken and nothing will ship. The order is
-          kept in this browser so the page survives a reload.
+          This is a demonstration store. No payment was taken and nothing will ship.
+          <template v-if="durable">
+            This order is stored server-side, so this link opens on any device.
+          </template>
+          <template v-else>
+            This order is kept in this browser, so the page survives a reload.
+          </template>
         </p>
 
         <RouterLink to="/shop" class="btn-primary mt-6 inline-flex">Continue shopping</RouterLink>

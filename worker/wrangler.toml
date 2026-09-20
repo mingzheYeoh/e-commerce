@@ -20,7 +20,9 @@ database_name = "nexus-orders"
 database_id = "7aa62821-d17f-43a2-b605-2643780e9690"
 
 [vars]
-ALLOWED_ORIGIN = "http://localhost:5173"
+# The deployed storefront and the dev server, in that order. The first entry is
+# what an unrecognised origin gets echoed back, so it must not be localhost.
+ALLOWED_ORIGIN = "https://nexus-tech-collective.mingzhe030228.workers.dev,http://localhost:5173"
 
 # Secrets are set with `wrangler secret put`, never written here:
 #   wrangler secret put NEO4J_URI

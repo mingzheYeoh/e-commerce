@@ -7,3 +7,10 @@ dist
 # Transformers.js caches model weights here during build-time embedding runs.
 .cache/
 dist-vectorize/
+
+# wrangler files
+.wrangler
+.dev.vars*
+!.dev.vars.example
+.env*
+!.env.example

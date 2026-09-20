@@ -130,3 +130,62 @@ export async function health(): Promise<HealthResponse | null> {
     return null
   }
 }
+
+/* ------------------------------------------------------------------ orders */
+
+export interface OrderRequest {
+  id: string
+  address: { name: string; email: string; line1: string; city: string; state: string; postal: string }
+  method: string
+  /** Skus and quantities only. Prices are the server's business, not the browser's. */
+  lines: { sku: string; qty: number }[]
+  paymentCode: string
+  currency: string
+}
+
+export interface RemoteOrder {
+  id: string
+  placedAt: string
+  /** Masked by the server: a receipt link should not hand out an address book. */
+  email: string
+  address: { name: string; line1: string; city: string; state: string; postal: string }
+  method: string
+  currency: string
+  totals: { subtotal: number; shipping: number; tax: number; total: number }
+  paymentCode: string
+  lines: { sku: string; title: string; qty: number; unitPriceCents: number }[]
+}
+
+/**
+ * Stores an order so it exists somewhere other than the device that placed it.
+ *
+ * Returns a boolean rather than throwing because the shopper's receipt is
+ * already written locally by the time this runs — a database that is down costs
+ * the shareable copy of the order, not the order.
+ */
+export async function saveOrder(order: OrderRequest): Promise<boolean> {
+  try {
+    const res = await fetch(`${BASE}/api/orders`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(order),
+      signal: AbortSignal.timeout(10_000),
+    })
+    // 409 means this id is already stored, which is a success from here.
+    return res.ok || res.status === 409
+  } catch {
+    return false
+  }
+}
+
+/** Reads an order placed on another device, or in a browser since cleared. */
+export async function fetchOrder(id: string): Promise<RemoteOrder | null> {
+  try {
+    const res = await fetch(`${BASE}/api/orders/${encodeURIComponent(id)}`, {
+      signal: AbortSignal.timeout(10_000),
+    })
+    return res.ok ? ((await res.json()) as RemoteOrder) : null
+  } catch {
+    return null
+  }
+}
