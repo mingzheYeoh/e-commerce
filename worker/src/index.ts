@@ -26,6 +26,14 @@ import {
   purgeExpired,
   sessionUser,
   accountOrders,
+  accountSettings,
+  changePassword,
+  requestEmailChange,
+  revokeOtherSessions,
+  deleteAccount,
+  startTotpEnrolment,
+  confirmTotpEnrolment,
+  disableTotp,
   authDefences,
   type AuthEnv,
   type AuthResult,
@@ -233,6 +241,35 @@ export default {
         const user = await sessionUser(env, request)
         if (!user) return json({ error: 'not signed in' }, { status: 401, headers })
         return json({ orders: await accountOrders(env, user) }, { headers })
+      }
+
+      /*
+       * Account settings.
+       *
+       * Every one of these needs a session AND the current password. A live
+       * session says a browser was signed in once; it does not say who is at
+       * the keyboard now, and an unlocked laptop is the whole attack.
+       */
+      if (url.pathname.startsWith('/api/account/') && url.pathname !== '/api/account/orders') {
+        const user = await sessionUser(env, request)
+        if (!user) return json({ error: 'not signed in' }, { status: 401, headers })
+
+        if (url.pathname === '/api/account/settings' && request.method === 'GET') {
+          return json(await accountSettings(env, user), { headers })
+        }
+        if (request.method === 'POST') {
+          const route = url.pathname.slice('/api/account/'.length)
+          const payload = () => request.json()
+
+          if (route === 'password') return authJson(await changePassword(env, user, await payload()), headers)
+          if (route === 'email') return authJson(await requestEmailChange(env, user, await payload(), request), headers)
+          if (route === 'sessions/revoke') return authJson(await revokeOtherSessions(env, user, request), headers)
+          if (route === 'delete') return authJson(await deleteAccount(env, user, await payload()), headers)
+          if (route === 'totp/start') return authJson(await startTotpEnrolment(env, user, await payload()), headers)
+          if (route === 'totp/confirm') return authJson(await confirmTotpEnrolment(env, user, await payload()), headers)
+          if (route === 'totp/disable') return authJson(await disableTotp(env, user, await payload()), headers)
+        }
+        return json({ error: 'not found' }, { status: 404, headers })
       }
 
       /* Structured lookups, answered by the graph without a model in the loop. */

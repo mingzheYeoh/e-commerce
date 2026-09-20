@@ -13,6 +13,7 @@ import { User, LogOut, Package, AlertCircle, MailCheck } from 'lucide-vue-next'
 import { useAuthStore } from '@/stores/auth'
 import { useCurrency } from '@/composables/useCurrency'
 import { myOrders, type AccountOrder } from '@/lib/api'
+import AccountSettings from '@/components/account/AccountSettings.vue'
 
 const auth = useAuthStore()
 const route = useRoute()
@@ -23,6 +24,7 @@ const mode = ref<'in' | 'up' | 'forgot'>('in')
 const name = ref('')
 const email = ref('')
 const password = ref('')
+const code = ref('')
 
 const orders = ref<AccountOrder[] | null>(null)
 const loadingOrders = ref(false)
@@ -59,9 +61,10 @@ async function submit() {
       ? await auth.register(name.value, email.value, password.value)
       : mode.value === 'forgot'
         ? await auth.forgot(email.value)
-        : await auth.login(email.value, password.value)
+        : await auth.login(email.value, password.value, code.value || undefined)
   if (!ok) return
 
+  code.value = ''
   password.value = ''
   // Registering leaves a notice and no session — the account is not usable
   // until the emailed link is clicked — so there is nowhere to go yet.
@@ -151,6 +154,8 @@ const when = (iso: string) =>
             <span class="nums ml-auto font-semibold">{{ format(order.total) }}</span>
           </li>
         </ul>
+
+        <AccountSettings />
       </template>
 
       <!-- ----------------------------------------------------- signed out -->
@@ -199,7 +204,22 @@ const when = (iso: string) =>
             <input v-model="email" type="email" required autocomplete="email" class="input" />
           </label>
 
-          <label v-if="mode !== 'forgot'" class="block">
+          <!--
+            Shown only after the password was accepted and a code is still
+            needed. Nothing failed at that point, so the panel is an ordinary
+            next step rather than an error.
+          -->
+          <label v-if="auth.mfaRequired" class="block">
+            <span class="mb-1.5 block text-sm text-text-secondary">
+              Code from your authenticator app
+            </span>
+            <input v-model="code" inputmode="text" required autocomplete="one-time-code" class="input" placeholder="000000" />
+            <span class="mt-1.5 block text-xs text-text-muted">
+              Lost your phone? A recovery code works here too.
+            </span>
+          </label>
+
+          <label v-if="mode !== 'forgot' && !auth.mfaRequired" class="block">
             <span class="mb-1.5 block text-sm text-text-secondary">Password</span>
             <input
               v-model="password"

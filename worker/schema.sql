@@ -60,12 +60,51 @@ CREATE TABLE IF NOT EXISTS users (
   -- cannot become two accounts.
   email         TEXT NOT NULL UNIQUE,
   name          TEXT NOT NULL,
-  -- PBKDF2-HMAC-SHA256, base64, per-user salt. The iteration count is stored
-  -- so it can be raised later without locking everyone out at once.
+  -- PBKDF2-HMAC-SHA256, base64, per-user salt.
   password_hash TEXT NOT NULL,
   password_salt TEXT NOT NULL,
   iterations    INTEGER NOT NULL,
-  created_at    TEXT NOT NULL DEFAULT (datetime('now'))
+  -- Chained passes of PBKDF2. The runtime caps one call at 100,000 iterations,
+  -- so six passes is how 600,000 is reached. Stored per row, so it can be
+  -- raised again and old rows re-hashed on next sign-in rather than locked out.
+  kdf_rounds    INTEGER NOT NULL DEFAULT 1,
+  created_at    TEXT NOT NULL DEFAULT (datetime('now')),
+  -- NULL means the address was typed but never proven.
+  email_verified_at TEXT,
+  -- A requested new address, waiting for its owner to prove they read it. The
+  -- account keeps working on the old one until they do.
+  pending_email TEXT,
+  -- Per-account guessing backoff: what a per-IP limit cannot see.
+  failed_attempts INTEGER NOT NULL DEFAULT 0,
+  -- A timestamp, not a boolean. A lock with no end is a way for a stranger to
+  -- take an account away from its owner by guessing wrong five times.
+  locked_until  TEXT,
+  -- Base32, as the authenticator app expects it. NULL means no second factor.
+  totp_secret   TEXT,
+  -- Set only once a code has been checked: a secret that was generated and
+  -- never confirmed must not lock anybody out.
+  totp_confirmed_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS email_tokens (
+  -- The SHA-256 of the token in the link, never the token itself.
+  token_hash  TEXT PRIMARY KEY,
+  user_id     TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  purpose     TEXT NOT NULL CHECK (purpose IN ('verify','reset','email_change')),
+  created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+  expires_at  TEXT NOT NULL,
+  -- Single use, so a link forwarded, logged by a mail gateway or left in a
+  -- browser history cannot be replayed.
+  used_at     TEXT
+);
+
+-- The way back in when the phone is gone. Without these, turning on a second
+-- factor is a way to lose an account.
+CREATE TABLE IF NOT EXISTS recovery_codes (
+  code_hash  TEXT PRIMARY KEY,
+  user_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  used_at    TEXT
 );
 
 CREATE TABLE IF NOT EXISTS sessions (
@@ -81,3 +120,9 @@ CREATE INDEX IF NOT EXISTS orders_email_idx ON orders(email);
 CREATE INDEX IF NOT EXISTS orders_created_idx ON orders(created_at DESC);
 CREATE INDEX IF NOT EXISTS orders_user_idx ON orders(user_id);
 CREATE INDEX IF NOT EXISTS sessions_user_idx ON sessions(user_id);
+CREATE INDEX IF NOT EXISTS email_tokens_user_idx ON email_tokens(user_id);
+CREATE INDEX IF NOT EXISTS recovery_codes_user_idx ON recovery_codes(user_id);
+-- Read by the nightly sweep. Without them it is a full scan of every session
+-- and link ever issued.
+CREATE INDEX IF NOT EXISTS sessions_expiry_idx ON sessions(expires_at);
+CREATE INDEX IF NOT EXISTS email_tokens_expiry_idx ON email_tokens(expires_at);
