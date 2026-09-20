@@ -10,7 +10,24 @@ export interface CartLine {
   unitPriceCents: number
   qty: number
   stockCount: number
+  /**
+   * The finish the shopper chose, when the product offers more than one.
+   *
+   * Kept beside the sku rather than folded into it. The flagship section used
+   * to build `SEN-HD900-113-CARBON`, which reads fine in a basket and is
+   * rejected by the order endpoint as an unknown sku — so the order silently
+   * never reached the database, because storing one is deliberately
+   * fire-and-forget.
+   */
+  finish?: string
 }
+
+/**
+ * What identifies a line. Two finishes of one product are two lines, so the
+ * sku alone cannot address them.
+ */
+export const lineKey = (line: Pick<CartLine, 'sku' | 'finish'>) =>
+  line.finish ? `${line.sku}|${line.finish}` : line.sku
 
 const CART_KEY = 'nexus:cart'
 
@@ -61,10 +78,15 @@ export const useCartStore = defineStore('cart', {
   },
 
   actions: {
-    add(product: Product, qty = 1) {
+    add(product: Product, qty = 1, finish?: string) {
       if (!product.inStock || product.stockCount < 1) return
 
-      const existing = this.items.find((line) => line.sku === product.sku)
+      // Only a finish the product actually offers. Anything else would travel
+      // to the order endpoint and be refused there instead.
+      const chosen = product.colorways.some((c) => c.name === finish) ? finish : undefined
+      const key = lineKey({ sku: product.sku, finish: chosen })
+      const existing = this.items.find((line) => lineKey(line) === key)
+
       if (existing) {
         existing.qty = clamp(existing.qty + qty, product.stockCount)
       } else {
@@ -76,12 +98,13 @@ export const useCartStore = defineStore('cart', {
           unitPriceCents: toCents(product.price),
           qty: clamp(qty, product.stockCount),
           stockCount: product.stockCount,
+          finish: chosen,
         })
       }
     },
 
-    setQty(sku: string, qty: number) {
-      const index = this.items.findIndex((line) => line.sku === sku)
+    setQty(key: string, qty: number) {
+      const index = this.items.findIndex((line) => lineKey(line) === key)
       if (index === -1) return
 
       const next = clamp(qty, this.items[index].stockCount)
@@ -89,8 +112,8 @@ export const useCartStore = defineStore('cart', {
       else this.items[index].qty = next
     },
 
-    remove(sku: string) {
-      this.items = this.items.filter((line) => line.sku !== sku)
+    remove(key: string) {
+      this.items = this.items.filter((line) => lineKey(line) !== key)
     },
 
     /** Mirrors the basket to storage. Called after every mutation. */

@@ -137,8 +137,8 @@ export interface OrderRequest {
   id: string
   address: { name: string; email: string; line1: string; city: string; state: string; postal: string }
   method: string
-  /** Skus and quantities only. Prices are the server's business, not the browser's. */
-  lines: { sku: string; qty: number }[]
+  /** Skus, quantities and finish. Prices are the server's business, not the browser's. */
+  lines: { sku: string; qty: number; finish?: string }[]
   paymentCode: string
   currency: string
 }
@@ -153,7 +153,7 @@ export interface RemoteOrder {
   currency: string
   totals: { subtotal: number; shipping: number; tax: number; total: number }
   paymentCode: string
-  lines: { sku: string; title: string; qty: number; unitPriceCents: number }[]
+  lines: { sku: string; title: string; qty: number; unitPriceCents: number; finish?: string }[]
 }
 
 /**

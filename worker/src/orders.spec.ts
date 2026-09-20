@@ -90,6 +90,59 @@ describe('placeOrder', () => {
     expect(total).toBe(unitCents + 2995 + Math.round(unitCents * 0.0725))
   })
 
+  it('stores a finish the product is actually sold in', async () => {
+    const { env, writes } = fakeD1()
+    const finish = products[0].colorways[0].name
+    const res = await placeOrder(env, payload({ lines: [{ sku, qty: 1, finish }] as never }))
+    expect(res.status).toBe(200)
+    const line = writes.find((w) => w.sql.includes('INSERT INTO order_lines'))!
+    expect(line.args).toContain(finish)
+  })
+
+  it('refuses a finish the product is not sold in', async () => {
+    /*
+     * Refused rather than quietly dropped. A finish the catalogue does not
+     * recognise means the basket and the catalogue disagree, and forgetting it
+     * silently is how someone receives the wrong colour.
+     */
+    const { env, writes } = fakeD1()
+    const res = await placeOrder(env, payload({ lines: [{ sku, qty: 1, finish: 'Chartreuse' }] as never }))
+    expect(res.status).toBe(400)
+    expect(writes).toHaveLength(0)
+  })
+
+  it('treats two finishes of one product as two lines', async () => {
+    // Keyed on sku alone, ordering a black one and a silver one loses the
+    // second — which is why the primary key carries the variant.
+    const { env, writes } = fakeD1()
+    const [a, b] = products[0].colorways
+    const res = await placeOrder(
+      env,
+      payload({ lines: [{ sku, qty: 1, finish: a.name }, { sku, qty: 1, finish: b.name }] as never }),
+    )
+    expect(res.status).toBe(200)
+    expect(writes.filter((w) => w.sql.includes('INSERT INTO order_lines'))).toHaveLength(2)
+  })
+
+  it('still refuses the same product in the same finish twice', async () => {
+    const { env } = fakeD1()
+    const finish = products[0].colorways[0].name
+    const res = await placeOrder(
+      env,
+      payload({ lines: [{ sku, qty: 1, finish }, { sku, qty: 2, finish }] as never }),
+    )
+    expect(res.status).toBe(400)
+  })
+
+  it('stores an empty string when no finish was chosen', async () => {
+    // Not NULL: the column is part of the primary key, and SQLite treats NULLs
+    // there as distinct, so the same line could be inserted twice.
+    const { env, writes } = fakeD1()
+    await placeOrder(env, payload())
+    const line = writes.find((w) => w.sql.includes('INSERT INTO order_lines'))!
+    expect(line.args[line.args.length - 1]).toBe('')
+  })
+
   it('refuses a sku that is not in the catalogue', async () => {
     const { env, writes } = fakeD1()
     const res = await placeOrder(env, payload({ lines: [{ sku: 'FREE-MONEY-1', qty: 1 }] }))

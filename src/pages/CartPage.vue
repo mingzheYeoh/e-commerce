@@ -2,7 +2,7 @@
 import { computed } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import { Minus, Plus, X, ShoppingBag } from 'lucide-vue-next'
-import { useCartStore } from '@/stores/cart'
+import { useCartStore, lineKey } from '@/stores/cart'
 import { useCurrency } from '@/composables/useCurrency'
 import { SHIPPING } from '@/lib/money'
 
@@ -48,12 +48,13 @@ const toFreeShipping = computed(() => {
           </p>
 
           <ul class="divide-y divide-border-hairline rounded-card border border-border-hairline bg-surface-1">
-            <li v-for="line in cart.items" :key="line.sku" class="flex items-center gap-4 p-4">
+            <li v-for="line in cart.items" :key="lineKey(line)" class="flex items-center gap-4 p-4">
               <img :src="line.thumb" :alt="line.title" width="72" height="72" class="h-18 w-18 shrink-0 rounded object-cover" />
 
               <div class="min-w-0 flex-1">
                 <p class="truncate font-medium">{{ line.title }}</p>
                 <p class="code mt-0.5 text-xs text-text-muted">{{ line.sku }}</p>
+                <p v-if="line.finish" class="mt-0.5 text-xs text-text-secondary">{{ line.finish }}</p>
                 <p class="nums mt-1 text-sm text-text-secondary">{{ format(line.unitPriceCents) }} each</p>
               </div>
 
@@ -62,7 +63,7 @@ const toFreeShipping = computed(() => {
                   type="button"
                   class="flex h-8 w-8 items-center justify-center text-text-secondary transition-colors hover:text-text-primary"
                   :aria-label="`Decrease quantity of ${line.title}`"
-                  @click="cart.setQty(line.sku, line.qty - 1)"
+                  @click="cart.setQty(lineKey(line), line.qty - 1)"
                 >
                   <Minus class="h-3.5 w-3.5" aria-hidden="true" />
                 </button>
@@ -72,7 +73,7 @@ const toFreeShipping = computed(() => {
                   class="flex h-8 w-8 items-center justify-center text-text-secondary transition-colors hover:text-text-primary disabled:opacity-30"
                   :disabled="line.qty >= line.stockCount"
                   :aria-label="`Increase quantity of ${line.title}`"
-                  @click="cart.setQty(line.sku, line.qty + 1)"
+                  @click="cart.setQty(lineKey(line), line.qty + 1)"
                 >
                   <Plus class="h-3.5 w-3.5" aria-hidden="true" />
                 </button>
@@ -86,7 +87,7 @@ const toFreeShipping = computed(() => {
                 type="button"
                 class="shrink-0 text-text-muted transition-colors hover:text-accent-red"
                 :aria-label="`Remove ${line.title}`"
-                @click="cart.remove(line.sku)"
+                @click="cart.remove(lineKey(line))"
               >
                 <X class="h-4 w-4" aria-hidden="true" />
               </button>
