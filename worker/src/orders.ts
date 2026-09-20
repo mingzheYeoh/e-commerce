@@ -13,6 +13,12 @@
  */
 import { products } from '../../src/data/products'
 import { SHIPPING, totalCents, type ShipMethod } from '../../src/lib/money'
+import {
+  findCountry,
+  validSubdivision,
+  validPostal,
+  validPhone,
+} from '../../src/lib/regions'
 
 export interface OrdersEnv {
   ORDERS: D1Database
@@ -29,7 +35,17 @@ type PaymentCode = (typeof PAYMENT_CODES)[number]
 
 export interface OrderPayload {
   id: string
-  address: { name: string; email: string; line1: string; city: string; state: string; postal: string }
+  address: {
+    name: string
+    email: string
+    phone?: string
+    country: string
+    line1: string
+    line2?: string
+    city: string
+    state: string
+    postal: string
+  }
   method: string
   lines: { sku: string; qty: number; finish?: string }[]
   paymentCode: string
@@ -49,7 +65,16 @@ const str = (v: unknown, max = 200): string | null =>
  * Every field is checked rather than trusted: this is a public endpoint, and
  * the only thing standing between it and the table is this function.
  */
-export async function placeOrder(env: OrdersEnv, body: unknown): Promise<PlaceResult> {
+export async function placeOrder(
+  env: OrdersEnv,
+  body: unknown,
+  /**
+   * The signed-in shopper, when there is one. Taken from the session cookie by
+   * the caller and never from the payload: a request that could name its own
+   * owner could file its order into someone else's account.
+   */
+  userId: string | null = null,
+): Promise<PlaceResult> {
   if (typeof body !== 'object' || body === null) return { status: 400, body: { error: 'bad request' } }
   const p = body as Partial<OrderPayload>
 
@@ -73,8 +98,6 @@ export async function placeOrder(env: OrdersEnv, body: unknown): Promise<PlaceRe
     email: str(a.email, 200),
     line1: str(a.line1, 200),
     city: str(a.city, 120),
-    state: str(a.state, 2),
-    postal: str(a.postal, 10),
   }
   if (Object.values(address).some((v) => v === null)) {
     return { status: 400, body: { error: 'address is incomplete' } }
@@ -82,6 +105,45 @@ export async function placeOrder(env: OrdersEnv, body: unknown): Promise<PlaceRe
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(address.email!)) {
     return { status: 400, body: { error: 'bad email' } }
   }
+
+  /*
+   * The country decides what the rest of the address may say, so it is
+   * resolved first and refused outright if it is not one we ship to. The
+   * subdivision and postcode are then checked against that country's own
+   * rules, imported from the same module the checkout form reads — when the
+   * two disagreed, the form collected a valid Malaysian postcode and this
+   * endpoint rejected it as a bad ZIP, which reads as a broken checkout.
+   */
+  const country = findCountry(str(a.country, 2) ?? '')
+  if (!country) return { status: 400, body: { error: 'we do not ship there' } }
+
+  // Empty is the right answer for a country with no subdivisions, so this is
+  // not `str`, which treats an empty string as missing.
+  const state = typeof a.state === 'string' ? a.state.trim().toUpperCase() : ''
+  if (!validSubdivision(country.code, state)) {
+    return {
+      status: 400,
+      body: {
+        // Two different faults wearing one status code. "bad region" for a
+        // country that has no regions tells the caller to fix a field that
+        // should not have been sent at all.
+        error: country.subdivisions
+          ? `bad ${country.subdivisionLabel!.toLowerCase()}`
+          : `${country.name} addresses carry no state`,
+      },
+    }
+  }
+
+  const postal = str(a.postal, 12)
+  if (!postal || !validPostal(country.code, postal)) {
+    return { status: 400, body: { error: `bad ${country.postalLabel.toLowerCase()}` } }
+  }
+
+  // Both optional. A missing apartment line or phone number is an address
+  // without them, not a bad request.
+  const line2 = a.line2 === undefined || a.line2 === null ? '' : (str(a.line2, 200) ?? '')
+  const phone = a.phone === undefined || a.phone === null ? '' : (str(a.phone, 32) ?? '')
+  if (phone && !validPhone(phone)) return { status: 400, body: { error: 'bad phone' } }
 
   if (!Array.isArray(p.lines) || p.lines.length === 0 || p.lines.length > 50) {
     return { status: 400, body: { error: 'lines are required' } }
@@ -121,7 +183,12 @@ export async function placeOrder(env: OrdersEnv, body: unknown): Promise<PlaceRe
   }
 
   const subtotal = lines.reduce((sum, l) => sum + l.unit * l.qty, 0)
-  const totals = totalCents({ subtotal, method: method as ShipMethod, state: address.state! })
+  const totals = totalCents({
+    subtotal,
+    method: method as ShipMethod,
+    country: country.code,
+    state,
+  })
 
   // Currency is a display choice; the ledger is in USD cents either way.
   const currency = str(p.currency, 3) ?? 'USD'
@@ -129,18 +196,22 @@ export async function placeOrder(env: OrdersEnv, body: unknown): Promise<PlaceRe
   try {
     await env.ORDERS.batch([
       env.ORDERS.prepare(
-        `INSERT INTO orders (id, email, ship_name, ship_line1, ship_city, ship_state, ship_postal,
+        `INSERT INTO orders (id, email, ship_name, ship_phone, ship_country, ship_line1, ship_line2,
+                             ship_city, ship_state, ship_postal,
                              method, currency, subtotal_cents, shipping_cents, tax_cents, total_cents,
-                             payment_status)
-         VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14)`,
+                             payment_status, user_id)
+         VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18)`,
       ).bind(
         id,
         address.email,
         address.name,
+        phone,
+        country.code,
         address.line1,
+        line2,
         address.city,
-        address.state!.toUpperCase(),
-        address.postal,
+        state,
+        postal,
         method,
         currency.toUpperCase(),
         totals.subtotal,
@@ -148,6 +219,7 @@ export async function placeOrder(env: OrdersEnv, body: unknown): Promise<PlaceRe
         totals.tax,
         totals.total,
         paymentCode,
+        userId,
       ),
       ...lines.map((l) =>
         env.ORDERS.prepare(
@@ -172,7 +244,16 @@ export interface StoredOrder {
   id: string
   placedAt: string
   email: string
-  address: { name: string; line1: string; city: string; state: string; postal: string }
+  address: {
+    name: string
+    phone: string
+    country: string
+    line1: string
+    line2: string
+    city: string
+    state: string
+    postal: string
+  }
   method: string
   currency: string
   totals: { subtotal: number; shipping: number; tax: number; total: number }
@@ -195,7 +276,10 @@ export async function getOrder(env: OrdersEnv, id: string): Promise<StoredOrder 
     created_at: string
     email: string
     ship_name: string
+    ship_phone: string
+    ship_country: string
     ship_line1: string
+    ship_line2: string
     ship_city: string
     ship_state: string
     ship_postal: string
@@ -221,7 +305,10 @@ export async function getOrder(env: OrdersEnv, id: string): Promise<StoredOrder 
     email: maskEmail(row.email),
     address: {
       name: row.ship_name,
+      phone: row.ship_phone ?? '',
+      country: row.ship_country ?? 'US',
       line1: row.ship_line1,
+      line2: row.ship_line2 ?? '',
       city: row.ship_city,
       state: row.ship_state,
       postal: row.ship_postal,

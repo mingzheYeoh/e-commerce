@@ -22,7 +22,10 @@ const inStock = () => products.find((p) => p.inStock)!
 function fill(store: ReturnType<typeof useCheckoutStore>) {
   store.address.name = 'Ada Lovelace'
   store.address.email = 'ada@example.com'
+  store.address.phone = ''
+  store.address.country = 'US'
   store.address.line1 = '12 Dean Street'
+  store.address.line2 = ''
   store.address.city = 'London'
   store.address.state = 'CA'
   store.address.postal = '94016'
@@ -205,7 +208,10 @@ describe('orders beyond this browser', () => {
       email: 'a•••@example.com',
       address: {
         name: 'Ada Lovelace',
+        phone: '',
+        country: 'US',
         line1: '12 Analytical Way',
+        line2: '',
         city: 'Portland',
         state: 'OR',
         postal: '97201',
@@ -264,5 +270,98 @@ describe('orders beyond this browser', () => {
 
   it('returns null when the order does not exist anywhere', async () => {
     expect(await useCheckoutStore().loadOrder('NX-QQQQQ')).toBeNull()
+  })
+})
+
+describe('delivery addresses beyond the United States', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    localStorage.clear()
+  })
+
+  it('drops the state and postcode when the country changes', () => {
+    /*
+     * Both belong to exactly one country. Carrying "OR / 97201" into Malaysia
+     * leaves an address that validates nowhere — and, until the server refused
+     * it, a tax line quoting a state the parcel was not going to.
+     */
+    const checkout = useCheckoutStore()
+    fill(checkout)
+    expect(checkout.address.state).toBe('CA')
+
+    checkout.setCountry('MY')
+    expect(checkout.address.state).toBe('')
+    expect(checkout.address.postal).toBe('')
+    // What does not belong to a country stays put; retyping a street address
+    // because you corrected the country is its own small insult.
+    expect(checkout.address.line1).toBe('12 Dean Street')
+  })
+
+  it('leaves everything alone when the country did not actually change', () => {
+    const checkout = useCheckoutStore()
+    fill(checkout)
+    checkout.setCountry('US')
+    expect(checkout.address.state).toBe('CA')
+    expect(checkout.address.postal).toBe('94016')
+  })
+
+  it('accepts a complete address in a country with subdivisions', () => {
+    const checkout = useCheckoutStore()
+    fill(checkout)
+    checkout.setCountry('MY')
+    checkout.address.state = 'SGR'
+    checkout.address.postal = '50450'
+    expect(checkout.stepValid(1)).toBe(true)
+  })
+
+  it('accepts one in a country that has none, with the field empty', () => {
+    // The case an American-shaped form gets wrong: it would demand a state
+    // that does not exist, or accept a meaningless one.
+    const checkout = useCheckoutStore()
+    fill(checkout)
+    checkout.setCountry('SG')
+    checkout.address.postal = '238839'
+    expect(checkout.address.state).toBe('')
+    expect(checkout.stepValid(1)).toBe(true)
+  })
+
+  it('refuses a subdivision or postcode from the wrong country', () => {
+    const checkout = useCheckoutStore()
+    fill(checkout)
+    checkout.setCountry('MY')
+    checkout.address.state = 'OR'
+    checkout.address.postal = '50450'
+    expect(checkout.stepValid(1), 'an Oregon address that says Malaysia').toBe(false)
+
+    checkout.address.state = 'SGR'
+    checkout.address.postal = '94016-1234'
+    expect(checkout.stepValid(1), 'a US ZIP on a Malaysian address').toBe(false)
+  })
+
+  it('taxes the order at the destination rate, not a default one', () => {
+    const cart = useCartStore()
+    const checkout = useCheckoutStore()
+    cart.add(inStock())
+    fill(checkout)
+
+    const us = checkout.totals.tax
+    checkout.setCountry('MY')
+    checkout.address.state = 'SGR'
+    checkout.address.postal = '50450'
+
+    expect(checkout.totals.tax).toBe(Math.round(cart.subtotalCents * 0.08))
+    expect(checkout.totals.tax).not.toBe(us)
+  })
+
+  it('treats the phone as optional but not as a free-text field', () => {
+    const checkout = useCheckoutStore()
+    fill(checkout)
+    expect(checkout.stepValid(1), 'no phone at all is fine').toBe(true)
+
+    checkout.address.phone = '+60 12-345 6789'
+    expect(checkout.stepValid(1)).toBe(true)
+
+    checkout.address.phone = 'call me maybe'
+    expect(checkout.stepValid(1)).toBe(false)
   })
 })

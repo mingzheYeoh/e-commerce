@@ -127,3 +127,86 @@ describe('persistence', () => {
     Storage.prototype.getItem = original
   })
 })
+
+describe('setAt — the dropdown on /compare', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    localStorage.clear()
+  })
+
+  it('swaps one column without disturbing the others', () => {
+    const compare = useCompareStore()
+    compare.add(phones[0])
+    compare.add(phones[1])
+
+    expect(compare.setAt(0, phones[2].id)).toBe(true)
+    expect(compare.ids).toEqual([phones[2].id, phones[1].id])
+  })
+
+  it('fills the empty slot at the end', () => {
+    const compare = useCompareStore()
+    compare.add(phones[0])
+
+    expect(compare.setAt(1, phones[1].id)).toBe(true)
+    expect(compare.ids).toEqual([phones[0].id, phones[1].id])
+  })
+
+  it('refuses a swap that would strand the other columns', () => {
+    /*
+     * Column 0 sets the category for everything after it. Changing it to a
+     * laptop while a second phone is in the table would drop that phone —
+     * quietly, because validIds returns what survives. So the shorter result
+     * is refused outright and the picker keeps its old value.
+     */
+    const compare = useCompareStore()
+    compare.add(phones[0])
+    compare.add(phones[1])
+
+    expect(compare.setAt(0, laptops[0].id)).toBe(false)
+    expect(compare.ids).toEqual([phones[0].id, phones[1].id])
+  })
+
+  it('lets the only column change category freely', () => {
+    // With nothing to strand, there is nothing to protect.
+    const compare = useCompareStore()
+    compare.add(phones[0])
+
+    expect(compare.setAt(0, laptops[0].id)).toBe(true)
+    expect(compare.category).toBe('computing')
+  })
+
+  it('will not put the same product in two columns', () => {
+    const compare = useCompareStore()
+    compare.add(phones[0])
+    compare.add(phones[1])
+
+    expect(compare.setAt(1, phones[0].id)).toBe(false)
+    expect(compare.ids).toEqual([phones[0].id, phones[1].id])
+  })
+
+  it('ignores a slot that is not there, and an id that is not a product', () => {
+    const compare = useCompareStore()
+    compare.add(phones[0])
+
+    expect(compare.setAt(5, phones[1].id), 'past the cap').toBe(false)
+    expect(compare.setAt(3, phones[1].id), 'past the first empty slot').toBe(false)
+    expect(compare.setAt(-1, phones[1].id)).toBe(false)
+    expect(compare.setAt(0, 'not-a-product')).toBe(false)
+    expect(compare.ids).toEqual([phones[0].id])
+  })
+
+  it('treats re-picking what is already there as a success', () => {
+    // The select fires change events for reasons other than a real choice;
+    // reporting failure would make the page put the value back for no reason.
+    const compare = useCompareStore()
+    compare.add(phones[0])
+    expect(compare.setAt(0, phones[0].id)).toBe(true)
+  })
+
+  it('fills every slot up to the cap and then stops', () => {
+    const compare = useCompareStore()
+    for (let i = 0; i < MAX_COMPARE; i++) expect(compare.setAt(i, phones[i].id)).toBe(true)
+    expect(compare.ids).toHaveLength(MAX_COMPARE)
+    expect(compare.setAt(MAX_COMPARE, phones[MAX_COMPARE].id)).toBe(false)
+  })
+})

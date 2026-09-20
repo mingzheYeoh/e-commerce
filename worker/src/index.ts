@@ -10,6 +10,7 @@ import { ask, search, type Env as RagEnv } from './rag'
 import { facts, queryOrError } from './graph'
 import { converse } from './agent'
 import { placeOrder, getOrder, type OrdersEnv } from './orders'
+import { register, login, logout, sessionUser, accountOrders } from './auth'
 
 export interface Env extends RagEnv, OrdersEnv {
   ALLOWED_ORIGIN?: string
@@ -34,6 +35,14 @@ function cors(env: Env, request: Request): Record<string, string> {
     'access-control-allow-origin': allowed.includes(origin) ? origin : allowed[0],
     'access-control-allow-methods': 'GET, POST, OPTIONS',
     'access-control-allow-headers': 'content-type',
+    /*
+     * Sessions ride a cookie, and a browser will not attach one to a
+     * cross-origin request unless the response says this. It is safe here only
+     * because the origin above is an exact echo of an allow-listed value —
+     * `*` with credentials is refused by every browser, which is the spec
+     * stopping exactly the mistake it looks like.
+     */
+    'access-control-allow-credentials': 'true',
     vary: 'origin',
   }
 }
@@ -95,7 +104,10 @@ export default {
        * calls this, so a failure here costs the shareable copy and nothing else.
        */
       if (url.pathname === '/api/orders' && request.method === 'POST') {
-        const result = await placeOrder(env, await request.json())
+        // Signing in is optional at checkout. When there is a session the order
+        // is filed to it, which is the only way it ever joins an account.
+        const user = await sessionUser(env, request)
+        const result = await placeOrder(env, await request.json(), user?.id ?? null)
         return json(result.body, { status: result.status, headers })
       }
 
@@ -104,6 +116,50 @@ export default {
         return order
           ? json(order, { headers })
           : json({ error: 'not found' }, { status: 404, headers })
+      }
+
+      /*
+       * Accounts.
+       *
+       * The session is a cookie this service sets and reads; it is never in a
+       * response body, so the page cannot leak what it cannot see. Each of
+       * these replies may carry a Set-Cookie, which is why they are built here
+       * rather than through the plain `json` helper.
+       */
+      if (url.pathname === '/api/auth/register' && request.method === 'POST') {
+        const result = await register(env, await request.json())
+        return json(result.body, {
+          status: result.status,
+          headers: { ...headers, ...('cookie' in result && result.cookie ? { 'set-cookie': result.cookie } : {}) },
+        })
+      }
+
+      if (url.pathname === '/api/auth/login' && request.method === 'POST') {
+        const result = await login(env, await request.json())
+        return json(result.body, {
+          status: result.status,
+          headers: { ...headers, ...('cookie' in result && result.cookie ? { 'set-cookie': result.cookie } : {}) },
+        })
+      }
+
+      if (url.pathname === '/api/auth/logout' && request.method === 'POST') {
+        const result = await logout(env, request)
+        return json(result.body, {
+          status: result.status,
+          headers: { ...headers, ...('cookie' in result && result.cookie ? { 'set-cookie': result.cookie } : {}) },
+        })
+      }
+
+      /* Who this browser is. 200 with a null user rather than a 401: not being
+         signed in is an answer, not a failure, and the header renders off it. */
+      if (url.pathname === '/api/auth/me' && request.method === 'GET') {
+        return json({ user: await sessionUser(env, request) }, { headers })
+      }
+
+      if (url.pathname === '/api/account/orders' && request.method === 'GET') {
+        const user = await sessionUser(env, request)
+        if (!user) return json({ error: 'not signed in' }, { status: 401, headers })
+        return json({ orders: await accountOrders(env, user) }, { headers })
       }
 
       /* Structured lookups, answered by the graph without a model in the loop. */

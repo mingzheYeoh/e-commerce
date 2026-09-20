@@ -11,12 +11,15 @@ import { computed, onMounted } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import { Check, Lock, AlertCircle, CreditCard } from 'lucide-vue-next'
 import { useCartStore } from '@/stores/cart'
+import { useAuthStore } from '@/stores/auth'
 import { useCheckoutStore } from '@/stores/checkout'
 import { useCurrency } from '@/composables/useCurrency'
-import { SHIPPING, TAX_RATES, type ShipMethod } from '@/lib/money'
+import { SHIPPING, type ShipMethod } from '@/lib/money'
+import { COUNTRIES, findCountry } from '@/lib/regions'
 import OrderSummary from '@/components/checkout/OrderSummary.vue'
 
 const cart = useCartStore()
+const auth = useAuthStore()
 const checkout = useCheckoutStore()
 const router = useRouter()
 const { format } = useCurrency()
@@ -29,13 +32,28 @@ const STEPS = [
 
 const METHODS = Object.entries(SHIPPING) as [ShipMethod, (typeof SHIPPING)[ShipMethod]][]
 
-/** Sorted so the free states are visible; a $0.00 tax line proves the rate follows the address. */
-const STATES = Object.keys(TAX_RATES).sort()
+/**
+ * The destination's own rules: what its subdivisions are called and are, and
+ * what a postcode looks like there. Everything below the country select reads
+ * off this rather than assuming an American address.
+ */
+const country = computed(() => findCountry(checkout.address.country))
 
 const canPlace = computed(() => checkout.stepValid(3) && cart.items.length > 0)
 
 onMounted(() => {
   if (!cart.items.length) router.replace('/cart')
+
+  /*
+   * Fill what the account already knows, and only what is still blank. A
+   * returning shopper should not retype their own name — but overwriting a
+   * half-typed field because a session resolved a moment later would be worse
+   * than not helping at all.
+   */
+  if (auth.signedIn && auth.user) {
+    if (!checkout.address.name.trim()) checkout.address.name = auth.user.name
+    if (!checkout.address.email.trim()) checkout.address.email = auth.user.email
+  }
 })
 
 async function place() {
@@ -86,36 +104,96 @@ async function place() {
           <!-- 1. Delivery -->
           <form v-if="checkout.step === 1" class="space-y-4" @submit.prevent="checkout.next()">
             <h2 class="font-semibold">Where is it going?</h2>
+
+            <!--
+              Offered, never required. Guest checkout is the shorter path and
+              stays the default; the only thing signing in changes is whether
+              this order can be found again from another device.
+            -->
+            <p
+              v-if="!auth.signedIn"
+              class="rounded border border-border-hairline bg-surface-2/60 p-3 text-xs text-text-secondary"
+            >
+              <RouterLink to="/account?next=/checkout" class="text-accent underline">Sign in</RouterLink>
+              to keep this order with your account, or carry on as a guest — checkout works either
+              way.
+            </p>
+
             <div class="grid gap-4 sm:grid-cols-2">
+              <!--
+                Country first, because everything under it depends on the
+                answer: which subdivisions exist, what the postcode field is
+                called and checks for, and which tax the summary quotes.
+              -->
+              <label class="block sm:col-span-2">
+                <span class="mb-1.5 block text-sm text-text-secondary">Country or region</span>
+                <select
+                  :value="checkout.address.country"
+                  required
+                  autocomplete="country"
+                  class="input"
+                  @change="checkout.setCountry(($event.target as HTMLSelectElement).value)"
+                >
+                  <option v-for="c in COUNTRIES" :key="c.code" :value="c.code">{{ c.name }}</option>
+                </select>
+              </label>
+
               <label class="block sm:col-span-2">
                 <span class="mb-1.5 block text-sm text-text-secondary">Full name</span>
                 <input v-model="checkout.address.name" required autocomplete="name" class="input" />
               </label>
-              <label class="block sm:col-span-2">
+              <label class="block">
                 <span class="mb-1.5 block text-sm text-text-secondary">Email</span>
                 <input v-model="checkout.address.email" type="email" required autocomplete="email" class="input" />
               </label>
+              <label class="block">
+                <span class="mb-1.5 block text-sm text-text-secondary">
+                  Phone <span class="text-text-muted">(optional)</span>
+                </span>
+                <input v-model="checkout.address.phone" type="tel" autocomplete="tel" placeholder="+1 555 010 0199" class="input" />
+              </label>
+
               <label class="block sm:col-span-2">
-                <span class="mb-1.5 block text-sm text-text-secondary">Address</span>
+                <span class="mb-1.5 block text-sm text-text-secondary">Street address</span>
                 <input v-model="checkout.address.line1" required autocomplete="address-line1" class="input" />
               </label>
+              <label class="block sm:col-span-2">
+                <span class="mb-1.5 block text-sm text-text-secondary">
+                  Apartment, suite, floor <span class="text-text-muted">(optional)</span>
+                </span>
+                <input v-model="checkout.address.line2" autocomplete="address-line2" class="input" />
+              </label>
+
               <label class="block">
                 <span class="mb-1.5 block text-sm text-text-secondary">City</span>
                 <input v-model="checkout.address.city" required autocomplete="address-level2" class="input" />
               </label>
-              <div class="grid grid-cols-2 gap-4">
-                <label class="block">
-                  <span class="mb-1.5 block text-sm text-text-secondary">State</span>
-                  <select v-model="checkout.address.state" required class="input">
-                    <option value="" disabled>—</option>
-                    <option v-for="code in STATES" :key="code" :value="code">{{ code }}</option>
-                  </select>
-                </label>
-                <label class="block">
-                  <span class="mb-1.5 block text-sm text-text-secondary">ZIP</span>
-                  <input v-model="checkout.address.postal" required inputmode="numeric" placeholder="94016" autocomplete="postal-code" class="input" />
-                </label>
-              </div>
+              <!-- Absent, not blank, where a country has no subdivisions: an
+                   empty "State" on a Singapore address is a field that can only
+                   be got wrong. -->
+              <label v-if="country?.subdivisions" class="block">
+                <span class="mb-1.5 block text-sm text-text-secondary">
+                  {{ country.subdivisionLabel }}
+                </span>
+                <select v-model="checkout.address.state" required autocomplete="address-level1" class="input">
+                  <option value="" disabled>Select…</option>
+                  <option v-for="s in country.subdivisions" :key="s.code" :value="s.code">
+                    {{ s.name }}
+                  </option>
+                </select>
+              </label>
+              <label class="block">
+                <span class="mb-1.5 block text-sm text-text-secondary">
+                  {{ country?.postalLabel ?? 'Postal code' }}
+                </span>
+                <input
+                  v-model="checkout.address.postal"
+                  required
+                  :placeholder="country?.postalExample"
+                  autocomplete="postal-code"
+                  class="input"
+                />
+              </label>
             </div>
             <button type="submit" class="btn-primary w-full" :disabled="!checkout.stepValid(1)">
               Continue to shipping
@@ -209,6 +287,7 @@ async function place() {
             :lines="cart.items"
             :totals="checkout.totals"
             :method="checkout.method"
+            :country="checkout.address.country"
             :state="checkout.address.state"
           />
         </div>

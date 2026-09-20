@@ -133,9 +133,22 @@ export async function health(): Promise<HealthResponse | null> {
 
 /* ------------------------------------------------------------------ orders */
 
+/** The delivery address as it travels over the wire, country included. */
+export interface ShipAddress {
+  name: string
+  phone: string
+  country: string
+  line1: string
+  line2: string
+  city: string
+  /** Empty for countries that have no subdivisions. */
+  state: string
+  postal: string
+}
+
 export interface OrderRequest {
   id: string
-  address: { name: string; email: string; line1: string; city: string; state: string; postal: string }
+  address: ShipAddress & { email: string }
   method: string
   /** Skus, quantities and finish. Prices are the server's business, not the browser's. */
   lines: { sku: string; qty: number; finish?: string }[]
@@ -148,7 +161,7 @@ export interface RemoteOrder {
   placedAt: string
   /** Masked by the server: a receipt link should not hand out an address book. */
   email: string
-  address: { name: string; line1: string; city: string; state: string; postal: string }
+  address: ShipAddress
   method: string
   currency: string
   totals: { subtotal: number; shipping: number; tax: number; total: number }
@@ -169,6 +182,9 @@ export async function saveOrder(order: OrderRequest): Promise<boolean> {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(order),
+      // So the session cookie rides along. It is the only way an order is ever
+      // filed to an account — the server reads the cookie, not the payload.
+      credentials: 'include',
       signal: AbortSignal.timeout(10_000),
     })
     // 409 means this id is already stored, which is a success from here.
@@ -185,6 +201,97 @@ export async function fetchOrder(id: string): Promise<RemoteOrder | null> {
       signal: AbortSignal.timeout(10_000),
     })
     return res.ok ? ((await res.json()) as RemoteOrder) : null
+  } catch {
+    return null
+  }
+}
+
+/* ---------------------------------------------------------------- accounts */
+
+export interface Account {
+  id: string
+  email: string
+  name: string
+}
+
+export interface AccountOrder {
+  id: string
+  placedAt: string
+  total: number
+  currency: string
+  paymentCode: string
+  itemCount: number
+}
+
+export type AuthResult = { ok: true; user: Account } | { ok: false; error: string }
+
+/**
+ * Every account call sends credentials, because the session is a cookie this
+ * page can neither read nor write — it is HttpOnly, so a script injected into
+ * the storefront cannot lift it. The cost is that "am I signed in?" is a
+ * request rather than a variable.
+ */
+const credentialled: RequestInit = { credentials: 'include' }
+
+async function post(path: string, body: unknown): Promise<AuthResult> {
+  try {
+    const res = await fetch(`${BASE}${path}`, {
+      ...credentialled,
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(20_000),
+    })
+    const data = (await res.json().catch(() => ({}))) as { user?: Account; error?: string }
+    if (!res.ok) return { ok: false, error: data.error ?? 'Something went wrong. Try again.' }
+    if (!data.user) return { ok: false, error: 'Something went wrong. Try again.' }
+    return { ok: true, user: data.user }
+  } catch {
+    return { ok: false, error: 'Could not reach the server. Check your connection.' }
+  }
+}
+
+export const registerAccount = (name: string, email: string, password: string) =>
+  post('/api/auth/register', { name, email, password })
+
+export const signIn = (email: string, password: string) =>
+  post('/api/auth/login', { email, password })
+
+export async function signOut(): Promise<void> {
+  try {
+    await fetch(`${BASE}/api/auth/logout`, {
+      ...credentialled,
+      method: 'POST',
+      signal: AbortSignal.timeout(10_000),
+    })
+  } catch {
+    /* The cookie expires on its own; a failed sign-out is not worth an error. */
+  }
+}
+
+/** Null for "not signed in" and for "could not ask", which render the same. */
+export async function currentAccount(): Promise<Account | null> {
+  try {
+    const res = await fetch(`${BASE}/api/auth/me`, {
+      ...credentialled,
+      signal: AbortSignal.timeout(10_000),
+    })
+    if (!res.ok) return null
+    return ((await res.json()) as { user: Account | null }).user
+  } catch {
+    return null
+  }
+}
+
+/** The signed-in shopper's own orders. Null means the session is gone. */
+export async function myOrders(): Promise<AccountOrder[] | null> {
+  try {
+    const res = await fetch(`${BASE}/api/account/orders`, {
+      ...credentialled,
+      signal: AbortSignal.timeout(10_000),
+    })
+    if (!res.ok) return null
+    return ((await res.json()) as { orders: AccountOrder[] }).orders
   } catch {
     return null
   }
