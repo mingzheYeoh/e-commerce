@@ -47,7 +47,7 @@ export const categories: Category[] = [
   {
     id: 'computing',
     label: 'Laptops & wearables',
-    blurb: 'Laptops, phones, smartwatches and charging.',
+    blurb: 'Laptops, smartwatches, tablets and charging.',
     unitsInStock: stockIn('computing'),
     fromPrice: cheapest('computing'),
     image: '/media/categories/computing.webp',

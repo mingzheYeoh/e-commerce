@@ -24,10 +24,14 @@ const spanClass: Record<Category['span'], string> = {
         <div>
           <h2 class="text-2xl font-bold md:text-4xl">Shop by category</h2>
           <p class="mt-2 text-sm text-text-secondary md:text-base">
-            Four departments, {{ categories.length ? '' : '' }}everything in stock today.
+            <!--
+              Counted, not written down. The copy said "Four departments" for as
+              long as there were five, because adding the phones category did
+              not look like a copy change.
+            -->
+            {{ categories.length }} departments, everything in stock today.
           </p>
         </div>
-        
       </div>
 
       <div class="grid grid-cols-1 gap-3 md:grid-cols-4">

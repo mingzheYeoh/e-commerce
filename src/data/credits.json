@@ -1,5 +1,61 @@
 [
   {
+    "file": "media/brands/asus.webp",
+    "photographer": "Jared Brashier",
+    "profileUrl": "https://unsplash.com/photos/usb-flash-drive-attached-to-laptop-computer-6WPcf5D1XdA",
+    "sourceUrl": "https://unsplash.com/photos/usb-flash-drive-attached-to-laptop-computer-6WPcf5D1XdA",
+    "licence": "Unsplash Licence",
+    "source": "Unsplash"
+  },
+  {
+    "file": "media/brands/dell.webp",
+    "photographer": "Ales Nesetril",
+    "profileUrl": "https://unsplash.com/photos/gray-and-black-laptop-computer-on-surface-Im7lZjxeLhg",
+    "sourceUrl": "https://unsplash.com/photos/gray-and-black-laptop-computer-on-surface-Im7lZjxeLhg",
+    "licence": "Unsplash Licence",
+    "source": "Unsplash"
+  },
+  {
+    "file": "media/brands/google.webp",
+    "photographer": "ᛟᛞᚨᛚᚹ",
+    "profileUrl": "https://unsplash.com/photos/a-smartphone-screen-displaying-app-icons-in-darkness-UX-yo33LgPA",
+    "sourceUrl": "https://unsplash.com/photos/a-smartphone-screen-displaying-app-icons-in-darkness-UX-yo33LgPA",
+    "licence": "Unsplash Licence",
+    "source": "Unsplash"
+  },
+  {
+    "file": "media/brands/lenovo.webp",
+    "photographer": "Agung Raharja",
+    "profileUrl": "https://unsplash.com/photos/folded-laptop-urbSCgUxfQ0",
+    "sourceUrl": "https://unsplash.com/photos/folded-laptop-urbSCgUxfQ0",
+    "licence": "Unsplash Licence",
+    "source": "Unsplash"
+  },
+  {
+    "file": "media/brands/oneplus.webp",
+    "photographer": "Pathum Danthanarayana",
+    "profileUrl": "https://unsplash.com/photos/turned-on-android-smartphone-t8TOMKe6xZU",
+    "sourceUrl": "https://unsplash.com/photos/turned-on-android-smartphone-t8TOMKe6xZU",
+    "licence": "Unsplash Licence",
+    "source": "Unsplash"
+  },
+  {
+    "file": "media/brands/xiaomi.webp",
+    "photographer": "Shubham Sharan",
+    "profileUrl": "https://unsplash.com/photos/man-in-black-shirt-holding-white-smartphone-1rJdewJPCWE",
+    "sourceUrl": "https://unsplash.com/photos/man-in-black-shirt-holding-white-smartphone-1rJdewJPCWE",
+    "licence": "Unsplash Licence",
+    "source": "Unsplash"
+  },
+  {
+    "file": "media/categories/phones.webp",
+    "photographer": "Ales Nesetril",
+    "profileUrl": "https://unsplash.com/photos/black-android-smartphone-S7sZReI6hJI",
+    "sourceUrl": "https://unsplash.com/photos/black-android-smartphone-S7sZReI6hJI",
+    "licence": "Unsplash Licence",
+    "source": "Unsplash"
+  },
+  {
     "file": "media/products/airpods-max-1.webp",
     "photographer": "Arne Müseler",
     "profileUrl": "https://commons.wikimedia.org/wiki/File:Apple_airpods_max_1.jpg",
@@ -1216,6 +1272,22 @@
     "source": "Wikimedia Commons"
   },
   {
+    "file": "media/products/thinkpad-x1-carbon-3.webp",
+    "photographer": "IAEA Imagebank",
+    "profileUrl": "https://commons.wikimedia.org/wiki/File:ThinkPad_X1_Carbon_gen7_(0).jpg",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:ThinkPad_X1_Carbon_gen7_(0).jpg",
+    "licence": "CC BY 2.0",
+    "source": "Wikimedia Commons"
+  },
+  {
+    "file": "media/products/thinkpad-x1-carbon-4.webp",
+    "photographer": "l ch",
+    "profileUrl": "https://unsplash.com/photos/a-laptop-with-a-mechanical-keyboard-and-mouse-AuMob2xihZk",
+    "sourceUrl": "https://unsplash.com/photos/a-laptop-with-a-mechanical-keyboard-and-mouse-AuMob2xihZk",
+    "licence": "Unsplash Licence",
+    "source": "Unsplash"
+  },
+  {
     "file": "media/products/tp7-recorder-1.webp",
     "photographer": "Keagan Henman",
     "profileUrl": "https://unsplash.com/photos/gray-microphone-with-filter-dkaYXcg1_jE",
@@ -1379,9 +1451,9 @@
     "file": "media/products/xps-16-1.webp",
     "photographer": "Dell",
     "profileUrl": "https://i.dell.com",
-    "sourceUrl": "https://i.dell.com/assetlink/img/global/dell-monitor-and-laptop-setup-in-modern-office-environment-dl2odj-original.jpg?wid=864&hei=648",
+    "sourceUrl": "https://i.dell.com/assetlink/img/global/notebook-da16260-t-gray-mg-1-dl12pds3-large.png",
     "source": "i.dell.com",
-    "licence": "© Dell, official product image — demonstration use, retrieved 2026-09-19"
+    "licence": "© Dell, official product image — demonstration use, retrieved 2026-09-20"
   },
   {
     "file": "media/products/xps-16-2.webp",
@@ -1410,16 +1482,16 @@
   {
     "file": "media/products/zenbook-duo-3.webp",
     "photographer": "Onur Binay",
-    "profileUrl": "https://unsplash.com/photos/black-laptop-computer-turned-on-displaying-green-and-yellow-lights-Xj98BB8IHJk",
-    "sourceUrl": "https://unsplash.com/photos/black-laptop-computer-turned-on-displaying-green-and-yellow-lights-Xj98BB8IHJk",
+    "profileUrl": "https://unsplash.com/photos/black-laptop-computer-on-brown-wooden-table-60x59t9fA-o",
+    "sourceUrl": "https://unsplash.com/photos/black-laptop-computer-on-brown-wooden-table-60x59t9fA-o",
     "licence": "Unsplash Licence",
     "source": "Unsplash"
   },
   {
     "file": "media/products/zenbook-duo-4.webp",
-    "photographer": "Behnam Norouzi",
-    "profileUrl": "https://unsplash.com/photos/a-person-typing-on-a-laptop-on-a-desk-mKhPLJ5JQI4",
-    "sourceUrl": "https://unsplash.com/photos/a-person-typing-on-a-laptop-on-a-desk-mKhPLJ5JQI4",
+    "photographer": "Harris Vo",
+    "profileUrl": "https://unsplash.com/photos/black-laptop-computer-on-brown-wooden-table-rNWzd_8rRI4",
+    "sourceUrl": "https://unsplash.com/photos/black-laptop-computer-on-brown-wooden-table-rNWzd_8rRI4",
     "licence": "Unsplash Licence",
     "source": "Unsplash"
   },
@@ -1440,11 +1512,19 @@
     "source": "Wikimedia Commons"
   },
   {
-    "file": "media/products/xps-16-1.webp",
-    "photographer": "Dell",
-    "profileUrl": "https://i.dell.com",
-    "sourceUrl": "https://i.dell.com/assetlink/img/global/notebook-da16260-t-gray-mg-1-dl12pds3-large.png",
-    "source": "i.dell.com",
-    "licence": "© Dell, official product image — demonstration use, retrieved 2026-09-20"
+    "file": "media/products/zenbook-s14-3.webp",
+    "photographer": "Raimond Spekking",
+    "profileUrl": "https://commons.wikimedia.org/wiki/File:Asus_Zenbook_UX31E_-_rear_cover_removed-47521.jpg",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Asus_Zenbook_UX31E_-_rear_cover_removed-47521.jpg",
+    "licence": "CC BY-SA 4.0",
+    "source": "Wikimedia Commons"
+  },
+  {
+    "file": "media/products/zenbook-s14-4.webp",
+    "photographer": "Onur Binay",
+    "profileUrl": "https://unsplash.com/photos/black-and-blue-laptop-computer-_yC2htzMYnI",
+    "sourceUrl": "https://unsplash.com/photos/black-and-blue-laptop-computer-_yC2htzMYnI",
+    "licence": "Unsplash Licence",
+    "source": "Unsplash"
   }
 ]

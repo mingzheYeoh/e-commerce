@@ -15,6 +15,14 @@ const cart = useCartStore()
 const compare = useCompareStore()
 const added = ref(false)
 
+/**
+ * The hover image is gallery[1], which the pipeline does not always find — and
+ * a missing asset does not 404 here, it serves the SPA shell, so the browser
+ * gets HTML where it wanted a picture. Hiding it on error leaves the hero
+ * showing, which is what a card with one photograph should look like.
+ */
+const hoverBroken = ref(false)
+
 const selected = computed(() => compare.has(props.product.id))
 /**
  * Greyed out when the comparison already holds another category, or is full.
@@ -57,8 +65,9 @@ function addToCart() {
         class="absolute inset-0 h-full w-full object-cover transition-opacity duration-500 group-hover:opacity-0"
       />
       <img
-        v-if="product.media.hoverImage"
+        v-if="product.media.hoverImage && !hoverBroken"
         :src="product.media.hoverImage"
+        @error="hoverBroken = true"
         alt=""
         aria-hidden="true"
         width="600"

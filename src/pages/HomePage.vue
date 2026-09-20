@@ -7,7 +7,7 @@ import PromoFeature from '@/components/sections/PromoFeature.vue'
 </script>
 
 <template>
-  <!-- Home sends people onward: one promise, the four departments, a curated
+  <!-- Home sends people onward: one promise, the departments, a curated
        eight, the brand roster, and one feature. Browsing and filtering live on
        /shop; the teardown lives on the product page. -->
   <HeroViewport />

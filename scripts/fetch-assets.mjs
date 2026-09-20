@@ -111,10 +111,24 @@ const BRANDS = [
   { slug: 'nothing', query: 'transparent electronics minimal' },
   { slug: 'keychron', query: 'custom keyboard keycaps' },
   { slug: 'teenage-engineering', query: 'synthesizer module studio' },
+  // Added with the phones and laptop brands, and missed here for the same
+  // reason the phones category was: a brand is added to the data, and nothing
+  // fails when its picture never arrives.
+  { slug: 'google', query: 'smartphone android minimal dark' },
+  { slug: 'oneplus', query: 'smartphone display macro dark' },
+  { slug: 'xiaomi', query: 'phone screen close up night' },
+  { slug: 'dell', query: 'laptop workstation desk dark' },
+  { slug: 'lenovo', query: 'business laptop keyboard dark' },
+  { slug: 'asus', query: 'thin laptop aluminium dark' },
 ]
 
 /** Category bento cards: <id>.webp */
 const CATEGORIES = [
+  // Added late, with the phones category itself — and missed here, so the card
+  // rendered blank for a week. The SPA fallback hid it: a missing asset does
+  // not 404, it serves index.html, and the browser reports a broken image with
+  // no clue why.
+  { slug: 'phones', query: 'smartphone dark background', targetLuma: 30 },
   { slug: 'audio', query: 'recording studio mixing desk dark' },
   { slug: 'peripherals', query: 'mechanical keyboard backlit dark' },
   { slug: 'imaging', query: 'drone aerial camera technology' },
@@ -206,6 +220,20 @@ async function ensureDir(dir) {
 }
 
 /**
+ * Unsplash+ results, which are paid and come back stamped.
+ *
+ * The free download of a premium photo is a preview with "Unsplash+" tiled
+ * across the whole frame. It passes every check this pipeline makes — right
+ * subject, right dimensions, right darkness — and is only obvious to a human
+ * looking at it, which is how one shipped as the phones category card.
+ *
+ * Three independent markers, because one flag going missing should not put a
+ * watermark back on the site.
+ */
+const isPlus = (r) =>
+  Boolean(r?.plus) || Boolean(r?.premium) || String(r?.urls?.raw ?? '').includes('premium_photo')
+
+/**
  * Unsplash's public search endpoint. No API key required.
  * Returns results sorted by likes, highest first.
  */
@@ -218,7 +246,7 @@ async function searchUnsplash(query) {
   })
   if (!res.ok) throw new Error(`unsplash search ${res.status}`)
   const json = await res.json()
-  const results = (json.results ?? []).filter((r) => r?.urls?.raw)
+  const results = (json.results ?? []).filter((r) => r?.urls?.raw && !isPlus(r))
   if (!results.length) throw new Error('no results')
   return results.sort((a, b) => (b.likes ?? 0) - (a.likes ?? 0))
 }
