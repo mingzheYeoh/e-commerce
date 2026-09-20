@@ -49,7 +49,12 @@ Two fields that must agree are two fields that can disagree.
 
 ## What the table shows
 
-Universal rows: price, brand, rating. Then rows chosen per category:
+Universal rows first — price, brand, rating, **review count, availability and
+colourways**. The review count sits directly under the rating because 4.8 from
+twelve reviews and 4.8 from two thousand are the same number and not the same
+claim.
+
+Then rows chosen per category:
 
 | Category | Rows |
 |---|---|
@@ -61,6 +66,11 @@ Universal rows: price, brand, rating. Then rows chosen per category:
 
 Typed as `Record<CategoryId, Row[]>` so adding a category without giving it rows
 is a compile error, the way `CATEGORY_WORDS` already is.
+
+Then the identity rows the catalogue holds — **highlights, badge and SKU** —
+below the specifications, because they name the product rather than describe it.
+Of all of these only price and rating carry a direction: availability is a fact
+about today's warehouse, and 48 units in stock is not better than 11.
 
 **Then every specification line any of the products publishes, verbatim,** under
 an "All published specifications" heading. Curated rows alone were the first
@@ -142,6 +152,10 @@ The tray hides itself on `/compare`, where it would duplicate the page.
 7. The price row picks the lowest as winner; the rating row picks the highest.
 8. The screen-size row has no winner at all.
 9. A row whose values are all equal has no winner.
+10. The review count follows the rating and is never crowned.
+11. An out-of-stock product reads "Out of stock", not "0 left".
+12. A product without a badge renders `—` rather than an invented one.
+13. Identity rows sit below the specifications.
 
 ## Deliberately not included
 

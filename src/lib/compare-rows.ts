@@ -38,10 +38,54 @@ export interface CompareRow {
 
 const list = (xs: string[]) => (xs.length ? xs.join(', ') : null)
 
+const BADGES: Record<NonNullable<Product['badge']>, string> = {
+  NEW_DROP: 'New drop',
+  LIMITED_EDITION: 'Limited edition',
+  DISCOUNT: 'On offer',
+}
+
+/**
+ * Everything the catalogue holds that is not a spec line.
+ *
+ * Only price and rating carry a direction. The rest are facts about the listing
+ * rather than the product:
+ *
+ * - Review count qualifies the rating rather than competing with it, and is here
+ *   directly under it because 4.8 from twelve reviews and 4.8 from two thousand
+ *   are the same number and not the same claim.
+ * - Availability is a fact about today's warehouse. A tick beside "In stock"
+ *   would read as a verdict on the product, and 48 units is not better than 11.
+ * - Colours, badge and SKU rank against nothing at all.
+ */
 const UNIVERSAL: CompareRow[] = [
   { label: 'Price', get: (p) => p.price, money: true, direction: 'lower' },
   { label: 'Brand', get: (p) => brandName(p.brand), direction: null },
   { label: 'Rating', get: (p) => p.rating, unit: ' / 5', direction: 'higher' },
+  {
+    label: 'Reviews',
+    get: (p) => (p.reviewCount ? p.reviewCount.toLocaleString('en-US') : null),
+    direction: null,
+  },
+  {
+    label: 'Availability',
+    get: (p) => (p.inStock ? `In stock · ${p.stockCount} left` : 'Out of stock'),
+    direction: null,
+  },
+  {
+    label: 'Colours',
+    get: (p) => list(p.colorways.map((c) => c.name)),
+    direction: null,
+  },
+]
+
+/**
+ * Listing detail, kept below the specifications because it identifies the
+ * product rather than describing it.
+ */
+const UNIVERSAL_TAIL: CompareRow[] = [
+  { label: 'Highlights', get: (p) => list(p.specsSummary), direction: null },
+  { label: 'Badge', get: (p) => (p.badge ? BADGES[p.badge] : null), direction: null },
+  { label: 'SKU', get: (p) => p.sku, direction: null },
 ]
 
 const SCREEN: CompareRow = {
@@ -184,7 +228,7 @@ const render = (
  */
 function measuredRows(items: Product[]): RenderedRow[] {
   const facts = items.map(extractFacts)
-  return [...UNIVERSAL, ...BY_CATEGORY[items[0].category]].flatMap((row) => {
+  return [...UNIVERSAL, ...BY_CATEGORY[items[0].category], ...UNIVERSAL_TAIL].flatMap((row) => {
     const values = items.map((p, i) => row.get(p, facts[i]))
     if (values.every((v) => v === null)) return []
     return [render(row.label, values, { group: 'measured', unit: row.unit, money: row.money, direction: row.direction })]

@@ -35,8 +35,10 @@ describe('buildRows', () => {
   })
 
   it('declares no winner on a row where every column agrees', () => {
+    // Identical in everything the table shows, including the sku — which is a
+    // row now, and a product that differs there differs, correctly.
     const one = byId('iphone-18-pro')
-    const rows = buildRows([one, { ...one, id: 'clone', sku: 'CLONE' } as Product])
+    const rows = buildRows([one, { ...one, id: 'clone' } as Product])
     for (const r of rows) {
       expect(r.cells.every((c) => !c.best), `${r.label} should have no winner`).toBe(true)
       expect(r.same).toBe(true)
@@ -84,9 +86,17 @@ describe('buildRows', () => {
     // empty comparison.
     for (const category of ['phones', 'computing', 'audio', 'imaging', 'peripherals'] as const) {
       const items = products.filter((p) => p.category === category).slice(0, 3)
-      const rows = buildRows(items)
-      const specRows = rows.filter((r) => !['Price', 'Brand', 'Rating'].includes(r.label))
-      expect(specRows.length, `${category} resolved no spec rows`).toBeGreaterThan(0)
+      // Named per category rather than "anything that is not universal", so the
+      // guard keeps its teeth as universal rows are added.
+      const expected: Record<string, string> = {
+        phones: 'Refresh rate',
+        computing: 'Memory',
+        audio: 'Battery life',
+        imaging: 'Main camera',
+        peripherals: 'Battery life',
+      }
+      const labels = buildRows(items).map((r) => r.label)
+      expect(labels, `${category} resolved no category rows`).toContain(expected[category])
     }
   })
 
@@ -163,5 +173,57 @@ describe('the published-spec union', () => {
     const storage = rows.filter((r) => r.label.toLowerCase() === 'storage')
     expect(storage.length).toBeGreaterThan(1)
     expect(new Set(storage.map((r) => r.group))).toEqual(new Set(['measured', 'spec']))
+  })
+})
+
+describe('the rest of the catalogue record', () => {
+  const items = products.filter((p) => p.category === 'phones').slice(0, 3)
+  const measured = (label: string) => buildRows(items).find((r) => r.label === label)!
+
+  it('puts the review count directly under the rating, with no verdict', () => {
+    // 4.8 from twelve reviews and 4.8 from two thousand are the same number and
+    // not the same claim, so the count sits where it qualifies the score. More
+    // reviews is not a better product, so nothing is crowned.
+    const labels = buildRows(items).map((r) => r.label)
+    expect(labels.indexOf('Reviews')).toBe(labels.indexOf('Rating') + 1)
+    expect(measured('Reviews').cells.every((c) => !c.best)).toBe(true)
+    expect(measured('Reviews').cells[0].value).toMatch(/^[\d,]+$/)
+  })
+
+  it('states availability without ranking it', () => {
+    // A tick beside "In stock" would read as a verdict on the product, and 48
+    // units in a warehouse is not better than 11.
+    const row = measured('Availability')
+    expect(row.cells.every((c) => !c.best)).toBe(true)
+    expect(String(row.cells[0].value)).toMatch(/In stock|Out of stock/)
+  })
+
+  it('reports an out-of-stock product as out of stock, not as zero left', () => {
+    const gone = { ...byId('iphone-18-pro'), id: 'gone', inStock: false, stockCount: 0 } as Product
+    const rows = buildRows([byId('iphone-18-pro'), gone])
+    expect(rows.find((r) => r.label === 'Availability')!.cells[1].value).toBe('Out of stock')
+  })
+
+  it('lists colourways, highlights and the sku', () => {
+    for (const label of ['Colours', 'Highlights', 'SKU']) {
+      const row = measured(label)
+      expect(row.cells.every((c) => c.value !== null), `${label} should resolve`).toBe(true)
+      expect(row.cells.every((c) => !c.best), `${label} cannot be won`).toBe(true)
+    }
+  })
+
+  it('leaves the badge blank rather than inventing one', () => {
+    const plain = { ...byId('iphone-18-pro'), id: 'plain', badge: undefined } as Product
+    const rows = buildRows([byId('iphone-18-pro'), plain])
+    const badge = rows.find((r) => r.label === 'Badge')!
+    expect(badge.cells[0].value).toBe('New drop')
+    expect(badge.cells[1].value).toBeNull()
+  })
+
+  it('keeps identity rows below the specifications they identify', () => {
+    const labels = buildRows(items)
+      .filter((r) => r.group === 'measured')
+      .map((r) => r.label)
+    expect(labels.indexOf('SKU')).toBeGreaterThan(labels.indexOf('Refresh rate'))
   })
 })
