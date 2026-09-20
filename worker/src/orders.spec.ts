@@ -258,6 +258,50 @@ describe('placeOrder addresses', () => {
     expect(orderRow(bare.writes).args).toContain('')
   })
 
+
+  it('refuses a delivery method the destination has no carrier for', async () => {
+    /*
+     * Not just "is this one of the three methods". Overnight is a domestic
+     * service; accepting it for Kuala Lumpur would take $29.95 for a delivery
+     * nobody has agreed to make, and the UI does not even offer it.
+     */
+    const { env, writes } = fakeD1()
+    const res = await placeOrder(
+      env,
+      payload({
+        address: { ...payload().address, country: 'MY', state: 'SGR', postal: '50450' } as never,
+        method: 'overnight',
+      }),
+    )
+    expect(res.status).toBe(400)
+    expect((res.body as { error: string }).error).toMatch(/not available to Malaysia/)
+    expect(writes).toHaveLength(0)
+  })
+
+  it('charges the destination its own delivery rate', async () => {
+    // One flat table billed $8.95 to send a laptop across town and $8.95 to
+    // send it to Kuala Lumpur.
+    // Under the $75 domestic free-delivery bar, so both legs are actually
+    // charged and the comparison is between two prices rather than two zeros.
+    const cheap = products.find((p) => Math.round(p.price * 100) < 7500)!
+    const line = { sku: cheap.sku, qty: 1 }
+    const home = fakeD1()
+    const away = fakeD1()
+
+    const us = await placeOrder(home.env, payload({ lines: [line] }))
+    const my = await placeOrder(
+      away.env,
+      payload({
+        address: { ...payload().address, country: 'MY', state: 'SGR', postal: '50450' } as never,
+        lines: [line],
+      }),
+    )
+
+    const cents = Math.round(cheap.price * 100)
+    expect((us.body as { total: number }).total).toBe(cents + 895)
+    expect((my.body as { total: number }).total).toBe(cents + 2695 + Math.round(cents * 0.08))
+  })
+
   it('refuses a phone number that cannot be one', async () => {
     const { env } = fakeD1()
     expect((await placeOrder(env, at({ phone: 'call me maybe' }))).status).toBe(400)

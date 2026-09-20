@@ -3,6 +3,7 @@ import { useCartStore, type CartLine } from './cart'
 import { charge } from '@/lib/payment'
 import { totalCents, type OrderTotals, type ShipMethod } from '@/lib/money'
 import { findCountry, validSubdivision, validPostal, validPhone } from '@/lib/regions'
+import { methodAvailable, defaultMethodFor } from '@/lib/shipping'
 import { saveOrder, fetchOrder } from '@/lib/api'
 import { products } from '@/data/products'
 import { useUiStore } from './ui'
@@ -136,7 +137,9 @@ export const useCheckoutStore = defineStore('checkout', {
           validPostal(a.country, a.postal)
         )
       }
-      if (step === 2) return Boolean(this.method)
+      // Not just "a method is selected" — it has to be one this destination
+      // actually has, which a change of country can invalidate.
+      if (step === 2) return methodAvailable(this.method, a.country)
       return this.card.number.replace(/[\s-]/g, '').length >= 12
     },
 
@@ -160,6 +163,11 @@ export const useCheckoutStore = defineStore('checkout', {
       this.address.country = code
       this.address.state = ''
       this.address.postal = ''
+
+      // The delivery method belongs to the old destination too. Overnight is a
+      // US service; carried into Malaysia it would bill $29.95 for something
+      // no carrier runs.
+      if (!methodAvailable(this.method, code)) this.method = defaultMethodFor(code)
     },
 
     goTo(step: 1 | 2 | 3) {

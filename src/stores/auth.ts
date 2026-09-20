@@ -4,6 +4,7 @@ import {
   registerAccount,
   signIn,
   signOut,
+  confirmEmail,
   type Account,
 } from '@/lib/api'
 
@@ -51,6 +52,8 @@ export const useAuthStore = defineStore('auth', {
     status: 'unknown' as 'unknown' | 'in' | 'out',
     busy: false,
     error: '',
+    /** Set after a registration: what to tell them to go and do. */
+    notice: '',
   }),
 
   getters: {
@@ -78,10 +81,33 @@ export const useAuthStore = defineStore('auth', {
       hint.write(this.hintName)
     },
 
+    /**
+     * Registering does not sign anyone in.
+     *
+     * The account is not usable until the link in the email is clicked, which
+     * is what makes the address verified rather than merely typed. So this
+     * leaves a notice rather than a session.
+     */
     async register(name: string, email: string, password: string): Promise<boolean> {
       this.busy = true
       this.error = ''
+      this.notice = ''
       const result = await registerAccount(name, email, password)
+      this.busy = false
+
+      if (!result.ok) {
+        this.error = result.error
+        return false
+      }
+      this.notice = result.message
+      return true
+    },
+
+    /** Redeems a verification link, which does sign them in. */
+    async confirm(token: string): Promise<boolean> {
+      this.busy = true
+      this.error = ''
+      const result = await confirmEmail(token)
       this.busy = false
 
       if (!result.ok) {
@@ -95,6 +121,7 @@ export const useAuthStore = defineStore('auth', {
     async login(email: string, password: string): Promise<boolean> {
       this.busy = true
       this.error = ''
+      this.notice = ''
       const result = await signIn(email, password)
       this.busy = false
 
