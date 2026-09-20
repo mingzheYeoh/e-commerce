@@ -21,6 +21,8 @@ export interface OrdersEnv {
 /** sku -> price in cents, built once per isolate rather than per request. */
 const PRICE_BY_SKU = new Map(products.map((p) => [p.sku, Math.round(p.price * 100)]))
 const TITLE_BY_SKU = new Map(products.map((p) => [p.sku, p.title]))
+/** sku -> the finishes that product is actually sold in. */
+const FINISHES_BY_SKU = new Map(products.map((p) => [p.sku, new Set(p.colorways.map((c) => c.name))]))
 
 const PAYMENT_CODES = ['succeeded', 'card_declined', 'insufficient_funds', 'expired_card'] as const
 type PaymentCode = (typeof PAYMENT_CODES)[number]
@@ -29,7 +31,7 @@ export interface OrderPayload {
   id: string
   address: { name: string; email: string; line1: string; city: string; state: string; postal: string }
   method: string
-  lines: { sku: string; qty: number }[]
+  lines: { sku: string; qty: number; finish?: string }[]
   paymentCode: string
   currency?: string
 }
@@ -88,19 +90,34 @@ export async function placeOrder(env: OrdersEnv, body: unknown): Promise<PlaceRe
   // Resolve each line against the catalogue. An unknown sku is refused rather
   // than stored at whatever price the caller suggested.
   const seen = new Set<string>()
-  const lines: { sku: string; title: string; qty: number; unit: number }[] = []
+  const lines: { sku: string; title: string; qty: number; unit: number; finish: string }[] = []
   for (const raw of p.lines) {
     const sku = str(raw?.sku, 40)
     const unit = sku ? PRICE_BY_SKU.get(sku) : undefined
     if (!sku || unit === undefined) return { status: 400, body: { error: 'unknown sku' } }
-    if (seen.has(sku)) return { status: 400, body: { error: 'duplicate sku' } }
-    seen.add(sku)
+
+    /*
+     * Checked against that product's own colourways, not accepted as written.
+     * Refused rather than quietly dropped: a finish the server does not
+     * recognise means the basket and the catalogue disagree, and silently
+     * forgetting it is how a shopper receives the wrong colour.
+     */
+    const finish = raw?.finish === undefined || raw?.finish === null ? '' : str(raw.finish, 60)
+    if (finish === null) return { status: 400, body: { error: 'bad finish' } }
+    if (finish && !FINISHES_BY_SKU.get(sku)?.has(finish)) {
+      return { status: 400, body: { error: 'unknown finish' } }
+    }
+
+    // Two finishes of one product are two lines; the same one twice is not.
+    const key = `${sku}|${finish}`
+    if (seen.has(key)) return { status: 400, body: { error: 'duplicate line' } }
+    seen.add(key)
 
     const qty = raw?.qty
     if (!Number.isInteger(qty) || (qty as number) < 1 || (qty as number) > 99) {
       return { status: 400, body: { error: 'bad quantity' } }
     }
-    lines.push({ sku, title: TITLE_BY_SKU.get(sku)!, qty: qty as number, unit })
+    lines.push({ sku, title: TITLE_BY_SKU.get(sku)!, qty: qty as number, unit, finish })
   }
 
   const subtotal = lines.reduce((sum, l) => sum + l.unit * l.qty, 0)
@@ -134,8 +151,9 @@ export async function placeOrder(env: OrdersEnv, body: unknown): Promise<PlaceRe
       ),
       ...lines.map((l) =>
         env.ORDERS.prepare(
-          `INSERT INTO order_lines (order_id, sku, title, qty, unit_price_cents) VALUES (?1,?2,?3,?4,?5)`,
-        ).bind(id, l.sku, l.title, l.qty, l.unit),
+          `INSERT INTO order_lines (order_id, sku, title, qty, unit_price_cents, variant)
+           VALUES (?1,?2,?3,?4,?5,?6)`,
+        ).bind(id, l.sku, l.title, l.qty, l.unit, l.finish),
       ),
     ])
   } catch (err) {
@@ -159,7 +177,7 @@ export interface StoredOrder {
   currency: string
   totals: { subtotal: number; shipping: number; tax: number; total: number }
   paymentCode: string
-  lines: { sku: string; title: string; qty: number; unitPriceCents: number }[]
+  lines: { sku: string; title: string; qty: number; unitPriceCents: number; finish?: string }[]
 }
 
 /**
@@ -192,10 +210,10 @@ export async function getOrder(env: OrdersEnv, id: string): Promise<StoredOrder 
   if (!row) return null
 
   const { results } = await env.ORDERS.prepare(
-    `SELECT sku, title, qty, unit_price_cents FROM order_lines WHERE order_id = ?1`,
+    `SELECT sku, title, qty, unit_price_cents, variant FROM order_lines WHERE order_id = ?1`,
   )
     .bind(id)
-    .all<{ sku: string; title: string; qty: number; unit_price_cents: number }>()
+    .all<{ sku: string; title: string; qty: number; unit_price_cents: number; variant: string }>()
 
   return {
     id: row.id,
@@ -222,6 +240,9 @@ export async function getOrder(env: OrdersEnv, id: string): Promise<StoredOrder 
       title: l.title,
       qty: l.qty,
       unitPriceCents: l.unit_price_cents,
+      // Empty string is the storage shape for "no choice offered"; undefined is
+      // what the rest of the app means by it.
+      finish: l.variant || undefined,
     })),
   }
 }

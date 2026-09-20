@@ -2,7 +2,7 @@
 import { computed, ref, toRef } from 'vue'
 import { X, Minus, Plus, Trash2, Lock } from 'lucide-vue-next'
 import { useRouter } from 'vue-router'
-import { useCartStore } from '@/stores/cart'
+import { useCartStore, lineKey } from '@/stores/cart'
 import { useCurrency } from '@/composables/useCurrency'
 import { SHIPPING } from '@/lib/money'
 import { useFocusTrap } from '@/composables/useFocusTrap'
@@ -98,7 +98,7 @@ const progress = computed(() =>
           </div>
 
           <ul v-else class="divide-y divide-border-hairline">
-            <li v-for="line in cart.items" :key="line.sku" class="flex gap-4 px-5 py-4">
+            <li v-for="line in cart.items" :key="lineKey(line)" class="flex gap-4 px-5 py-4">
               <img
                 :src="line.thumb"
                 :alt="line.title"
@@ -113,6 +113,7 @@ const progress = computed(() =>
                 <p class="text-xs text-text-secondary">{{ brandName(line.brand) }}</p>
                 <p class="truncate text-sm font-medium">{{ line.title }}</p>
                 <p class="code mt-0.5">{{ line.sku }}</p>
+                <p v-if="line.finish" class="mt-0.5 text-xs text-text-secondary">{{ line.finish }}</p>
 
                 <div class="mt-2.5 flex items-center justify-between">
                   <div class="flex items-center rounded border border-border-hairline">
@@ -120,7 +121,7 @@ const progress = computed(() =>
                       type="button"
                       class="rounded-l px-2 py-1 text-text-secondary transition-colors hover:bg-surface-2 hover:text-text-primary"
                       :aria-label="`Decrease quantity of ${line.title}`"
-                      @click="cart.setQty(line.sku, line.qty - 1)"
+                      @click="cart.setQty(lineKey(line), line.qty - 1)"
                     >
                       <Minus class="h-3.5 w-3.5" aria-hidden="true" />
                     </button>
@@ -130,7 +131,7 @@ const progress = computed(() =>
                       class="rounded-r px-2 py-1 text-text-secondary transition-colors hover:bg-surface-2 hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-30"
                       :disabled="line.qty >= line.stockCount"
                       :aria-label="`Increase quantity of ${line.title}`"
-                      @click="cart.setQty(line.sku, line.qty + 1)"
+                      @click="cart.setQty(lineKey(line), line.qty + 1)"
                     >
                       <Plus class="h-3.5 w-3.5" aria-hidden="true" />
                     </button>
@@ -144,7 +145,7 @@ const progress = computed(() =>
                       type="button"
                       class="rounded p-1 text-text-muted transition-colors hover:text-accent-amber"
                       :aria-label="`Remove ${line.title}`"
-                      @click="cart.remove(line.sku)"
+                      @click="cart.remove(lineKey(line))"
                     >
                       <Trash2 class="h-4 w-4" aria-hidden="true" />
                     </button>

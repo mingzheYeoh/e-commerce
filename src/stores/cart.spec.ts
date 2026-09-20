@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
-import { useCartStore } from './cart'
+import { useCartStore, lineKey } from './cart'
 import { products } from '@/data/products'
 
 const anyProduct = products[0]
@@ -79,5 +79,56 @@ describe('cart store', () => {
     cart.remove(anyProduct.sku)
     expect(cart.items).toHaveLength(0)
     expect(cart.subtotalCents).toBe(0)
+  })
+})
+
+describe('finishes', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    localStorage.clear()
+  })
+
+  const multi = () => products.find((p) => p.inStock && p.colorways.length > 1)!
+
+  it('keeps two finishes of one product as two lines', () => {
+    // They are different things to ship. Keyed on sku alone the second one
+    // silently becomes more of the first.
+    const cart = useCartStore()
+    const p = multi()
+    cart.add(p, 1, p.colorways[0].name)
+    cart.add(p, 1, p.colorways[1].name)
+    expect(cart.items).toHaveLength(2)
+    expect(cart.items.map((l) => l.finish)).toEqual([p.colorways[0].name, p.colorways[1].name])
+  })
+
+  it('merges a repeat of the same finish', () => {
+    const cart = useCartStore()
+    const p = multi()
+    cart.add(p, 1, p.colorways[0].name)
+    cart.add(p, 2, p.colorways[0].name)
+    expect(cart.items).toHaveLength(1)
+    expect(cart.items[0].qty).toBe(3)
+  })
+
+  it('ignores a finish the product is not sold in', () => {
+    // The order endpoint refuses one too. Catching it here means the basket
+    // never holds something the checkout will later reject.
+    const cart = useCartStore()
+    cart.add(multi(), 1, 'Chartreuse')
+    expect(cart.items[0].finish).toBeUndefined()
+  })
+
+  it('addresses the right line when two finishes share a sku', () => {
+    const cart = useCartStore()
+    const p = multi()
+    cart.add(p, 1, p.colorways[0].name)
+    cart.add(p, 5, p.colorways[1].name)
+
+    cart.remove(lineKey({ sku: p.sku, finish: p.colorways[0].name }))
+    expect(cart.items).toHaveLength(1)
+    expect(cart.items[0].finish).toBe(p.colorways[1].name)
+
+    cart.setQty(lineKey(cart.items[0]), 2)
+    expect(cart.items[0].qty).toBe(2)
   })
 })
