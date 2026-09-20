@@ -365,3 +365,66 @@ describe('delivery addresses beyond the United States', () => {
     expect(checkout.stepValid(1)).toBe(false)
   })
 })
+
+describe('delivery methods follow the destination', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    localStorage.clear()
+  })
+
+  it('drops a method the new country has no carrier for', () => {
+    // Overnight is a US service. Carried into Malaysia it would have billed
+    // $29.95 for a delivery nobody runs.
+    const checkout = useCheckoutStore()
+    fill(checkout)
+    checkout.method = 'overnight'
+
+    checkout.setCountry('MY')
+    expect(checkout.method).toBe('standard')
+    expect(checkout.stepValid(2)).toBe(true)
+  })
+
+  it('keeps a method the new country does have', () => {
+    const checkout = useCheckoutStore()
+    fill(checkout)
+    checkout.method = 'express'
+    checkout.setCountry('GB')
+    expect(checkout.method).toBe('express')
+  })
+
+  it('refuses to leave the shipping step on a method the address cannot use', () => {
+    // Reachable by a store rehydrated from an older session, or a country
+    // changed from somewhere other than setCountry.
+    const checkout = useCheckoutStore()
+    fill(checkout)
+    checkout.address.country = 'MY'
+    checkout.method = 'overnight'
+    expect(checkout.stepValid(2)).toBe(false)
+  })
+
+  it('charges the destination its own delivery rate', () => {
+    const cart = useCartStore()
+    const checkout = useCheckoutStore()
+    cart.add(inStock())
+    fill(checkout)
+
+    // A basket over $75 ships free in the US and not to Kuala Lumpur, where
+    // the bar is $250 and the carrier charge is three times as large.
+    expect(checkout.totals.shipping).toBe(0)
+    checkout.setCountry('MY')
+    checkout.address.state = 'SGR'
+    checkout.address.postal = '50450'
+    expect(checkout.totals.shipping).toBe(0) // still over the APAC bar
+  })
+
+  it('bills international delivery on a basket that would ship free at home', () => {
+    const cart = useCartStore()
+    const checkout = useCheckoutStore()
+    const cheap = products.find((p) => p.inStock && p.price * 100 < 15000)!
+    cart.add(cheap)
+    fill(checkout)
+
+    checkout.setCountry('MY')
+    expect(checkout.totals.shipping).toBeGreaterThan(0)
+  })
+})

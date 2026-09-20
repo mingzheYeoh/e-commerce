@@ -7,7 +7,8 @@
  * most common reason a basket is abandoned.
  */
 import { computed } from 'vue'
-import { SHIPPING, taxRate, taxLabel, TAX_POLICY, type ShipMethod } from '@/lib/money'
+import { taxRate, taxLabel, TAX_POLICY, type ShipMethod } from '@/lib/money'
+import { rateFor, isInternational } from '@/lib/shipping'
 import { findCountry } from '@/lib/regions'
 import { useCurrency } from '@/composables/useCurrency'
 import { lineKey, type CartLine } from '@/stores/cart'
@@ -24,12 +25,25 @@ const props = defineProps<{
 const { format } = useCurrency()
 
 const shippingNote = computed(() => {
-  const option = SHIPPING[props.method]
-  if (props.totals.shipping === 0 && option.freeAbove !== undefined) {
-    return `Free over ${format(option.freeAbove)}`
+  const rate = rateFor(props.method, props.country ?? '')
+  // A method the destination has no carrier for. The wizard resets the choice,
+  // but the summary renders first and should not quote a transit time for a
+  // service nobody runs.
+  if (!rate) return 'Not available to this address'
+  if (props.totals.shipping === 0 && rate.freeAbove !== undefined) {
+    return `Free over ${format(rate.freeAbove)}`
   }
-  return option.transit
+  return rate.transit
 })
+
+/**
+ * Duty paid at checkout rather than on the doorstep.
+ *
+ * The store collects the destination's VAT or GST up front, which is what
+ * "delivered duty paid" means. Worth one line, because the alternative most
+ * shoppers have been burned by is a courier asking for money on delivery.
+ */
+const dutiesPaid = computed(() => isInternational(props.country ?? ''))
 
 /**
  * The tax line names its own authority, not just its rate.
@@ -109,5 +123,12 @@ const taxNote = computed(() => {
       <span class="font-semibold">Total</span>
       <span class="nums text-xl font-bold">{{ format(totals.total) }}</span>
     </div>
+
+    <!-- Not lower-cased: every label here but one is an acronym, and "Duties
+         and sst are paid at checkout" is what lower-casing them produces. -->
+    <p v-if="dutiesPaid" class="mt-3 text-xs text-text-muted">
+      Duties and {{ taxTitle }} are paid at checkout. Nothing further is owed to the carrier on
+      delivery.
+    </p>
   </aside>
 </template>

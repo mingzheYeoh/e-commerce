@@ -10,7 +10,8 @@ import { computed, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import { CheckCircle2, Package } from 'lucide-vue-next'
 import { useCheckoutStore, type Order } from '@/stores/checkout'
-import { SHIPPING } from '@/lib/money'
+import { SHIP_METHODS } from '@/lib/money'
+import { rateFor } from '@/lib/shipping'
 import { findCountry } from '@/lib/regions'
 import OrderSummary from '@/components/checkout/OrderSummary.vue'
 import NotFoundPage from './NotFoundPage.vue'
@@ -87,7 +88,7 @@ const placedOn = computed(() =>
           </div>
           <div class="rounded-card border border-border-hairline bg-surface-1 p-4">
             <p class="text-xs text-text-secondary">Delivery</p>
-            <p class="mt-1 text-sm font-medium">{{ SHIPPING[order.method].label }}</p>
+            <p class="mt-1 text-sm font-medium">{{ SHIP_METHODS[order.method].label }}</p>
           </div>
         </div>
 
@@ -113,7 +114,10 @@ const placedOn = computed(() =>
               </template>
             </address>
             <p class="mt-4 border-t border-border-hairline pt-4 text-sm text-text-secondary">
-              {{ SHIPPING[order.method].label }} · {{ SHIPPING[order.method].transit }}
+              {{ SHIP_METHODS[order.method].label }}
+              <template v-if="rateFor(order.method, order.address.country)">
+                · {{ rateFor(order.method, order.address.country)!.transit }}
+              </template>
             </p>
           </div>
 

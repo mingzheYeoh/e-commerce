@@ -12,7 +12,8 @@
  * MacBook gets an order for the real price, not an argument.
  */
 import { products } from '../../src/data/products'
-import { SHIPPING, totalCents, type ShipMethod } from '../../src/lib/money'
+import { totalCents, type ShipMethod } from '../../src/lib/money'
+import { methodAvailable } from '../../src/lib/shipping'
 import {
   findCountry,
   validSubdivision,
@@ -83,8 +84,10 @@ export async function placeOrder(
   // choose one that looks like someone else's.
   if (!id || !/^NX-[A-HJ-NP-Z2-9]{5}$/.test(id)) return { status: 400, body: { error: 'bad order id' } }
 
+  // Whether this method exists at all. Whether it runs to *this* address is
+  // checked below, once the country is known.
   const method = str(p.method, 20)
-  if (!method || !(method in SHIPPING)) return { status: 400, body: { error: 'bad shipping method' } }
+  if (!method) return { status: 400, body: { error: 'bad shipping method' } }
 
   const paymentCode = str(p.paymentCode, 40)
   if (!paymentCode || !PAYMENT_CODES.includes(paymentCode as PaymentCode)) {
@@ -116,6 +119,16 @@ export async function placeOrder(
    */
   const country = findCountry(str(a.country, 2) ?? '')
   if (!country) return { status: 400, body: { error: 'we do not ship there' } }
+
+  /*
+   * And the method has to be one a carrier runs to that country. Checked here
+   * rather than against a flat list of three: Overnight is a domestic service,
+   * and accepting it for Kuala Lumpur would take $29.95 for a delivery nobody
+   * has agreed to make.
+   */
+  if (!methodAvailable(method, country.code)) {
+    return { status: 400, body: { error: `${method} is not available to ${country.name}` } }
+  }
 
   // Empty is the right answer for a country with no subdivisions, so this is
   // not `str`, which treats an empty string as missing.

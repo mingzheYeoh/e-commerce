@@ -251,11 +251,44 @@ async function post(path: string, body: unknown): Promise<AuthResult> {
   }
 }
 
-export const registerAccount = (name: string, email: string, password: string) =>
-  post('/api/auth/register', { name, email, password })
+export type RegisterResult =
+  | { ok: true; message: string }
+  | { ok: false; error: string }
+
+/**
+ * Registration does not sign anyone in, and does not say whether the address
+ * was already taken.
+ *
+ * Both follow from the same decision: which of the two happened is told only
+ * to the inbox that owns the address. So this returns a message to show, not a
+ * user — there is no user yet as far as this browser is allowed to know.
+ */
+export async function registerAccount(
+  name: string,
+  email: string,
+  password: string,
+): Promise<RegisterResult> {
+  try {
+    const res = await fetch(`${BASE}/api/auth/register`, {
+      ...credentialled,
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ name, email, password }),
+      signal: AbortSignal.timeout(20_000),
+    })
+    const data = (await res.json().catch(() => ({}))) as { message?: string; error?: string }
+    if (!res.ok) return { ok: false, error: data.error ?? 'Something went wrong. Try again.' }
+    return { ok: true, message: data.message ?? 'Check your email to finish signing in.' }
+  } catch {
+    return { ok: false, error: 'Could not reach the server. Check your connection.' }
+  }
+}
 
 export const signIn = (email: string, password: string) =>
   post('/api/auth/login', { email, password })
+
+/** Redeems the link from a verification email, which also signs the user in. */
+export const confirmEmail = (token: string) => post('/api/auth/verify', { token })
 
 export async function signOut(): Promise<void> {
   try {

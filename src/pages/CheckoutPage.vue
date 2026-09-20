@@ -14,7 +14,7 @@ import { useCartStore } from '@/stores/cart'
 import { useAuthStore } from '@/stores/auth'
 import { useCheckoutStore } from '@/stores/checkout'
 import { useCurrency } from '@/composables/useCurrency'
-import { SHIPPING, type ShipMethod } from '@/lib/money'
+import { methodsFor } from '@/lib/shipping'
 import { COUNTRIES, findCountry } from '@/lib/regions'
 import OrderSummary from '@/components/checkout/OrderSummary.vue'
 
@@ -30,7 +30,12 @@ const STEPS = [
   { n: 3 as const, label: 'Payment' },
 ]
 
-const METHODS = Object.entries(SHIPPING) as [ShipMethod, (typeof SHIPPING)[ShipMethod]][]
+/**
+ * Only what a carrier actually runs to this address. Overnight exists in the
+ * United States and nowhere else, so it disappears rather than being offered
+ * and then refused by the order endpoint.
+ */
+const methods = computed(() => methodsFor(checkout.address.country))
 
 /**
  * The destination's own rules: what its subdivisions are called and are, and
@@ -203,23 +208,26 @@ async function place() {
           <!-- 2. Shipping -->
           <form v-else-if="checkout.step === 2" class="space-y-4" @submit.prevent="checkout.next()">
             <h2 class="font-semibold">How fast?</h2>
+            <p class="text-xs text-text-secondary">
+              To {{ country?.name }}. Rates and transit times are for this destination.
+            </p>
             <div class="space-y-2">
               <label
-                v-for="[id, option] in METHODS"
-                :key="id"
+                v-for="option in methods"
+                :key="option.id"
                 class="flex cursor-pointer items-center gap-3 rounded border p-3.5 transition-colors"
-                :class="checkout.method === id ? 'border-accent bg-accent/5' : 'border-border-hairline hover:border-border-strong'"
+                :class="checkout.method === option.id ? 'border-accent bg-accent/5' : 'border-border-hairline hover:border-border-strong'"
               >
-                <input v-model="checkout.method" type="radio" :value="id" class="accent-accent" />
+                <input v-model="checkout.method" type="radio" :value="option.id" class="accent-accent" />
                 <span class="flex-1">
                   <span class="block text-sm font-medium">{{ option.label }}</span>
-                  <span class="block text-xs text-text-secondary">{{ option.transit }}</span>
+                  <span class="block text-xs text-text-secondary">{{ option.rate.transit }}</span>
                 </span>
                 <span class="nums text-sm">
-                  <template v-if="option.freeAbove !== undefined && cart.subtotalCents >= option.freeAbove">
+                  <template v-if="option.rate.freeAbove !== undefined && cart.subtotalCents >= option.rate.freeAbove">
                     <span class="text-accent-green">Free</span>
                   </template>
-                  <template v-else>{{ format(option.cents) }}</template>
+                  <template v-else>{{ format(option.rate.cents) }}</template>
                 </span>
               </label>
             </div>

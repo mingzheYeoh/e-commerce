@@ -57,3 +57,43 @@ describe('the tax line', () => {
     expect(summary({ country: 'US', state: 'OR' }).text()).toContain('US-OR · none due')
   })
 })
+
+describe('the shipping line', () => {
+  // Delivery that was charged, so the note is the transit time rather than the
+  // free-shipping message that replaces it.
+  const charged = { ...totals, shipping: 2695 }
+
+  it('quotes the transit time the destination actually gets', () => {
+    expect(
+      summary({ country: 'US', state: 'OR', method: 'standard', totals: charged }).text(),
+    ).toContain('3–5 business days')
+    expect(
+      summary({ country: 'MY', state: 'SGR', method: 'standard', totals: charged }).text(),
+    ).toContain('7–12 business days')
+  })
+
+  it('shows the free-delivery promise instead once it has been earned', () => {
+    // Which is why the test above has to charge for delivery: this branch wins
+    // whenever shipping came to nothing and the method has a threshold.
+    expect(summary({ country: 'US', state: 'OR', method: 'standard' }).text()).toContain(
+      'Free over',
+    )
+  })
+
+  it('says so rather than inventing one for a method the address cannot use', () => {
+    // Overnight is a US service. The wizard resets the choice, but the summary
+    // renders first and must not promise "Next business day" to Kuala Lumpur.
+    expect(summary({ country: 'MY', state: 'SGR', method: 'overnight' }).text()).toContain(
+      'Not available to this address',
+    )
+  })
+
+  it('promises duty-paid delivery abroad, and says nothing about it at home', () => {
+    const away = summary({ country: 'MY', state: 'SGR' }).text()
+    expect(away).toContain('Duties and SST are paid at checkout')
+    // Lower-casing the label is what produced "Duties and sst".
+    expect(away).not.toContain('sst are paid')
+
+    expect(summary({ country: 'US', state: 'OR' }).text()).not.toContain('Duties')
+  })
+})

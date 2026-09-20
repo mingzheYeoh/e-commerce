@@ -9,7 +9,7 @@
  */
 import { computed, onMounted, ref } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
-import { User, LogOut, Package, AlertCircle } from 'lucide-vue-next'
+import { User, LogOut, Package, AlertCircle, MailCheck } from 'lucide-vue-next'
 import { useAuthStore } from '@/stores/auth'
 import { useCurrency } from '@/composables/useCurrency'
 import { myOrders, type AccountOrder } from '@/lib/api'
@@ -59,6 +59,10 @@ async function submit() {
   if (!ok) return
 
   password.value = ''
+  // Registering leaves a notice and no session — the account is not usable
+  // until the emailed link is clicked — so there is nowhere to go yet.
+  if (!auth.signedIn) return
+
   if (next.value) {
     router.replace(next.value)
     return
@@ -156,7 +160,28 @@ const when = (iso: string) =>
           perfectly well without one.
         </p>
 
-        <form class="mt-8 space-y-4" @submit.prevent="submit">
+        <!--
+          After a registration there is nothing to sign into yet, so the form
+          steps aside for the one instruction that matters. It says the same
+          thing whether the address was free or already had an account — which
+          of the two happened is in the inbox, not on this page.
+        -->
+        <div
+          v-if="auth.notice"
+          class="mt-8 rounded-card border border-accent-green/30 bg-accent-green/5 p-5"
+          role="status"
+        >
+          <p class="flex items-start gap-2 text-sm font-medium text-accent-green">
+            <MailCheck class="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+            {{ auth.notice }}
+          </p>
+          <p class="mt-2 text-xs text-text-secondary">
+            Sent to <span class="font-medium text-text-primary">{{ email }}</span>. The link is good
+            for 24 hours. Nothing arrives? Check spam, then try again in a minute.
+          </p>
+        </div>
+
+        <form v-else class="mt-8 space-y-4" @submit.prevent="submit">
           <label v-if="mode === 'up'" class="block">
             <span class="mb-1.5 block text-sm text-text-secondary">Full name</span>
             <input v-model="name" required autocomplete="name" class="input" />
@@ -196,7 +221,7 @@ const when = (iso: string) =>
           </button>
         </form>
 
-        <p class="mt-6 text-sm text-text-secondary">
+        <p v-if="!auth.notice" class="mt-6 text-sm text-text-secondary">
           {{ mode === 'up' ? 'Already have an account?' : 'New here?' }}
           <button
             type="button"

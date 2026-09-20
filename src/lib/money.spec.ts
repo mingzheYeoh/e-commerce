@@ -1,27 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { shippingCents, taxCents, totalCents, taxLabel, SHIPPING, TAX_RATES, TAX_POLICY } from './money'
+import { taxCents, totalCents, taxLabel, TAX_RATES, TAX_POLICY } from './money'
 import { COUNTRIES } from './regions'
-
-describe('shippingCents', () => {
-  it('is free on standard above the threshold, and charged below it', () => {
-    // The boundary is the whole rule; $74.99 and $75.00 must land either side.
-    expect(shippingCents('standard', 7499)).toBe(895)
-    expect(shippingCents('standard', 7500)).toBe(0)
-    expect(shippingCents('standard', 129900)).toBe(0)
-  })
-
-  it('charges a flat rate for the faster methods regardless of basket size', () => {
-    // Free shipping is a standard-delivery promise; a $3,000 order does not
-    // earn free overnight.
-    expect(shippingCents('express', 500000)).toBe(1495)
-    expect(shippingCents('overnight', 500000)).toBe(2995)
-  })
-
-  it('charges nothing on an empty basket', () => {
-    expect(shippingCents('standard', 0)).toBe(0)
-    expect(shippingCents('overnight', 0)).toBe(0)
-  })
-})
 
 describe('taxCents', () => {
   it('applies the destination rate, not a flat one', () => {
@@ -89,10 +68,6 @@ describe('totalCents', () => {
 })
 
 describe('tables', () => {
-  it('offers exactly the three methods the UI shows', () => {
-    expect(Object.keys(SHIPPING)).toEqual(['standard', 'express', 'overnight'])
-  })
-
   it('keeps the no-tax states at zero rather than omitting them', () => {
     // An omitted state would fall through to the 6% default and quietly charge
     // tax where none is due.

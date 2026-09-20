@@ -7,27 +7,13 @@
  * division happens in the formatter, once, at the moment of display.
  */
 
-export type ShipMethod = 'standard' | 'express' | 'overnight'
-
-export interface ShipOption {
-  label: string
-  transit: string
-  cents: number
-  /** Subtotal at or above which this method costs nothing. */
-  freeAbove?: number
-}
-
-/**
- * Modelled on mainstream US electronics retail — Best Buy is free over $35,
- * B&H over $49. The threshold sits at $75 because this catalogue's median line
- * is considerably higher, and free shipping that every order qualifies for is
- * not a shipping policy.
+/*
+ * Delivery pricing lives in ./shipping, because it is banded by destination
+ * zone rather than being one table. Re-exported here so a caller doing order
+ * arithmetic has one import rather than two.
  */
-export const SHIPPING: Record<ShipMethod, ShipOption> = {
-  standard: { label: 'Standard', transit: '3–5 business days', cents: 895, freeAbove: 7500 },
-  express: { label: 'Express', transit: '2 business days', cents: 1495 },
-  overnight: { label: 'Overnight', transit: 'Next business day', cents: 2995 },
-}
+export { shippingCents, SHIP_METHODS, type ShipMethod } from './shipping'
+import { shippingCents as shipCents, type ShipMethod } from './shipping'
 
 /**
  * Destination-based sales tax.
@@ -130,13 +116,6 @@ export function taxRate(country: string, subdivision: string): number {
   return policy.bySubdivision[code] ?? policy.rate
 }
 
-export function shippingCents(method: ShipMethod, subtotalCents: number): number {
-  if (subtotalCents <= 0) return 0
-  const option = SHIPPING[method]
-  if (option.freeAbove !== undefined && subtotalCents >= option.freeAbove) return 0
-  return option.cents
-}
-
 /**
  * Tax on the goods only.
  *
@@ -169,7 +148,7 @@ export function totalCents(input: {
   country: string
   state: string
 }): OrderTotals {
-  const shipping = shippingCents(input.method, input.subtotal)
+  const shipping = shipCents(input.method, input.subtotal, input.country)
   const tax = taxCents(input.subtotal, input.country, input.state)
   return { subtotal: input.subtotal, shipping, tax, total: input.subtotal + shipping + tax }
 }

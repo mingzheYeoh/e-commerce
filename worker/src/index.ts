@@ -10,9 +10,25 @@ import { ask, search, type Env as RagEnv } from './rag'
 import { facts, queryOrError } from './graph'
 import { converse } from './agent'
 import { placeOrder, getOrder, type OrdersEnv } from './orders'
-import { register, login, logout, sessionUser, accountOrders } from './auth'
 
-export interface Env extends RagEnv, OrdersEnv {
+/*
+ * Re-exported because Cloudflare resolves a Durable Object class by name from
+ * the worker's own module exports — it is not enough for the class to exist.
+ */
+export { IpThrottle } from './throttle'
+import {
+  register,
+  login,
+  logout,
+  verifyEmail,
+  sessionUser,
+  accountOrders,
+  authDefences,
+  type AuthEnv,
+  type AuthResult,
+} from './auth'
+
+export interface Env extends RagEnv, OrdersEnv, AuthEnv {
   ALLOWED_ORIGIN?: string
 }
 
@@ -51,6 +67,25 @@ const json = (body: unknown, init: ResponseInit & { headers: Record<string, stri
   new Response(JSON.stringify(body), {
     ...init,
     headers: { 'content-type': 'application/json', ...init.headers },
+  })
+
+/**
+ * An auth reply, which may carry a Set-Cookie and a Retry-After.
+ *
+ * Both are headers rather than body fields on purpose: the session must stay
+ * out of reach of the page's own JavaScript, and Retry-After is the answer a
+ * client library already knows how to read.
+ */
+const authJson = (result: AuthResult, headers: Record<string, string>) =>
+  json(result.body, {
+    status: result.status,
+    headers: {
+      ...headers,
+      ...('cookie' in result && result.cookie ? { 'set-cookie': result.cookie } : {}),
+      ...('retryAfter' in result && result.retryAfter
+        ? { 'retry-after': String(result.retryAfter) }
+        : {}),
+    },
   })
 
 export default {
@@ -127,27 +162,25 @@ export default {
        * rather than through the plain `json` helper.
        */
       if (url.pathname === '/api/auth/register' && request.method === 'POST') {
-        const result = await register(env, await request.json())
-        return json(result.body, {
-          status: result.status,
-          headers: { ...headers, ...('cookie' in result && result.cookie ? { 'set-cookie': result.cookie } : {}) },
-        })
+        return authJson(await register(env, await request.json(), request), headers)
       }
 
       if (url.pathname === '/api/auth/login' && request.method === 'POST') {
-        const result = await login(env, await request.json())
-        return json(result.body, {
-          status: result.status,
-          headers: { ...headers, ...('cookie' in result && result.cookie ? { 'set-cookie': result.cookie } : {}) },
-        })
+        return authJson(await login(env, await request.json(), request), headers)
+      }
+
+      /*
+       * The link from a verification email lands on a page in the storefront,
+       * and that page calls this. A GET would be followed by mail scanners and
+       * link prefetchers — a one-shot token spent by a security appliance
+       * before the recipient has read the message.
+       */
+      if (url.pathname === '/api/auth/verify' && request.method === 'POST') {
+        return authJson(await verifyEmail(env, await request.json()), headers)
       }
 
       if (url.pathname === '/api/auth/logout' && request.method === 'POST') {
-        const result = await logout(env, request)
-        return json(result.body, {
-          status: result.status,
-          headers: { ...headers, ...('cookie' in result && result.cookie ? { 'set-cookie': result.cookie } : {}) },
-        })
+        return authJson(await logout(env, request), headers)
       }
 
       /* Who this browser is. 200 with a null user rather than a 401: not being
@@ -199,6 +232,15 @@ export default {
               user: Boolean(env.NEO4J_USER),
               password: Boolean(env.NEO4J_PASSWORD),
             },
+            /*
+             * Whether the account protections are actually bound.
+             *
+             * An unbound rate limiter allows everything, and a missing mail
+             * transport closes registration. Both are silent from the outside
+             * — the first looks like a working endpoint and the second like a
+             * broken one — so they are reported rather than left to be found.
+             */
+            auth: authDefences(env),
           },
           { headers },
         )
