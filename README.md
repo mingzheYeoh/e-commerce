@@ -15,6 +15,52 @@ Cloudflare Workers AI, where the binding *is* the credential.
 > Demo project. NEXUS is not a real retailer, the payment gateway is simulated
 > with Stripe's published test card numbers, and nothing takes money or ships.
 
+## Environments and branches
+
+Production keeps its URL while anything is being looked at.
+
+| | Branch | Site | API |
+|---|---|---|---|
+| **production** | `main` | [nexus-tech-collective](https://nexus-tech-collective.mingzhe030228.workers.dev) | `nexus-api` |
+| **staging** | `staging` | [...-staging](https://nexus-tech-collective-staging.mingzhe030228.workers.dev) | `nexus-api-staging` |
+
+Nothing is committed to `main` directly. Work goes
+`feat/<name>` → PR → `staging` → PR → `main`.
+
+```bash
+git checkout staging && git pull
+git checkout -b feat/whatever
+# ... work, npm test, npm run typecheck ...
+gh pr create --base staging
+
+npm run deploy:staging     # site + build pointed at the staging API
+cd worker && npx wrangler deploy --env staging
+
+# once it looks right on the staging URL
+gh pr create --base main --head staging
+npm run deploy             # production
+```
+
+The two environments share Workers AI and the Vectorize index — both are
+read-only from the API, and a second copy of the index would only drift.
+**Orders go to separate D1 databases,** so a test checkout never lands in the
+production ledger.
+
+Wrangler does not inherit bindings into an environment, so every one is
+repeated under `[env.staging]`. An omitted binding does not warn; it deploys a
+worker that is missing it.
+
+Secrets are per-environment too. Staging has none set, so its `/api/health`
+reports `graph: false` with `"credentials not configured"` — the degraded mode
+the code already handles. To give staging its own graph:
+
+```bash
+cd worker
+npx wrangler secret put NEO4J_URI --env staging
+npx wrangler secret put NEO4J_USER --env staging
+npx wrangler secret put NEO4J_PASSWORD --env staging
+```
+
 ## Run it
 
 ```bash
