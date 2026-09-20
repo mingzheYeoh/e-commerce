@@ -93,6 +93,28 @@ describe('CardGallery gestures', () => {
     expect(clickWouldNavigate(el), 'suppression must not be sticky').toBe(true)
   })
 
+  it('does not eat the next tap when the swipe produced no click', async () => {
+    /*
+     * The bug this file missed the first time, found on staging. A touch drag
+     * frequently produces no click at all, and a suppressor armed for one that
+     * never arrives stays armed — so the user's next tap vanishes and the card
+     * looks like it ignored them until they tried twice.
+     *
+     * The distinguishing move is the absence below: no click after the drag.
+     */
+    vi.useFakeTimers()
+    const { wrapper, el } = gallery()
+    ;(wrapper.vm as unknown as { slides: string[] }).slides = IMAGES
+    await wrapper.vm.$nextTick()
+
+    drag(el, 300, 200)
+    await wrapper.vm.$nextTick()
+
+    vi.advanceTimersByTime(200)
+    expect(clickWouldNavigate(el), 'a later tap must open the product').toBe(true)
+    vi.useRealTimers()
+  })
+
   it('stops at the ends instead of running off', async () => {
     const { wrapper, el } = gallery()
     ;(wrapper.vm as unknown as { slides: string[] }).slides = IMAGES
