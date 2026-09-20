@@ -6,6 +6,7 @@ import StockBadge from './StockBadge.vue'
 import PriceTag from './PriceTag.vue'
 import { useCartStore } from '@/stores/cart'
 import { useCompareStore } from '@/stores/compare'
+import { useTilt } from '@/composables/useTilt'
 import { brandName } from '@/data/brands'
 import type { Product } from '@/types'
 
@@ -22,6 +23,8 @@ const added = ref(false)
  * showing, which is what a card with one photograph should look like.
  */
 const hoverBroken = ref(false)
+
+const { transform, glare, onMove, onLeave } = useTilt()
 
 const selected = computed(() => compare.has(props.product.id))
 /**
@@ -53,8 +56,25 @@ function addToCart() {
 <template>
   <RouterLink
     :to="`/product/${product.id}`"
-    class="card group flex flex-col overflow-hidden transition-colors hover:border-border-strong"
+    class="card tilt group flex flex-col overflow-hidden transition-colors hover:border-border-strong"
+    :style="transform ? { transform } : undefined"
+    @pointermove="onMove"
+    @pointerleave="onLeave"
   >
+    <!--
+      A specular highlight that tracks the pointer. The rotation alone reads as
+      a flat card being turned; a moving light is what makes it read as a
+      surface catching one. Non-interactive and hidden from assistive tech: it
+      carries no information a screen reader could use.
+    -->
+    <span
+      v-if="glare"
+      aria-hidden="true"
+      class="pointer-events-none absolute inset-0 z-10 rounded-card opacity-60"
+      :style="{
+        background: `radial-gradient(420px circle at ${glare.x}% ${glare.y}%, rgb(255 255 255 / 7%), transparent 60%)`,
+      }"
+    />
     <div class="relative aspect-[4/3] overflow-hidden bg-surface-2">
       <img
         :src="product.media.heroImage"

@@ -47,7 +47,14 @@ ALLOWED_ORIGIN = "https://nexus-tech-collective.mingzhe030228.workers.dev,http:/
 #   npx wrangler secret put NEO4J_URI --env staging
 #   npx wrangler secret put NEO4J_USER --env staging
 #   npx wrangler secret put NEO4J_PASSWORD --env staging
+#   npx wrangler secret put NEO4J_DATABASE --env staging
 #   npx wrangler d1 execute nexus-orders-staging --remote --file=schema.sql
+#
+# NEO4J_DATABASE is a secret rather than a var even though it is only a name.
+# Aura names the database after the instance and its hostname is
+# <instance>.databases.neo4j.io, so committing the name publishes the endpoint
+# NEO4J_URI is kept secret to withhold. It is not a credential; it is the
+# address a credential opens.
 [env.staging]
 name = "nexus-api-staging"
 
