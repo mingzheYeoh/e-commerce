@@ -9,7 +9,7 @@
 import { computed } from 'vue'
 import { SHIPPING, TAX_RATES, type ShipMethod } from '@/lib/money'
 import { useCurrency } from '@/composables/useCurrency'
-import type { CartLine } from '@/stores/cart'
+import { lineKey, type CartLine } from '@/stores/cart'
 import type { OrderTotals } from '@/lib/money'
 
 const props = defineProps<{
@@ -43,11 +43,13 @@ const taxNote = computed(() => {
     <h2 class="text-sm font-semibold">Order summary</h2>
 
     <ul class="mt-4 space-y-3 border-b border-border-hairline pb-4">
-      <li v-for="line in lines" :key="line.sku" class="flex items-center gap-3">
+      <li v-for="line in lines" :key="lineKey(line)" class="flex items-center gap-3">
         <img :src="line.thumb" :alt="line.title" width="40" height="40" class="h-10 w-10 shrink-0 rounded object-cover" />
         <span class="min-w-0 flex-1">
           <span class="block truncate text-sm">{{ line.title }}</span>
-          <span class="nums block text-xs text-text-secondary">Qty {{ line.qty }}</span>
+          <span class="nums block text-xs text-text-secondary">
+            Qty {{ line.qty }}<template v-if="line.finish"> · {{ line.finish }}</template>
+          </span>
         </span>
         <span class="nums shrink-0 text-sm">{{ format(line.unitPriceCents * line.qty) }}</span>
       </li>

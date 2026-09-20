@@ -59,11 +59,18 @@ const stage = computed(() => {
 function preorder() {
   // The flagship is not in the catalog fixtures — it is configured here, so the
   // cart line is built from the chosen variant.
+  /*
+   * The sku is the real one. It used to carry the variant as a suffix —
+   * `SEN-HD900-113-CARBON` — which reads fine in a basket and is refused by the
+   * order endpoint as an unknown sku. Storing an order is deliberately
+   * fire-and-forget, so every preorder simply never reached the database and
+   * nothing anywhere said so. The finish is a field now, not a spelling.
+   */
   const asProduct: Product = {
     id: 'flagship',
-    sku: `${flagship.sku}-${variant.value.name.replace(/\s+/g, '').toUpperCase()}`,
+    sku: flagship.sku,
     brand: flagship.brand,
-    title: `${flagship.title} (${variant.value.name})`,
+    title: flagship.title,
     category: 'audio',
     price: flagship.price,
     currency: 'USD',
@@ -76,7 +83,7 @@ function preorder() {
     media: { heroImage: flagship.image, thumb: flagship.image, gallery: [flagship.image] },
     colorways: flagship.variants,
   }
-  cart.add(asProduct)
+  cart.add(asProduct, 1, variant.value.name)
   added.value = true
   window.setTimeout(() => (added.value = false), 1200)
 }

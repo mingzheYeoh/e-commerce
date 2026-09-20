@@ -190,9 +190,10 @@ export const useCheckoutStore = defineStore('checkout', {
         id: order.id,
         address: order.address,
         method: order.method,
-        // Skus and quantities only. The server prices the order from its own
-        // catalogue, so there is nothing here worth tampering with.
-        lines: order.lines.map((l) => ({ sku: l.sku, qty: l.qty })),
+        // Skus, quantities and the chosen finish. Still no prices: the server
+        // prices the order from its own catalogue, and it checks the finish
+        // against that product's colourways rather than taking the word for it.
+        lines: order.lines.map((l) => ({ sku: l.sku, qty: l.qty, finish: l.finish })),
         paymentCode: order.paymentCode,
         currency: useUiStore().currency,
       }).then((stored) => {
@@ -232,6 +233,7 @@ export const useCheckoutStore = defineStore('checkout', {
           return {
             sku: l.sku,
             title: l.title,
+            finish: l.finish,
             brand: p?.brand ?? '',
             thumb: p?.media.thumb ?? '',
             unitPriceCents: l.unitPriceCents,

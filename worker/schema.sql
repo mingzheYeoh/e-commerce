@@ -31,7 +31,14 @@ CREATE TABLE IF NOT EXISTS order_lines (
   -- Frozen at the moment of purchase. Reading today's price back from the
   -- catalogue would rewrite history every time a price changes.
   unit_price_cents INTEGER NOT NULL,
-  PRIMARY KEY (order_id, sku)
+  -- The finish chosen, validated against that product's colourways before it
+  -- got here. Empty string rather than NULL because it is part of the key, and
+  -- SQLite treats NULLs in a primary key as distinct from one another — which
+  -- would let the same line be inserted twice.
+  variant       TEXT NOT NULL DEFAULT '',
+  -- Two finishes of one product are two lines. Keyed on (order_id, sku) alone,
+  -- ordering a black one and a silver one loses the second.
+  PRIMARY KEY (order_id, sku, variant)
 );
 
 CREATE INDEX IF NOT EXISTS orders_email_idx ON orders(email);

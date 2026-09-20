@@ -29,7 +29,10 @@ const stockLine = computed(() => {
 
 function addToCart() {
   if (!props.product.inStock) return
-  cart.add(props.product, qty.value)
+  // The chosen finish travels with the line. Before this it lived only in this
+  // component, so a shopper picked one and the basket, the order and the
+  // receipt all recorded the product as though no choice had been offered.
+  cart.add(props.product, qty.value, variant.value?.name)
   added.value = true
   window.setTimeout(() => (added.value = false), 1200)
 }
