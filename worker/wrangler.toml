@@ -59,6 +59,12 @@ class_name = "IpThrottle"
 tag = "v1"
 new_sqlite_classes = ["IpThrottle"]
 
+# Nightly sweep of expired sessions and spent links. 04:17 rather than a round
+# hour, because every cron on the platform fires on the hour and the quiet
+# minutes are the ones nobody else picked.
+[triggers]
+crons = ["17 4 * * *"]
+
 # Secrets are set with `wrangler secret put`, never written here:
 #   wrangler secret put NEO4J_URI
 #   wrangler secret put NEO4J_USER
@@ -123,5 +129,8 @@ simple = { limit = 5, period = 60 }
 [[env.staging.durable_objects.bindings]]
 name = "IP_THROTTLE"
 class_name = "IpThrottle"
+
+[env.staging.triggers]
+crons = ["47 4 * * *"]
 
 

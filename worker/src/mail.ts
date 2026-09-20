@@ -122,3 +122,21 @@ export const alreadyRegisteredEmail = (signInUrl: string) => ({
     { href: signInUrl, label: 'Sign in' },
   ),
 })
+
+/**
+ * A way back in for someone who has forgotten their password.
+ *
+ * Phrased so that a person who did NOT ask for it is told plainly that
+ * ignoring the message is enough — the most common recipient of a password
+ * reset email is someone whose address a stranger typed by mistake, and they
+ * should not be left wondering whether their account is in danger.
+ */
+export const passwordResetEmail = (link: string) => ({
+  subject: 'Reset your NEXUS password',
+  text: `Use this link to choose a new password:\n\n${link}\n\nIt is good for one hour and works once. If you did not ask for this, ignore it — your password has not changed and nobody has seen it.`,
+  html: shell(
+    'Choose a new password',
+    'The link below is good for one hour and works once.<br><br>If you did not ask for this, ignore this message. Your password has not changed, and nobody — including whoever requested this — has seen it.',
+    { href: link, label: 'Choose a new password' },
+  ),
+})

@@ -31,7 +31,13 @@
  *    one account, none of them often enough to trip a limit of their own.
  */
 import type { OrdersEnv } from './orders'
-import { mailerFor, verificationEmail, alreadyRegisteredEmail, type MailEnv } from './mail'
+import {
+  mailerFor,
+  verificationEmail,
+  alreadyRegisteredEmail,
+  passwordResetEmail,
+  type MailEnv,
+} from './mail'
 import { throttle, type ThrottleBinding } from './throttle'
 
 /** Cloudflare's rate limiting binding. Absent in tests and local dev. */
@@ -263,6 +269,14 @@ const MIN_PASSWORD = 8
 const MAX_PASSWORD = 200
 
 const VERIFY_TOKEN_HOURS = 24
+/**
+ * Much shorter than a verification link.
+ *
+ * A reset token is a live key to an existing account, where a verification
+ * token only finishes setting one up. An hour is long enough to find the
+ * message and short enough that one left in a mail archive is dead.
+ */
+const RESET_TOKEN_MINUTES = 60
 
 const siteUrl = (env: AuthEnv): string =>
   (env.ALLOWED_ORIGIN ?? 'http://localhost:5173').split(',')[0].trim()
@@ -357,9 +371,10 @@ export async function register(
   }
 
   const site = siteUrl(env)
-  const existing = await env.ORDERS.prepare(`SELECT id FROM users WHERE email = ?1`)
+  const existing = await env.ORDERS
+    .prepare(`SELECT id, email_verified_at FROM users WHERE email = ?1`)
     .bind(email)
-    .first<{ id: string }>()
+    .first<{ id: string; email_verified_at: string | null }>()
 
   /*
    * What to say when the message could not be sent.
@@ -378,6 +393,50 @@ export async function register(
   }
 
   if (existing) {
+    /*
+     * An account that was started and never confirmed is not the same as one
+     * in use, and telling them apart is what fixes a dead end: the link
+     * expires after a day, registering again answered "you already have an
+     * account, sign in", and signing in answered "confirm your email first —
+     * check your inbox for the link we sent". The link that had expired. There
+     * was no way out, and the address was taken.
+     *
+     * So an unverified account gets a fresh link instead, and the password is
+     * replaced by whatever was just typed.
+     *
+     * That replacement is the security half. Without it, someone could sign up
+     * with an address that is not theirs, wait, and be holding a working
+     * password on the day its real owner registers and confirms. Overwriting
+     * means the credential that survives belongs to whoever last typed one
+     * before the inbox was proven — and proving the inbox is the step the
+     * attacker can never take.
+     */
+    if (!existing.email_verified_at) {
+      const salt = crypto.getRandomValues(new Uint8Array(16))
+      const hash = await derive(password, salt, PBKDF2_ITERATIONS)
+      const token = randomToken()
+
+      await env.ORDERS.batch([
+        env.ORDERS.prepare(
+          `UPDATE users SET name = ?2, password_hash = ?3, password_salt = ?4, iterations = ?5,
+                            failed_attempts = 0, locked_until = NULL
+             WHERE id = ?1`,
+        ).bind(existing.id, name, toB64(hash), toB64(salt), PBKDF2_ITERATIONS),
+        // Any earlier link stops working. Two live links to one unconfirmed
+        // account is two chances for the wrong person to hold one.
+        env.ORDERS.prepare(
+          `DELETE FROM email_tokens WHERE user_id = ?1 AND purpose = 'verify'`,
+        ).bind(existing.id),
+        env.ORDERS.prepare(
+          `INSERT INTO email_tokens (token_hash, user_id, purpose, expires_at) VALUES (?1,?2,'verify',?3)`,
+        ).bind(await sha256(token), existing.id, inSeconds(VERIFY_TOKEN_HOURS * 3600)),
+      ])
+
+      const mail = verificationEmail(`${site}/verify?token=${encodeURIComponent(token)}`)
+      if (!(await mailer.send({ to: email, ...mail }))) return UNDELIVERABLE
+      return { status: 200, body: REGISTRATION_ACCEPTED }
+    }
+
     // Identical response, different email. The owner of the address finds out;
     // whoever typed it does not.
     const mail = alreadyRegisteredEmail(`${site}/account`)
@@ -627,3 +686,162 @@ export const authDefences = (env: AuthEnv) => ({
   /** The one whose count can be trusted. Without it the others are advisory. */
   durableThrottle: Boolean(env.IP_THROTTLE),
 })
+
+/* ------------------------------------------------------- forgotten password */
+
+/**
+ * The one sentence both outcomes get.
+ *
+ * Same discipline as registration: whether an address has an account is told
+ * to the inbox, not to whoever filled in the form. An honest "if that address
+ * has an account" is also the only phrasing that is true in both cases.
+ */
+const RESET_REQUESTED = {
+  sent: true,
+  message: 'If that address has an account, a reset link is on its way.',
+}
+
+export async function requestPasswordReset(
+  env: AuthEnv,
+  body: unknown,
+  request: Request,
+): Promise<AuthResult> {
+  // Sending mail on demand to an address a stranger chose is a way to use this
+  // store as someone else's spam relay, so it is throttled like signing up.
+  const limited = await guard(env, request, 'signup')
+  if (limited) return limited
+
+  if (typeof body !== 'object' || body === null) return { status: 400, body: { error: 'bad request' } }
+  const email = str((body as { email?: unknown }).email, 200)?.toLowerCase() ?? ''
+
+  const mailer = mailerFor(env)
+  if (!mailer) {
+    console.error('reset refused: no mail transport configured')
+    return {
+      status: 503,
+      body: { error: 'Password reset is temporarily unavailable.' },
+    }
+  }
+
+  const user = await env.ORDERS.prepare(
+    `SELECT id, email_verified_at FROM users WHERE email = ?1`,
+  )
+    .bind(email)
+    .first<{ id: string; email_verified_at: string | null }>()
+
+  /*
+   * Nothing is sent for an unknown address, or for one that was never
+   * confirmed — there is no proof anyone reading that inbox ever wanted an
+   * account here. An unconfirmed account's way back in is to register again,
+   * which reissues its link.
+   *
+   * Either way the answer above is the same one a real reset gets.
+   */
+  if (user?.email_verified_at) {
+    const token = randomToken()
+    await env.ORDERS.batch([
+      // One live reset link at a time. An older one in a mail archive stops
+      // working the moment a newer one is asked for.
+      env.ORDERS.prepare(`DELETE FROM email_tokens WHERE user_id = ?1 AND purpose = 'reset'`).bind(
+        user.id,
+      ),
+      env.ORDERS.prepare(
+        `INSERT INTO email_tokens (token_hash, user_id, purpose, expires_at) VALUES (?1,?2,'reset',?3)`,
+      ).bind(await sha256(token), user.id, inSeconds(RESET_TOKEN_MINUTES * 60)),
+    ])
+
+    const site = siteUrl(env)
+    const mail = passwordResetEmail(`${site}/reset?token=${encodeURIComponent(token)}`)
+    // A send failure is NOT reported here, unlike registration. Saying "we
+    // could not send it" for one address and "if that address has an account"
+    // for another rebuilds the oracle this endpoint exists to avoid. It is
+    // logged instead.
+    if (!(await mailer.send({ to: email, ...mail }))) {
+      console.error('reset email could not be sent')
+    }
+  }
+
+  return { status: 200, body: RESET_REQUESTED }
+}
+
+/**
+ * Sets a new password from a reset link, and ends every existing session.
+ *
+ * The sign-out is the part that matters. Somebody resetting a password often
+ * does it because they think someone else has it; leaving that person's
+ * session alive makes the reset a gesture.
+ */
+export async function resetPassword(env: AuthEnv, body: unknown): Promise<AuthResult> {
+  if (typeof body !== 'object' || body === null) return { status: 400, body: { error: 'bad request' } }
+  const p = body as { token?: unknown; password?: unknown }
+
+  const token = str(p.token, 200)
+  if (!token) return { status: 400, body: { error: 'That link is not valid.' } }
+
+  const password = typeof p.password === 'string' ? p.password : ''
+  if (password.length < MIN_PASSWORD || password.length > MAX_PASSWORD) {
+    return { status: 400, body: { error: `Use at least ${MIN_PASSWORD} characters.` } }
+  }
+
+  const row = await env.ORDERS.prepare(
+    `SELECT t.user_id, t.expires_at, t.used_at, u.email, u.name
+       FROM email_tokens t JOIN users u ON u.id = t.user_id
+      WHERE t.token_hash = ?1 AND t.purpose = 'reset'`,
+  )
+    .bind(await sha256(token))
+    .first<{ user_id: string; expires_at: string; used_at: string | null; email: string; name: string }>()
+
+  if (!row || row.used_at || isPast(row.expires_at)) {
+    return { status: 400, body: { error: 'That link has expired or has already been used.' } }
+  }
+
+  const salt = crypto.getRandomValues(new Uint8Array(16))
+  const hash = await derive(password, salt, PBKDF2_ITERATIONS)
+
+  await env.ORDERS.batch([
+    env.ORDERS.prepare(`UPDATE email_tokens SET used_at = ?2 WHERE token_hash = ?1`).bind(
+      await sha256(token),
+      nowIso(),
+    ),
+    env.ORDERS.prepare(
+      `UPDATE users SET password_hash = ?2, password_salt = ?3, iterations = ?4,
+                        failed_attempts = 0, locked_until = NULL,
+                        email_verified_at = COALESCE(email_verified_at, ?5)
+         WHERE id = ?1`,
+    ).bind(row.user_id, toB64(hash), toB64(salt), PBKDF2_ITERATIONS, nowIso()),
+    // Everywhere, including whoever they are resetting because of.
+    env.ORDERS.prepare(`DELETE FROM sessions WHERE user_id = ?1`).bind(row.user_id),
+  ])
+
+  return {
+    status: 200,
+    body: { user: { id: row.user_id, email: row.email, name: row.name } satisfies User },
+    cookie: sessionCookie(await startSession(env, row.user_id), SESSION_DAYS * 86_400),
+  }
+}
+
+/* ------------------------------------------------------------------ hygiene */
+
+/**
+ * Deletes what has aged out. Run from a scheduled trigger, nightly.
+ *
+ * Expired rows were already refused on read, so this changes no behaviour —
+ * it stops two tables growing forever. A year of a storefront nobody cleans
+ * up is a sessions table that is almost entirely dead keys, which is both a
+ * cost and a bigger thing to lose in a breach.
+ *
+ * Used-but-unexpired tokens are kept on purpose: while a spent link is still
+ * inside its own lifetime, "already used" is a more useful answer than
+ * "never existed", and they cost nothing for an hour.
+ */
+export async function purgeExpired(env: AuthEnv): Promise<{ sessions: number; tokens: number }> {
+  const now = nowIso()
+  const [sessions, tokens] = await env.ORDERS.batch([
+    env.ORDERS.prepare(`DELETE FROM sessions WHERE expires_at < ?1`).bind(now),
+    env.ORDERS.prepare(`DELETE FROM email_tokens WHERE expires_at < ?1`).bind(now),
+  ])
+  return {
+    sessions: sessions.meta?.changes ?? 0,
+    tokens: tokens.meta?.changes ?? 0,
+  }
+}

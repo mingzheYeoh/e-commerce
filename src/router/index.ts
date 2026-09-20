@@ -10,6 +10,7 @@ export const router = createRouter({
     { path: '/compare', name: 'compare', component: () => import('@/pages/ComparePage.vue') },
     { path: '/account', name: 'account', component: () => import('@/pages/AccountPage.vue') },
     { path: '/verify', name: 'verify', component: () => import('@/pages/VerifyPage.vue') },
+    { path: '/reset', name: 'reset', component: () => import('@/pages/ResetPage.vue') },
     { path: '/checkout', name: 'checkout', component: () => import('@/pages/CheckoutPage.vue') },
     {
       path: '/order/:id',
