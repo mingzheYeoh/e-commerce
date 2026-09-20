@@ -28,3 +28,40 @@ ALLOWED_ORIGIN = "https://nexus-tech-collective.mingzhe030228.workers.dev,http:/
 #   wrangler secret put NEO4J_URI
 #   wrangler secret put NEO4J_USER
 #   wrangler secret put NEO4J_PASSWORD
+
+# ---------------------------------------------------------------- staging --
+#
+# Deployed from the `staging` branch. Bindings are NOT inherited by an
+# environment in wrangler, so every one is repeated here on purpose — an
+# omission does not warn, it deploys a worker missing a binding.
+#
+# Orders go to their own database so a test checkout never lands in the
+# production ledger. Vectorize and Workers AI are shared: both are read-only
+# from this service, and a second copy of the index would only drift.
+#
+# Secrets are per-environment too. Until these are set, staging answers with
+# the graph reported unavailable by /api/health, which is the degraded mode the
+# code already handles rather than a crash:
+#
+#   cd worker
+#   npx wrangler secret put NEO4J_URI --env staging
+#   npx wrangler secret put NEO4J_USER --env staging
+#   npx wrangler secret put NEO4J_PASSWORD --env staging
+#   npx wrangler d1 execute nexus-orders-staging --remote --file=schema.sql
+[env.staging]
+name = "nexus-api-staging"
+
+[env.staging.ai]
+binding = "AI"
+
+[[env.staging.vectorize]]
+binding = "VECTORIZE"
+index_name = "nexus-products"
+
+[[env.staging.d1_databases]]
+binding = "ORDERS"
+database_name = "nexus-orders-staging"
+database_id = "aedb0572-7924-4068-8d30-11b6e61eeed5"
+
+[env.staging.vars]
+ALLOWED_ORIGIN = "https://nexus-tech-collective-staging.mingzhe030228.workers.dev,http://localhost:5173"

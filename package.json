@@ -14,7 +14,9 @@
     "build:graph": "node scripts/build-graph.mjs",
     "build:vectorize": "node scripts/build-vectorize.mjs",
     "eval:search": "node scripts/eval-search.mjs",
-    "deploy": "npm run build && npx --prefix worker wrangler deploy"
+    "deploy": "npm run build && npx --prefix worker wrangler deploy",
+    "build:staging": "vite build --mode staging",
+    "deploy:staging": "npm run build:staging && npx --prefix worker wrangler deploy --env staging"
   },
   "dependencies": {
     "@huggingface/transformers": "^4.3.0",

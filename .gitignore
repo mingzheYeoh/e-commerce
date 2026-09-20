@@ -14,3 +14,5 @@ dist-vectorize/
 !.dev.vars.example
 .env*
 !.env.example
+# Holds a public URL, not a credential. See the file.
+!.env.staging

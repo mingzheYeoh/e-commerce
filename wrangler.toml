@@ -12,3 +12,15 @@ directory = "./dist"
 # The router uses history mode, so /order/NX-4K2P9 is a real URL a shopper can
 # reload or share. Without this, the edge looks for a file at that path.
 not_found_handling = "single-page-application"
+
+# ---------------------------------------------------------------- staging --
+#
+# Deployed from the `staging` branch, so production keeps its URL while a
+# change is being looked at. `assets` is repeated rather than inherited: an
+# environment that silently ships no assets is a blank page.
+[env.staging]
+name = "nexus-tech-collective-staging"
+
+[env.staging.assets]
+directory = "./dist"
+not_found_handling = "single-page-application"
