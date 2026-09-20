@@ -7,7 +7,8 @@
  * most common reason a basket is abandoned.
  */
 import { computed } from 'vue'
-import { SHIPPING, TAX_RATES, type ShipMethod } from '@/lib/money'
+import { SHIPPING, taxRate, taxLabel, type ShipMethod } from '@/lib/money'
+import { findCountry } from '@/lib/regions'
 import { useCurrency } from '@/composables/useCurrency'
 import { lineKey, type CartLine } from '@/stores/cart'
 import type { OrderTotals } from '@/lib/money'
@@ -16,6 +17,7 @@ const props = defineProps<{
   lines: CartLine[]
   totals: OrderTotals
   method: ShipMethod
+  country?: string
   state?: string
 }>()
 
@@ -29,12 +31,33 @@ const shippingNote = computed(() => {
   return option.transit
 })
 
+/**
+ * The tax line names its own authority, not just its rate.
+ *
+ * "6.00%" tells a shopper nothing they can check. "MY · 8%" and "US-CA · 7.25%"
+ * are claims they can hold the receipt against — and the difference between
+ * them is the reason the country has to be part of the lookup: `CA` alone is
+ * California at 7.25% or Canada at 5%.
+ */
+const taxTitle = computed(() => taxLabel(props.country ?? ''))
+
 const taxNote = computed(() => {
-  const code = (props.state ?? '').trim().toUpperCase()
-  if (!code) return 'Added once we have your address'
-  const rate = TAX_RATES[code]
-  if (rate === undefined) return `${code} · 6.00%`
-  return rate === 0 ? `${code} · no sales tax` : `${code} · ${(rate * 100).toFixed(3).replace(/0+$/, '').replace(/\.$/, '')}%`
+  const country = (props.country ?? '').trim().toUpperCase()
+  const info = findCountry(country)
+  if (!info) return 'Added once we have your address'
+
+  const sub = (props.state ?? '').trim().toUpperCase()
+  // A country taxed per state cannot answer until the state is known, and
+  // saying so is better than showing a national average nobody is charged.
+  if (info.subdivisions && !sub) {
+    return `Added once we have your ${info.subdivisionLabel?.toLowerCase() ?? 'region'}`
+  }
+
+  const rate = taxRate(country, sub)
+  const where = sub ? `${country}-${sub}` : country
+  if (rate === 0) return `${where} · none due`
+  const pct = (rate * 100).toFixed(3).replace(/0+$/, '').replace(/\.$/, '')
+  return `${where} · ${pct}%`
 })
 </script>
 
@@ -71,7 +94,7 @@ const taxNote = computed(() => {
       </div>
       <div class="flex justify-between">
         <dt class="text-text-secondary">
-          Tax
+          {{ taxTitle }}
           <span class="block text-xs text-text-muted">{{ taxNote }}</span>
         </dt>
         <dd class="nums">{{ format(totals.tax) }}</dd>

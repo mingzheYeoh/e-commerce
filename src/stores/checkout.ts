@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { useCartStore, type CartLine } from './cart'
 import { charge } from '@/lib/payment'
 import { totalCents, type OrderTotals, type ShipMethod } from '@/lib/money'
+import { findCountry, validSubdivision, validPostal, validPhone } from '@/lib/regions'
 import { saveOrder, fetchOrder } from '@/lib/api'
 import { products } from '@/data/products'
 import { useUiStore } from './ui'
@@ -18,8 +19,15 @@ import { useUiStore } from './ui'
 export interface Address {
   name: string
   email: string
+  /** Optional. Couriers ask for one; refusing an order without it does not. */
+  phone: string
+  /** ISO 3166-1 alpha-2. Drives the subdivision list, the postcode rule and the tax. */
+  country: string
   line1: string
+  /** Apartment, suite, floor. Optional, and most of the world needs it. */
+  line2: string
   city: string
+  /** State, province or territory — empty for countries that have none. */
   state: string
   postal: string
 }
@@ -63,7 +71,6 @@ const safeStorage = {
 
 const required = (v: string) => v.trim().length > 0
 const isEmail = (v: string) => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v.trim())
-const isPostal = (v: string) => /^\d{5}(-\d{4})?$/.test(v.trim())
 
 /** NX-7K2M9: short enough to read aloud, unambiguous in print. */
 function orderId(): string {
@@ -76,7 +83,20 @@ function orderId(): string {
 export const useCheckoutStore = defineStore('checkout', {
   state: () => ({
     step: 1 as 1 | 2 | 3,
-    address: { name: '', email: '', line1: '', city: '', state: '', postal: '' } as Address,
+    address: {
+      name: '',
+      email: '',
+      phone: '',
+      // Preselected because the tax model is built around it, and an empty
+      // country means an empty subdivision list — a first field that offers
+      // nothing reads as broken.
+      country: 'US',
+      line1: '',
+      line2: '',
+      city: '',
+      state: '',
+      postal: '',
+    } as Address,
     method: 'standard' as ShipMethod,
     card: { number: '', expiry: '', cvc: '' },
     placing: false,
@@ -92,6 +112,7 @@ export const useCheckoutStore = defineStore('checkout', {
       return totalCents({
         subtotal: cart.subtotalCents,
         method: state.method,
+        country: state.address.country,
         state: state.address.state,
       })
     },
@@ -105,10 +126,14 @@ export const useCheckoutStore = defineStore('checkout', {
         return (
           required(a.name) &&
           isEmail(a.email) &&
+          validPhone(a.phone) &&
+          Boolean(findCountry(a.country)) &&
           required(a.line1) &&
           required(a.city) &&
-          required(a.state) &&
-          isPostal(a.postal)
+          // Not `required`: Singapore has no subdivision, so an empty one is
+          // the correct answer there and a missing one everywhere else.
+          validSubdivision(a.country, a.state) &&
+          validPostal(a.country, a.postal)
         )
       }
       if (step === 2) return Boolean(this.method)
@@ -120,6 +145,21 @@ export const useCheckoutStore = defineStore('checkout', {
       if (!this.stepValid(1)) return 1
       if (!this.stepValid(2)) return 2
       return 3
+    },
+
+    /**
+     * Changes the destination country, and drops what belonged to the old one.
+     *
+     * A subdivision code and a postcode format each belong to exactly one
+     * country. Carrying "OR" into Malaysia leaves an address that validates
+     * nowhere, and — worse — leaves a tax line quoting a state the order is not
+     * going to.
+     */
+    setCountry(code: string) {
+      if (this.address.country === code) return
+      this.address.country = code
+      this.address.state = ''
+      this.address.postal = ''
     },
 
     goTo(step: 1 | 2 | 3) {

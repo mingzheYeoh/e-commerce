@@ -35,6 +35,7 @@ const payload = (over: Partial<OrderPayload> = {}): OrderPayload => ({
   address: {
     name: 'Ada Lovelace',
     email: 'ada@example.com',
+    country: 'US',
     line1: '12 Analytical Way',
     city: 'Portland',
     state: 'OR',
@@ -176,6 +177,85 @@ describe('placeOrder', () => {
     const { env } = fakeD1()
     expect((await placeOrder(env, payload({ address: { ...payload().address, city: '' } }))).status).toBe(400)
     expect((await placeOrder(env, payload({ address: { ...payload().address, email: 'ada' } }))).status).toBe(400)
+  })
+
+  it('files the order to the signed-in account, and to nobody otherwise', async () => {
+    /*
+     * The account link comes from the session, which the caller reads from a
+     * cookie — never from the payload. A request that could name its own owner
+     * could file its order into someone else's history.
+     */
+    const signedIn = fakeD1()
+    await placeOrder(signedIn.env, payload(), 'usr_abc')
+    expect(orderRow(signedIn.writes).args).toContain('usr_abc')
+
+    const guest = fakeD1()
+    await placeOrder(guest.env, payload())
+    expect(orderRow(guest.writes).args.at(-1)).toBeNull()
+  })
+})
+
+describe('placeOrder addresses', () => {
+  const at = (over: Record<string, unknown>) =>
+    payload({ address: { ...payload().address, ...over } as never })
+
+  it('accepts an address from any country the store ships to', async () => {
+    const { env, writes } = fakeD1()
+    const res = await placeOrder(env, at({ country: 'MY', state: 'SGR', postal: '50450' }))
+    expect(res.status).toBe(200)
+    expect(orderRow(writes).args).toContain('MY')
+  })
+
+  it('charges the destination its own tax, not an American one', async () => {
+    // The whole reason country reaches totalCents. Before this, a Malaysian
+    // order was charged 6% US default sales tax under a "Tax" label.
+    const { env } = fakeD1()
+    const res = await placeOrder(env, at({ country: 'MY', state: 'SGR', postal: '50450' }))
+    expect((res.body as { total: number }).total).toBe(unitCents + Math.round(unitCents * 0.08))
+  })
+
+  it('refuses a country the store does not ship to', async () => {
+    const { env, writes } = fakeD1()
+    const res = await placeOrder(env, at({ country: 'ZZ' }))
+    expect(res.status).toBe(400)
+    expect(writes).toHaveLength(0)
+  })
+
+  it('refuses a subdivision belonging to a different country', async () => {
+    // An Oregon address that says Malaysia is not an address, and it would
+    // have been taxed at Oregon's rate of nothing.
+    const { env } = fakeD1()
+    expect((await placeOrder(env, at({ country: 'MY', state: 'OR', postal: '50450' }))).status).toBe(400)
+  })
+
+  it('requires an empty subdivision where the country has none', async () => {
+    const { env } = fakeD1()
+    expect((await placeOrder(env, at({ country: 'SG', state: '', postal: '238839' }))).status).toBe(200)
+    expect((await placeOrder(env, at({ country: 'SG', state: 'CA', postal: '238839' }))).status).toBe(400)
+  })
+
+  it('holds the postcode to the destination format', async () => {
+    const { env } = fakeD1()
+    // A US ZIP is not a Malaysian postcode, and the reverse was the bug: the
+    // form accepted one shape and this endpoint demanded another.
+    expect((await placeOrder(env, at({ country: 'MY', state: 'SGR', postal: '94016-1234' }))).status).toBe(400)
+    expect((await placeOrder(env, at({ country: 'GB', state: '', postal: 'SW1A 1AA' }))).status).toBe(200)
+  })
+
+  it('treats the apartment line and the phone as optional', async () => {
+    const { env, writes } = fakeD1()
+    const res = await placeOrder(env, at({ line2: 'Flat 3', phone: '+60 12-345 6789' }))
+    expect(res.status).toBe(200)
+    expect(orderRow(writes).args).toContain('Flat 3')
+
+    const bare = fakeD1()
+    expect((await placeOrder(bare.env, payload())).status).toBe(200)
+    expect(orderRow(bare.writes).args).toContain('')
+  })
+
+  it('refuses a phone number that cannot be one', async () => {
+    const { env } = fakeD1()
+    expect((await placeOrder(env, at({ phone: 'call me maybe' }))).status).toBe(400)
   })
 
   it('refuses the same sku twice rather than violating the primary key', async () => {

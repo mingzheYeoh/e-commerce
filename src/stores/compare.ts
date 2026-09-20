@@ -116,6 +116,29 @@ export const useCompareStore = defineStore('compare', {
       return true
     },
 
+    /**
+     * Swaps the product in one column, or fills the first empty slot.
+     *
+     * The candidate list goes through `validIds` and is accepted only if
+     * nothing was dropped, which is what keeps the category lock honest without
+     * restating it here: swapping column 0 for another category would strand
+     * every other column, so the shorter result is refused and the picker keeps
+     * its old value. Column 0 alone can change category freely, because then
+     * there is nothing to strand.
+     */
+    setAt(index: number, id: string): boolean {
+      if (index < 0 || index > this.ids.length || index >= MAX_COMPARE) return false
+      if (this.ids[index] === id) return true
+
+      const next = [...this.ids]
+      next[index] = id
+      const valid = validIds(next)
+      if (valid.length !== next.length) return false
+
+      this.ids = valid
+      return true
+    },
+
     remove(id: string) {
       this.ids = this.ids.filter((x) => x !== id)
     },
