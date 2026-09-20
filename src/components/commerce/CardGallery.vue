@@ -20,6 +20,13 @@ const emit = defineEmits<{ dragging: [boolean] }>()
 /** Past this, the gesture is a swipe rather than a slightly sloppy click. */
 const THRESHOLD_PX = 40
 
+/**
+ * How long the swipe's own click stays swallowable. A real one arrives in the
+ * same input sequence, so this only has to outlast a slow device — and has to
+ * be short enough that a tap a moment later is untouched.
+ */
+const CLICK_WINDOW_MS = 100
+
 const index = ref(0)
 /** Live finger offset, in px, while a drag is in progress. */
 const offset = ref(0)
@@ -95,15 +102,22 @@ function onPointerUp(event: PointerEvent) {
   go(index.value + (moved < 0 ? 1 : -1))
 
   /*
-   * A completed drag still fires a click on the way up, and the click would
-   * follow the link. Swallowing exactly the next one leaves ordinary clicks —
-   * the ones that should open the product — working.
+   * A completed drag usually fires a click on the way up, and that click would
+   * follow the link. Swallow exactly that one.
+   *
+   * It has to expire. A drag does not always produce a click — a touch drag
+   * frequently does not — and a listener left armed eats the user's NEXT tap
+   * instead, which reads as a card that ignored them until they tried twice.
+   * Found on staging, not in the test, because the test dispatched a click
+   * straight afterwards and so always consumed it.
    */
   const el = event.currentTarget as HTMLElement
-  el.addEventListener('click', (e) => {
+  const swallow = (e: Event) => {
     e.preventDefault()
     e.stopPropagation()
-  }, { capture: true, once: true })
+  }
+  el.addEventListener('click', swallow, { capture: true, once: true })
+  window.setTimeout(() => el.removeEventListener('click', swallow, { capture: true }), CLICK_WINDOW_MS)
 }
 </script>
 
