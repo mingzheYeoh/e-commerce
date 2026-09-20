@@ -5,6 +5,8 @@ import {
   signIn,
   signOut,
   confirmEmail,
+  requestPasswordReset,
+  resetPassword,
   type Account,
 } from '@/lib/api'
 
@@ -100,6 +102,40 @@ export const useAuthStore = defineStore('auth', {
         return false
       }
       this.notice = result.message
+      return true
+    },
+
+    /**
+     * Asks for a reset link. Leaves a notice, never a session — the same
+     * notice whether or not the address has an account.
+     */
+    async forgot(email: string): Promise<boolean> {
+      this.busy = true
+      this.error = ''
+      this.notice = ''
+      const result = await requestPasswordReset(email)
+      this.busy = false
+
+      if (!result.ok) {
+        this.error = result.error
+        return false
+      }
+      this.notice = result.message
+      return true
+    },
+
+    /** Sets a new password from a reset link, which does sign them in. */
+    async reset(token: string, password: string): Promise<boolean> {
+      this.busy = true
+      this.error = ''
+      const result = await resetPassword(token, password)
+      this.busy = false
+
+      if (!result.ok) {
+        this.error = result.error
+        return false
+      }
+      this.apply(result.user)
       return true
     },
 

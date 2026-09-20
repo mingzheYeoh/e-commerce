@@ -9,6 +9,9 @@ import {
   authDefences,
   SESSION_COOKIE,
   MAX_PBKDF2_ITERATIONS,
+  requestPasswordReset,
+  resetPassword,
+  purgeExpired,
   type AuthEnv,
 } from './auth'
 
@@ -25,7 +28,7 @@ function fakeDb() {
   const sessions: Row[] = []
   const tokens: Row[] = []
 
-  const mutate = (sql: string, args: unknown[]) => {
+  const mutate = (sql: string, args: unknown[]): { meta?: { changes: number } } => {
     if (sql.includes('INSERT INTO users')) {
       const [id, email, name, password_hash, password_salt, iterations] = args
       if (users.some((u) => u.email === email)) {
@@ -47,17 +50,73 @@ function fakeDb() {
       sessions.push({ token_hash, user_id, expires_at })
     } else if (sql.includes('INSERT INTO email_tokens')) {
       const [token_hash, user_id, expires_at] = args
-      tokens.push({ token_hash, user_id, purpose: 'verify', expires_at, used_at: null })
-    } else if (sql.includes('DELETE FROM sessions')) {
+      // The purpose is baked into the statement, not bound, so it is read back
+      // out of the SQL — otherwise the fake would let a verification token be
+      // redeemed as a reset token and hide exactly the bug worth catching.
+      const purpose = sql.includes("'reset'") ? 'reset' : 'verify'
+      tokens.push({ token_hash, user_id, purpose, expires_at, used_at: null })
+    } else if (sql.includes('DELETE FROM sessions WHERE token_hash')) {
+      // Matched on the whole clause, not just the table: a bare
+      // `DELETE FROM sessions` also matches the by-user and by-expiry
+      // statements below, and swallowed both until this was narrowed.
       const i = sessions.findIndex((s) => s.token_hash === args[0])
       if (i >= 0) sessions.splice(i, 1)
     } else if (sql.includes('DELETE FROM email_tokens WHERE user_id')) {
+      const only = sql.includes("purpose = 'reset'")
+        ? 'reset'
+        : sql.includes("purpose = 'verify'")
+          ? 'verify'
+          : null
       for (let i = tokens.length - 1; i >= 0; i--) {
-        if (tokens[i].user_id === args[0]) tokens.splice(i, 1)
+        if (tokens[i].user_id === args[0] && (!only || tokens[i].purpose === only)) {
+          tokens.splice(i, 1)
+        }
+      }
+    } else if (sql.includes('DELETE FROM email_tokens WHERE expires_at')) {
+      let removed = 0
+      for (let i = tokens.length - 1; i >= 0; i--) {
+        if (String(tokens[i].expires_at) < String(args[0])) {
+          tokens.splice(i, 1)
+          removed++
+        }
+      }
+      return { meta: { changes: removed } }
+    } else if (sql.includes('DELETE FROM sessions WHERE expires_at')) {
+      let removed = 0
+      for (let i = sessions.length - 1; i >= 0; i--) {
+        if (String(sessions[i].expires_at) < String(args[0])) {
+          sessions.splice(i, 1)
+          removed++
+        }
+      }
+      return { meta: { changes: removed } }
+    } else if (sql.includes('DELETE FROM sessions WHERE user_id')) {
+      for (let i = sessions.length - 1; i >= 0; i--) {
+        if (sessions[i].user_id === args[0]) sessions.splice(i, 1)
       }
     } else if (sql.includes('DELETE FROM users WHERE id')) {
       const i = users.findIndex((u) => u.id === args[0])
       if (i >= 0) users.splice(i, 1)
+    } else if (sql.includes('UPDATE users SET name = ?2')) {
+      const user = users.find((u) => u.id === args[0])
+      if (user) {
+        user.name = args[1]
+        user.password_hash = args[2]
+        user.password_salt = args[3]
+        user.iterations = args[4]
+        user.failed_attempts = 0
+        user.locked_until = null
+      }
+    } else if (sql.includes('UPDATE users SET password_hash = ?2')) {
+      const user = users.find((u) => u.id === args[0])
+      if (user) {
+        user.password_hash = args[1]
+        user.password_salt = args[2]
+        user.iterations = args[3]
+        user.failed_attempts = 0
+        user.locked_until = null
+        user.email_verified_at = user.email_verified_at ?? args[4]
+      }
     } else if (sql.includes('UPDATE email_tokens SET used_at')) {
       const token = tokens.find((t) => t.token_hash === args[0])
       if (token) token.used_at = args[1]
@@ -91,7 +150,8 @@ function fakeDb() {
       return { ...user, expires_at: session.expires_at }
     }
     if (sql.includes('FROM email_tokens t JOIN users u')) {
-      const token = tokens.find((t) => t.token_hash === args[0])
+      const purpose = sql.includes("'reset'") ? 'reset' : 'verify'
+      const token = tokens.find((t) => t.token_hash === args[0] && t.purpose === purpose)
       if (!token) return null
       const user = users.find((u) => u.id === token.user_id)!
       return { ...token, email: user.email, name: user.name }
@@ -118,9 +178,9 @@ function fakeDb() {
     },
     async batch(stmts: { sql: string; args: unknown[] }[]) {
       // D1 batches are atomic; a throw here leaves nothing written, which is
-      // what the duplicate-registration path relies on.
-      for (const s of stmts) mutate(s.sql, s.args)
-      return []
+      // what the duplicate-registration path relies on. The results are
+      // returned because the nightly sweep reads `meta.changes` off them.
+      return stmts.map((s) => mutate(s.sql, s.args))
     },
   }
 
@@ -216,15 +276,65 @@ describe('register', () => {
 
   it('tells the difference only to the inbox that owns the address', async () => {
     const { env, users } = envWith()
-    await register(env, account, req())
+    await signUpAndVerify(env)
+    sent = []
+
     await register(env, account, req())
 
     expect(users, 'no second account').toHaveLength(1)
-    expect(sent).toHaveLength(2)
-    expect(sent[0].subject).toMatch(/confirm/i)
     // The owner hears about the attempt; whoever typed it gets the same page.
-    expect(sent[1].subject).toMatch(/someone tried/i)
-    expect(sent[1].text).not.toContain(account.password)
+    expect(sent[0].subject).toMatch(/someone tried/i)
+    expect(sent[0].text).not.toContain(account.password)
+  })
+
+  it('sends a fresh link instead when the account was never confirmed', async () => {
+    /*
+     * The dead end this fixes. The link expires after a day; registering again
+     * answered "you already have an account, sign in"; signing in answered
+     * "confirm your email first, check your inbox for the link we sent". The
+     * link that had expired. There was no way out, and the address was taken.
+     */
+    const { env, users } = envWith()
+    await register(env, account, req())
+    sent = []
+
+    await register(env, account, req())
+
+    expect(users).toHaveLength(1)
+    expect(sent[0].subject, 'a new link, not "sign in instead"').toMatch(/confirm/i)
+    // And it works, which is the whole point.
+    expect((await verifyEmail(env, { token: linkTokenFrom(sent[0].text) })).status).toBe(200)
+  })
+
+  it('replaces the password on an unconfirmed account, and kills the old link', async () => {
+    /*
+     * Account pre-hijacking. Someone signs up with an address that is not
+     * theirs and waits. The day its real owner registers and confirms, the
+     * squatter is holding a working password.
+     *
+     * Overwriting means the credential that survives belongs to whoever last
+     * typed one before the inbox was proven, and proving the inbox is the step
+     * the squatter can never take.
+     */
+    const { env } = envWith()
+    await register(env, { ...account, password: 'the squatter password' }, req())
+    const squatterLink = linkTokenFrom(sent[0].text)
+    sent = []
+
+    await register(env, { ...account, password: 'the real owner password' }, req())
+    await verifyEmail(env, { token: linkTokenFrom(sent[0].text) })
+
+    expect(
+      (await login(env, { email: account.email, password: 'the real owner password' }, req())).status,
+    ).toBe(200)
+    expect(
+      (await login(env, { email: account.email, password: 'the squatter password' }, req())).status,
+      'the earlier password must not survive',
+    ).toBe(401)
+    expect(
+      (await verifyEmail(env, { token: squatterLink })).status,
+      'and neither must the earlier link',
+    ).toBe(400)
   })
 
   it('refuses to register at all when it cannot send email', async () => {
@@ -625,5 +735,180 @@ describe('the iteration count', () => {
     const { env, users } = envWith()
     await register(env, account, req())
     expect(users[0].iterations).toBeLessThanOrEqual(MAX_PBKDF2_ITERATIONS)
+  })
+})
+
+/* --------------------------------------------------------- forgot password */
+
+describe('asking for a reset link', () => {
+  it('answers identically for an address with an account and one without', async () => {
+    // Same discipline as registration: whether an address has an account is
+    // told to the inbox, not to whoever filled in the form.
+    const { env } = envWith()
+    await signUpAndVerify(env)
+
+    const known = await requestPasswordReset(env, { email: account.email }, req())
+    const unknown = await requestPasswordReset(env, { email: 'nobody@example.com' }, req())
+
+    expect(unknown.status).toBe(known.status)
+    expect(unknown.body).toEqual(known.body)
+  })
+
+  it('only actually sends to a confirmed account', async () => {
+    const { env } = envWith()
+    await signUpAndVerify(env)
+    sent = []
+
+    await requestPasswordReset(env, { email: account.email }, req())
+    expect(sent[0].subject).toMatch(/reset/i)
+
+    sent = []
+    await requestPasswordReset(env, { email: 'nobody@example.com' }, req())
+    expect(sent, 'nothing to send to an address with no account').toHaveLength(0)
+  })
+
+  it('sends nothing for an account that was never confirmed', async () => {
+    // There is no proof anyone reading that inbox ever wanted an account here.
+    // Their way back in is to register again, which reissues the link.
+    const { env } = envWith()
+    await register(env, account, req())
+    sent = []
+
+    const result = await requestPasswordReset(env, { email: account.email }, req())
+    expect(result.status).toBe(200)
+    expect(sent).toHaveLength(0)
+  })
+
+  it('replaces any earlier link rather than leaving two alive', async () => {
+    const { env } = envWith()
+    await signUpAndVerify(env)
+
+    await requestPasswordReset(env, { email: account.email }, req())
+    const first = linkTokenFrom(sent.at(-1)!.text)
+    await requestPasswordReset(env, { email: account.email }, req())
+    const second = linkTokenFrom(sent.at(-1)!.text)
+
+    expect((await resetPassword(env, { token: first, password: 'a'.repeat(12) })).status).toBe(400)
+    expect((await resetPassword(env, { token: second, password: 'a'.repeat(12) })).status).toBe(200)
+  })
+
+  it('is throttled, because it sends mail to an address a stranger chose', async () => {
+    const { env } = envWith({ SIGNUP_LIMITER: { limit: async () => ({ success: false }) } })
+    expect((await requestPasswordReset(env, { email: account.email }, req())).status).toBe(429)
+  })
+})
+
+describe('using a reset link', () => {
+  async function linkFor(env: AuthEnv) {
+    await requestPasswordReset(env, { email: account.email }, req())
+    return linkTokenFrom(sent.at(-1)!.text)
+  }
+
+  it('sets the new password and signs them in', async () => {
+    const { env } = envWith()
+    await signUpAndVerify(env)
+    const token = await linkFor(env)
+
+    const result = await resetPassword(env, { token, password: 'a brand new password' })
+    expect(result.status).toBe(200)
+    expect((result as { cookie: string }).cookie).toContain('HttpOnly')
+    expect(
+      (await login(env, { email: account.email, password: 'a brand new password' }, req())).status,
+    ).toBe(200)
+  })
+
+  it('ends every other session, which is the point of resetting', async () => {
+    /*
+     * Someone resets a password because they think another person has it.
+     * Leaving that person's session alive makes the reset a gesture.
+     */
+    const { env, sessions } = envWith()
+    await signUpAndVerify(env)
+    await login(env, { email: account.email, password: account.password }, req())
+    expect(sessions.length).toBeGreaterThan(1)
+
+    await resetPassword(env, { token: await linkFor(env), password: 'a brand new password' })
+    // Exactly one: the device that just did the resetting.
+    expect(sessions).toHaveLength(1)
+  })
+
+  it('clears a backoff, so a reset is a way out of being held back', async () => {
+    const { env, users } = envWith()
+    await signUpAndVerify(env)
+    for (let i = 0; i < 6; i++) await login(env, { email: account.email, password: 'no' }, req())
+    expect(users[0].locked_until).not.toBeNull()
+
+    await resetPassword(env, { token: await linkFor(env), password: 'a brand new password' })
+    expect(users[0].failed_attempts).toBe(0)
+    expect(users[0].locked_until).toBeNull()
+  })
+
+  it('works once', async () => {
+    const { env } = envWith()
+    await signUpAndVerify(env)
+    const token = await linkFor(env)
+
+    expect((await resetPassword(env, { token, password: 'a brand new password' })).status).toBe(200)
+    expect((await resetPassword(env, { token, password: 'another one entirely' })).status).toBe(400)
+  })
+
+  it('refuses an expired link', async () => {
+    const { env, tokens } = envWith()
+    await signUpAndVerify(env)
+    const token = await linkFor(env)
+    tokens.find((t) => t.purpose === 'reset')!.expires_at = new Date(Date.now() - 1000).toISOString()
+
+    expect((await resetPassword(env, { token, password: 'a brand new password' })).status).toBe(400)
+  })
+
+  it('will not accept a verification token in its place', async () => {
+    // Different purposes, different lifetimes, different powers. A verify
+    // token is a signup formality; a reset token is a live key to an account.
+    const { env } = envWith()
+    await register(env, account, req())
+    const verifyToken = linkTokenFrom(sent[0].text)
+
+    expect((await resetPassword(env, { token: verifyToken, password: 'a'.repeat(12) })).status).toBe(
+      400,
+    )
+  })
+
+  it('refuses a new password too short to be one', async () => {
+    const { env } = envWith()
+    await signUpAndVerify(env)
+    expect((await resetPassword(env, { token: await linkFor(env), password: 'short' })).status).toBe(
+      400,
+    )
+  })
+})
+
+/* ------------------------------------------------------------------ hygiene */
+
+describe('the nightly sweep', () => {
+  it('deletes what has aged out and leaves what has not', async () => {
+    const { env, sessions, tokens } = envWith()
+    await signUpAndVerify(env)
+
+    const past = new Date(Date.now() - 1000).toISOString()
+    sessions.push({ token_hash: 'old', user_id: 'x', expires_at: past })
+    tokens.push({ token_hash: 'old', user_id: 'x', purpose: 'verify', expires_at: past, used_at: null })
+
+    const purged = await purgeExpired(env)
+
+    expect(purged.sessions).toBe(1)
+    expect(purged.tokens).toBe(1)
+    expect(sessions, 'the live session survives').toHaveLength(1)
+    expect(sessions.every((s) => s.token_hash !== 'old')).toBe(true)
+    expect(tokens.every((t) => t.token_hash !== 'old')).toBe(true)
+  })
+
+  it('keeps a spent link until it expires, so "already used" stays true', async () => {
+    // For a while a spent link gets a more useful answer than "never existed",
+    // and it costs nothing to say it.
+    const { env, tokens } = envWith()
+    await signUpAndVerify(env)
+
+    await purgeExpired(env)
+    expect(tokens.filter((t) => t.used_at !== null)).toHaveLength(1)
   })
 })

@@ -21,6 +21,9 @@ import {
   login,
   logout,
   verifyEmail,
+  requestPasswordReset,
+  resetPassword,
+  purgeExpired,
   sessionUser,
   accountOrders,
   authDefences,
@@ -41,12 +44,15 @@ export interface Env extends RagEnv, OrdersEnv, AuthEnv {
  * An unrecognised origin gets the first entry echoed back, which is not its own
  * — the browser then refuses the response, which is the point.
  */
-function cors(env: Env, request: Request): Record<string, string> {
-  const origin = request.headers.get('origin') ?? ''
-  const allowed = (env.ALLOWED_ORIGIN ?? 'http://localhost:5173')
+const allowedOrigins = (env: Env): string[] =>
+  (env.ALLOWED_ORIGIN ?? 'http://localhost:5173')
     .split(',')
     .map((o) => o.trim())
     .filter(Boolean)
+
+function cors(env: Env, request: Request): Record<string, string> {
+  const origin = request.headers.get('origin') ?? ''
+  const allowed = allowedOrigins(env)
   return {
     'access-control-allow-origin': allowed.includes(origin) ? origin : allowed[0],
     'access-control-allow-methods': 'GET, POST, OPTIONS',
@@ -61,6 +67,28 @@ function cors(env: Env, request: Request): Record<string, string> {
     'access-control-allow-credentials': 'true',
     vary: 'origin',
   }
+}
+
+/**
+ * Refuses a state-changing request that a browser says came from somewhere
+ * else.
+ *
+ * CORS already stops a page on another origin READING a reply, but it does not
+ * stop the request being sent: a cross-site form POST carrying a JSON body is
+ * a "simple request" and skips the preflight entirely. That is enough to sign
+ * a visitor into an attacker's account without their noticing, and then watch
+ * their orders land in it.
+ *
+ * `Origin` is checked only when present. Every browser sends it on a
+ * cross-origin POST, so this is complete against the attack; a server-side
+ * client with no Origin at all — curl, a health check, another worker — is not
+ * a browser and is not the thing being defended against.
+ */
+function foreignOrigin(env: Env, request: Request): boolean {
+  if (request.method === 'GET' || request.method === 'OPTIONS') return false
+  const origin = request.headers.get('origin')
+  if (!origin) return false
+  return !allowedOrigins(env).includes(origin)
 }
 
 const json = (body: unknown, init: ResponseInit & { headers: Record<string, string> }) =>
@@ -92,6 +120,10 @@ export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const headers = cors(env, request)
     if (request.method === 'OPTIONS') return new Response(null, { headers })
+
+    if (foreignOrigin(env, request)) {
+      return json({ error: 'cross-origin request refused' }, { status: 403, headers })
+    }
 
     const url = new URL(request.url)
 
@@ -179,6 +211,14 @@ export default {
         return authJson(await verifyEmail(env, await request.json()), headers)
       }
 
+      if (url.pathname === '/api/auth/forgot' && request.method === 'POST') {
+        return authJson(await requestPasswordReset(env, await request.json(), request), headers)
+      }
+
+      if (url.pathname === '/api/auth/reset' && request.method === 'POST') {
+        return authJson(await resetPassword(env, await request.json()), headers)
+      }
+
       if (url.pathname === '/api/auth/logout' && request.method === 'POST') {
         return authJson(await logout(env, request), headers)
       }
@@ -253,5 +293,23 @@ export default {
       console.error('unhandled', err)
       return json({ error: 'internal error' }, { status: 500, headers })
     }
+  },
+
+  /**
+   * Nightly housekeeping.
+   *
+   * Expired sessions and spent links were already refused on read, so this
+   * changes no behaviour — it stops two tables growing forever. A storefront
+   * nobody sweeps ends up with a sessions table that is almost entirely dead
+   * keys, which is a cost and a bigger thing to lose in a breach.
+   */
+  async scheduled(_event: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
+    ctx.waitUntil(
+      purgeExpired(env)
+        .then(({ sessions, tokens }) =>
+          console.log(`purged ${sessions} expired sessions and ${tokens} expired tokens`),
+        )
+        .catch((err) => console.error('purge failed', err)),
+    )
   },
 }

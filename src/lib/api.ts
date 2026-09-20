@@ -290,6 +290,34 @@ export const signIn = (email: string, password: string) =>
 /** Redeems the link from a verification email, which also signs the user in. */
 export const confirmEmail = (token: string) => post('/api/auth/verify', { token })
 
+/**
+ * Asks for a reset link.
+ *
+ * Returns a message rather than a user, and the same one whether or not the
+ * address has an account — whether it does is told to the inbox, not to
+ * whoever filled in the form.
+ */
+export async function requestPasswordReset(email: string): Promise<RegisterResult> {
+  try {
+    const res = await fetch(`${BASE}/api/auth/forgot`, {
+      ...credentialled,
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ email }),
+      signal: AbortSignal.timeout(20_000),
+    })
+    const data = (await res.json().catch(() => ({}))) as { message?: string; error?: string }
+    if (!res.ok) return { ok: false, error: data.error ?? 'Something went wrong. Try again.' }
+    return { ok: true, message: data.message ?? 'If that address has an account, a reset link is on its way.' }
+  } catch {
+    return { ok: false, error: 'Could not reach the server. Check your connection.' }
+  }
+}
+
+/** Sets the new password from a reset link, and signs them in on this device. */
+export const resetPassword = (token: string, password: string) =>
+  post('/api/auth/reset', { token, password })
+
 export async function signOut(): Promise<void> {
   try {
     await fetch(`${BASE}/api/auth/logout`, {

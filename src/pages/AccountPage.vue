@@ -19,7 +19,7 @@ const route = useRoute()
 const router = useRouter()
 const { format } = useCurrency()
 
-const mode = ref<'in' | 'up'>('in')
+const mode = ref<'in' | 'up' | 'forgot'>('in')
 const name = ref('')
 const email = ref('')
 const password = ref('')
@@ -51,11 +51,15 @@ onMounted(async () => {
   if (auth.signedIn) void loadOrders()
 })
 
+const HEADING = { in: 'Sign in', up: 'Create an account', forgot: 'Reset your password' }
+
 async function submit() {
   const ok =
     mode.value === 'up'
       ? await auth.register(name.value, email.value, password.value)
-      : await auth.login(email.value, password.value)
+      : mode.value === 'forgot'
+        ? await auth.forgot(email.value)
+        : await auth.login(email.value, password.value)
   if (!ok) return
 
   password.value = ''
@@ -153,11 +157,14 @@ const when = (iso: string) =>
       <div v-else class="mx-auto max-w-md">
         <h1 class="flex items-center gap-2 text-2xl font-bold">
           <User class="h-5 w-5 text-text-secondary" aria-hidden="true" />
-          {{ mode === 'up' ? 'Create an account' : 'Sign in' }}
+          {{ HEADING[mode] }}
         </h1>
         <p class="mt-2 text-sm text-text-secondary">
-          An account keeps your orders together and readable from any device. Checkout works
-          perfectly well without one.
+          {{
+            mode === 'forgot'
+              ? 'Tell us the address on the account and we will send a link to choose a new password.'
+              : 'An account keeps your orders together and readable from any device. Checkout works perfectly well without one.'
+          }}
         </p>
 
         <!--
@@ -176,8 +183,8 @@ const when = (iso: string) =>
             {{ auth.notice }}
           </p>
           <p class="mt-2 text-xs text-text-secondary">
-            Sent to <span class="font-medium text-text-primary">{{ email }}</span>. The link is good
-            for 24 hours. Nothing arrives? Check spam, then try again in a minute.
+            Sent to <span class="font-medium text-text-primary">{{ email }}</span>. Nothing arrives?
+            Check spam, then try again in a minute.
           </p>
         </div>
 
@@ -192,7 +199,7 @@ const when = (iso: string) =>
             <input v-model="email" type="email" required autocomplete="email" class="input" />
           </label>
 
-          <label class="block">
+          <label v-if="mode !== 'forgot'" class="block">
             <span class="mb-1.5 block text-sm text-text-secondary">Password</span>
             <input
               v-model="password"
@@ -217,18 +224,39 @@ const when = (iso: string) =>
           </p>
 
           <button type="submit" class="btn-primary w-full" :disabled="auth.busy">
-            {{ auth.busy ? 'One moment…' : mode === 'up' ? 'Create account' : 'Sign in' }}
+            {{
+              auth.busy
+                ? 'One moment…'
+                : mode === 'up'
+                  ? 'Create account'
+                  : mode === 'forgot'
+                    ? 'Send the link'
+                    : 'Sign in'
+            }}
           </button>
+
+          <!-- Only offered from the sign-in form. Putting it on the sign-up
+               form would ask someone creating an account to reset a password
+               they have not chosen yet. -->
+          <p v-if="mode === 'in'" class="text-center text-sm">
+            <button
+              type="button"
+              class="text-text-secondary underline hover:text-text-primary"
+              @click="((mode = 'forgot'), (auth.error = ''))"
+            >
+              Forgot your password?
+            </button>
+          </p>
         </form>
 
         <p v-if="!auth.notice" class="mt-6 text-sm text-text-secondary">
-          {{ mode === 'up' ? 'Already have an account?' : 'New here?' }}
+          {{ mode === 'in' ? 'New here?' : 'Remembered it, or already have an account?' }}
           <button
             type="button"
             class="text-accent underline"
-            @click="((mode = mode === 'up' ? 'in' : 'up'), (auth.error = ''))"
+            @click="((mode = mode === 'in' ? 'up' : 'in'), (auth.error = ''))"
           >
-            {{ mode === 'up' ? 'Sign in' : 'Create one' }}
+            {{ mode === 'in' ? 'Create one' : 'Sign in' }}
           </button>
         </p>
 
