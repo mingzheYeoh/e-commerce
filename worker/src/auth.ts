@@ -39,6 +39,14 @@ import {
   type MailEnv,
 } from './mail'
 import { throttle, type ThrottleBinding } from './throttle'
+import { tooCommon } from './pwned'
+import {
+  newTotpSecret,
+  verifyTotp,
+  otpauthUri,
+  newRecoveryCodes,
+  normaliseRecoveryCode,
+} from './totp'
 
 /** Cloudflare's rate limiting binding. Absent in tests and local dev. */
 export interface RateLimiterBinding {
@@ -82,34 +90,50 @@ const toB64Url = (bytes: Uint8Array): string =>
  * Not bcrypt or argon2: neither exists in the Workers runtime, and shipping a
  * WASM build of one to hash a demo store's passwords is a larger risk surface
  * than the thing it protects. PBKDF2 is the strongest primitive available here
- * natively, which makes the iteration count the only real dial.
+ * natively, which makes the work factor the only real dial.
  *
- * And the dial does not go as far as it should. Workers refuses outright above
- * 100,000 — `NotSupportedError: Pbkdf2 failed: iteration counts above 100000
- * are not supported` — which is below OWASP's current guidance for this
- * algorithm. There is no configuration for it; it is the platform's ceiling.
- *
- * ponytail: 100k because the runtime rejects more. Real protection at this
- * point means a different KDF, which on Workers means WASM — worth it for
- * credentials that matter, not for a demo store that tells people not to reuse
- * a password. The count is stored per user, so the day that changes, everyone
- * is re-hashed as they sign in rather than locked out.
+ * Workers refuses outright above 100,000 in a single call —
+ * `NotSupportedError: Pbkdf2 failed: iteration counts above 100000 are not
+ * supported` — which on its own is below OWASP's figure for this algorithm.
+ * There is no configuration for it; it is the platform's ceiling.
  */
 const PBKDF2_ITERATIONS = 100_000
 
-/** What the runtime will accept. Above this, `deriveBits` throws. */
+/** What the runtime will accept in one call. Above this, `deriveBits` throws. */
 export const MAX_PBKDF2_ITERATIONS = 100_000
 
-async function derive(password: string, salt: Uint8Array, iterations: number): Promise<Uint8Array> {
-  const key = await crypto.subtle.importKey('raw', encoder.encode(password), 'PBKDF2', false, [
-    'deriveBits',
-  ])
-  const bits = await crypto.subtle.deriveBits(
-    { name: 'PBKDF2', hash: 'SHA-256', salt, iterations },
-    key,
-    256,
-  )
-  return new Uint8Array(bits)
+/**
+ * Passes of PBKDF2, chained — which is the way past that ceiling.
+ *
+ * Each pass takes the previous pass's output as its input, so six of them is
+ * 600,000 iterations of work an attacker has to repeat for every single guess.
+ * That is OWASP's current figure, reached without a WASM KDF. Measured at
+ * 139ms against a 30-second CPU budget, so the headroom is in the hundreds of
+ * rounds rather than the ones.
+ *
+ * Stored per user rather than assumed, which is what lets it be raised again:
+ * a row hashed at an older setting still verifies, and is re-hashed at the
+ * current one the next time its owner signs in — nobody is locked out by a
+ * change they did not ask for.
+ */
+const KDF_ROUNDS = 6
+
+async function derive(password: string, salt: Uint8Array, rounds: number): Promise<Uint8Array> {
+  // One round, with the password itself as the input, reproduces exactly what a
+  // single PBKDF2 call used to produce. That is why every row written before
+  // this still verifies against `kdf_rounds = 1`.
+  let material = encoder.encode(password) as Uint8Array
+  for (let i = 0; i < Math.max(1, rounds); i++) {
+    const key = await crypto.subtle.importKey('raw', material, 'PBKDF2', false, ['deriveBits'])
+    material = new Uint8Array(
+      await crypto.subtle.deriveBits(
+        { name: 'PBKDF2', hash: 'SHA-256', salt, iterations: PBKDF2_ITERATIONS },
+        key,
+        256,
+      ),
+    )
+  }
+  return material
 }
 
 /**
@@ -257,7 +281,12 @@ export interface User {
 
 export type AuthResult =
   | { status: 200; body: unknown; cookie?: string }
-  | { status: 400 | 401 | 403 | 409 | 429 | 503; body: { error: string }; retryAfter?: number }
+  | {
+      status: 400 | 401 | 403 | 409 | 429 | 503
+      /** `mfaRequired` is how the form knows to ask for a code rather than retry. */
+      body: { error: string; mfaRequired?: boolean }
+      retryAfter?: number
+    }
 
 const str = (v: unknown, max: number): string | null =>
   typeof v === 'string' && v.trim() && v.trim().length <= max ? v.trim() : null
@@ -361,6 +390,17 @@ export async function register(
    * feature; failing open would keep the feature and quietly lose the
    * property, which is the worse trade every time.
    */
+  /*
+   * Length is a poor predictor and everybody knows it. `Password1!` clears
+   * most length-and-symbol rules and sits in breach corpora millions of
+   * times over; what actually predicts a guess is whether someone has
+   * already guessed it.
+   *
+   * Only the first five characters of the SHA-1 leave this worker.
+   */
+  const breached = await tooCommon(password)
+  if (breached) return { status: 400, body: { error: breached } }
+
   const mailer = mailerFor(env)
   if (!mailer) {
     console.error('registration refused: no mail transport configured')
@@ -413,15 +453,15 @@ export async function register(
      */
     if (!existing.email_verified_at) {
       const salt = crypto.getRandomValues(new Uint8Array(16))
-      const hash = await derive(password, salt, PBKDF2_ITERATIONS)
+      const hash = await derive(password, salt, KDF_ROUNDS)
       const token = randomToken()
 
       await env.ORDERS.batch([
         env.ORDERS.prepare(
           `UPDATE users SET name = ?2, password_hash = ?3, password_salt = ?4, iterations = ?5,
-                            failed_attempts = 0, locked_until = NULL
+                            kdf_rounds = ?6, failed_attempts = 0, locked_until = NULL
              WHERE id = ?1`,
-        ).bind(existing.id, name, toB64(hash), toB64(salt), PBKDF2_ITERATIONS),
+        ).bind(existing.id, name, toB64(hash), toB64(salt), PBKDF2_ITERATIONS, KDF_ROUNDS),
         // Any earlier link stops working. Two live links to one unconfirmed
         // account is two chances for the wrong person to hold one.
         env.ORDERS.prepare(
@@ -445,16 +485,16 @@ export async function register(
   }
 
   const salt = crypto.getRandomValues(new Uint8Array(16))
-  const hash = await derive(password, salt, PBKDF2_ITERATIONS)
+  const hash = await derive(password, salt, KDF_ROUNDS)
   const id = `usr_${randomB64(16).replace(/[^A-Za-z0-9]/g, '')}`
   const token = randomToken()
 
   try {
     await env.ORDERS.batch([
       env.ORDERS.prepare(
-        `INSERT INTO users (id, email, name, password_hash, password_salt, iterations)
-         VALUES (?1,?2,?3,?4,?5,?6)`,
-      ).bind(id, email, name, toB64(hash), toB64(salt), PBKDF2_ITERATIONS),
+        `INSERT INTO users (id, email, name, password_hash, password_salt, iterations, kdf_rounds)
+         VALUES (?1,?2,?3,?4,?5,?6,?7)`,
+      ).bind(id, email, name, toB64(hash), toB64(salt), PBKDF2_ITERATIONS, KDF_ROUNDS),
       env.ORDERS.prepare(
         `INSERT INTO email_tokens (token_hash, user_id, purpose, expires_at) VALUES (?1,?2,'verify',?3)`,
       ).bind(await sha256(token), id, inSeconds(VERIFY_TOKEN_HOURS * 3600)),
@@ -501,13 +541,26 @@ export async function verifyEmail(env: AuthEnv, body: unknown): Promise<AuthResu
   const token = typeof body === 'object' && body !== null ? str((body as { token?: unknown }).token, 200) : null
   if (!token) return { status: 400, body: { error: 'That link is not valid.' } }
 
+  /*
+   * Both kinds of link land here, because to the person holding one they are
+   * the same thing: a message that says click this. Splitting them into two
+   * endpoints and two pages would be two ways to say "that did not work".
+   */
   const row = await env.ORDERS.prepare(
-    `SELECT t.user_id, t.expires_at, t.used_at, u.email, u.name
+    `SELECT t.user_id, t.purpose, t.expires_at, t.used_at, u.email, u.name, u.pending_email
        FROM email_tokens t JOIN users u ON u.id = t.user_id
-      WHERE t.token_hash = ?1 AND t.purpose = 'verify'`,
+      WHERE t.token_hash = ?1 AND t.purpose IN ('verify','email_change')`,
   )
     .bind(await sha256(token))
-    .first<{ user_id: string; expires_at: string; used_at: string | null; email: string; name: string }>()
+    .first<{
+      user_id: string
+      purpose: string
+      expires_at: string
+      used_at: string | null
+      email: string
+      name: string
+      pending_email: string | null
+    }>()
 
   // One message for unknown, expired and already-used. They are all "this link
   // will not work, ask for another", and distinguishing them tells a stranger
@@ -516,11 +569,57 @@ export async function verifyEmail(env: AuthEnv, body: unknown): Promise<AuthResu
     return { status: 400, body: { error: 'That link has expired or has already been used.' } }
   }
 
+  const spend = env.ORDERS.prepare(`UPDATE email_tokens SET used_at = ?2 WHERE token_hash = ?1`).bind(
+    await sha256(token),
+    nowIso(),
+  )
+
+  if (row.purpose === 'email_change') {
+    if (!row.pending_email) {
+      return { status: 400, body: { error: 'That change was already cancelled.' } }
+    }
+
+    /*
+     * The collision is caught here rather than when the change was requested.
+     *
+     * Reporting "that address is taken" on the settings form would turn it
+     * into the account-existence oracle registration goes to such lengths to
+     * avoid — and one that comes with free confirmation the asker is a real
+     * signed-in customer. By the time somebody is holding a link sent to the
+     * address, they read that inbox, so there is nothing left to leak.
+     */
+    try {
+      await env.ORDERS.batch([
+        spend,
+        env.ORDERS.prepare(
+          `UPDATE users SET email = ?2, pending_email = NULL, email_verified_at = ?3 WHERE id = ?1`,
+        ).bind(row.user_id, row.pending_email, nowIso()),
+      ])
+    } catch (err) {
+      if (/UNIQUE/i.test(String(err))) {
+        await env.ORDERS.prepare(`UPDATE users SET pending_email = NULL WHERE id = ?1`)
+          .bind(row.user_id)
+          .run()
+        return {
+          status: 409,
+          body: { error: 'That address is no longer available. Your account is unchanged.' },
+        }
+      }
+      throw err
+    }
+
+    return {
+      status: 200,
+      body: {
+        user: { id: row.user_id, email: row.pending_email, name: row.name } satisfies User,
+        changed: 'email',
+      },
+      cookie: sessionCookie(await startSession(env, row.user_id), SESSION_DAYS * 86_400),
+    }
+  }
+
   await env.ORDERS.batch([
-    env.ORDERS.prepare(`UPDATE email_tokens SET used_at = ?2 WHERE token_hash = ?1`).bind(
-      await sha256(token),
-      nowIso(),
-    ),
+    spend,
     env.ORDERS.prepare(`UPDATE users SET email_verified_at = ?2 WHERE id = ?1`).bind(
       row.user_id,
       nowIso(),
@@ -547,8 +646,8 @@ export async function login(env: AuthEnv, body: unknown, request: Request): Prom
   const password = typeof p.password === 'string' ? p.password : ''
 
   const row = await env.ORDERS.prepare(
-    `SELECT id, email, name, password_hash, password_salt, iterations,
-            failed_attempts, locked_until, email_verified_at
+    `SELECT id, email, name, password_hash, password_salt, iterations, kdf_rounds,
+            failed_attempts, locked_until, email_verified_at, totp_secret, totp_confirmed_at
        FROM users WHERE email = ?1`,
   )
     .bind(email)
@@ -559,9 +658,12 @@ export async function login(env: AuthEnv, body: unknown, request: Request): Prom
       password_hash: string
       password_salt: string
       iterations: number
+      kdf_rounds: number
       failed_attempts: number
       locked_until: string | null
       email_verified_at: string | null
+      totp_secret: string | null
+      totp_confirmed_at: string | null
     }>()
 
   const WRONG = { status: 401 as const, body: { error: 'That email and password do not match.' } }
@@ -583,8 +685,10 @@ export async function login(env: AuthEnv, body: unknown, request: Request): Prom
    * password", which turns this endpoint into a way to find out who shops here.
    */
   const salt = row ? fromB64(row.password_salt) : new Uint8Array(16)
-  const iterations = row?.iterations ?? PBKDF2_ITERATIONS
-  const attempt = await derive(password, salt, iterations)
+  // An unknown address is hashed at the current cost, so it takes as long as
+  // a real one rather than finishing early and saying so.
+  const rounds = row?.kdf_rounds ?? KDF_ROUNDS
+  const attempt = await derive(password, salt, rounds)
 
   if (!row || !sameBytes(attempt, fromB64(row.password_hash))) {
     if (row) {
@@ -608,6 +712,31 @@ export async function login(env: AuthEnv, body: unknown, request: Request): Prom
     }
   }
 
+  /*
+   * The second factor, if there is one.
+   *
+   * Asked for only after the password is known to be right, which does tell a
+   * caller holding a correct password that the account exists — but they hold
+   * a correct password, so there is nothing left to conceal. A recovery code is
+   * accepted in the same field: somebody whose phone is gone is already having
+   * a bad day and should not have to find a different form.
+   */
+  if (row.totp_confirmed_at && row.totp_secret) {
+    const code = str((p as { code?: unknown }).code, 40)
+    if (!code) {
+      return {
+        status: 403,
+        body: { error: 'Enter the code from your authenticator app.', mfaRequired: true },
+      }
+    }
+
+    const accepted =
+      (await verifyTotp(row.totp_secret, code)) || (await spendRecoveryCode(env, row.id, code))
+    if (!accepted) {
+      return { status: 401, body: { error: 'That code is not right.', mfaRequired: true } }
+    }
+  }
+
   // A correct password clears the count. Backoff is there to slow guessing,
   // not to punish someone who eventually remembered.
   await env.ORDERS.prepare(
@@ -615,6 +744,26 @@ export async function login(env: AuthEnv, body: unknown, request: Request): Prom
   )
     .bind(row.id)
     .run()
+
+  /*
+   * And this is the moment an old hash gets upgraded.
+   *
+   * It is the only point where the plaintext password and the stored row are
+   * both in hand, so it is the only place a stronger work factor can be
+   * applied without asking anybody to do anything. Deliberately not awaited
+   * into the response — a failed re-hash leaves a working older hash, which is
+   * not worth failing a sign-in over.
+   */
+  if (row.kdf_rounds < KDF_ROUNDS) {
+    const salt = crypto.getRandomValues(new Uint8Array(16))
+    const upgraded = await derive(password, salt, KDF_ROUNDS)
+    await env.ORDERS.prepare(
+      `UPDATE users SET password_hash = ?2, password_salt = ?3, kdf_rounds = ?4 WHERE id = ?1`,
+    )
+      .bind(row.id, toB64(upgraded), toB64(salt), KDF_ROUNDS)
+      .run()
+      .catch((err) => console.error('rehash failed', err))
+  }
 
   return {
     status: 200,
@@ -795,8 +944,11 @@ export async function resetPassword(env: AuthEnv, body: unknown): Promise<AuthRe
     return { status: 400, body: { error: 'That link has expired or has already been used.' } }
   }
 
+  const breached = await tooCommon(password)
+  if (breached) return { status: 400, body: { error: breached } }
+
   const salt = crypto.getRandomValues(new Uint8Array(16))
-  const hash = await derive(password, salt, PBKDF2_ITERATIONS)
+  const hash = await derive(password, salt, KDF_ROUNDS)
 
   await env.ORDERS.batch([
     env.ORDERS.prepare(`UPDATE email_tokens SET used_at = ?2 WHERE token_hash = ?1`).bind(
@@ -804,11 +956,11 @@ export async function resetPassword(env: AuthEnv, body: unknown): Promise<AuthRe
       nowIso(),
     ),
     env.ORDERS.prepare(
-      `UPDATE users SET password_hash = ?2, password_salt = ?3, iterations = ?4,
+      `UPDATE users SET password_hash = ?2, password_salt = ?3, iterations = ?4, kdf_rounds = ?5,
                         failed_attempts = 0, locked_until = NULL,
-                        email_verified_at = COALESCE(email_verified_at, ?5)
+                        email_verified_at = COALESCE(email_verified_at, ?6)
          WHERE id = ?1`,
-    ).bind(row.user_id, toB64(hash), toB64(salt), PBKDF2_ITERATIONS, nowIso()),
+    ).bind(row.user_id, toB64(hash), toB64(salt), PBKDF2_ITERATIONS, KDF_ROUNDS, nowIso()),
     // Everywhere, including whoever they are resetting because of.
     env.ORDERS.prepare(`DELETE FROM sessions WHERE user_id = ?1`).bind(row.user_id),
   ])
@@ -843,5 +995,348 @@ export async function purgeExpired(env: AuthEnv): Promise<{ sessions: number; to
   return {
     sessions: sessions.meta?.changes ?? 0,
     tokens: tokens.meta?.changes ?? 0,
+  }
+}
+
+/* ------------------------------------------------------- account settings */
+
+/**
+ * Every setting below asks for the current password again.
+ *
+ * A live session is not proof that the person at the keyboard is the account's
+ * owner — an unlocked laptop is the whole point of the attack. Re-asking costs
+ * a returning owner four seconds and costs somebody who sat down at their desk
+ * everything.
+ */
+async function passwordMatches(env: AuthEnv, userId: string, password: string): Promise<boolean> {
+  const row = await env.ORDERS.prepare(
+    `SELECT password_hash, password_salt, kdf_rounds FROM users WHERE id = ?1`,
+  )
+    .bind(userId)
+    .first<{ password_hash: string; password_salt: string; kdf_rounds: number }>()
+  if (!row) return false
+
+  const attempt = await derive(password, fromB64(row.password_salt), row.kdf_rounds)
+  return sameBytes(attempt, fromB64(row.password_hash))
+}
+
+const WRONG_PASSWORD = {
+  status: 401 as const,
+  body: { error: 'That password is not right.' },
+}
+
+export async function changePassword(
+  env: AuthEnv,
+  user: User,
+  body: unknown,
+): Promise<AuthResult> {
+  if (typeof body !== 'object' || body === null) return { status: 400, body: { error: 'bad request' } }
+  const p = body as { current?: unknown; next?: unknown }
+
+  const current = typeof p.current === 'string' ? p.current : ''
+  const next = typeof p.next === 'string' ? p.next : ''
+
+  if (next.length < MIN_PASSWORD || next.length > MAX_PASSWORD) {
+    return { status: 400, body: { error: `Use at least ${MIN_PASSWORD} characters.` } }
+  }
+  if (!(await passwordMatches(env, user.id, current))) return WRONG_PASSWORD
+
+  const breached = await tooCommon(next)
+  if (breached) return { status: 400, body: { error: breached } }
+
+  const salt = crypto.getRandomValues(new Uint8Array(16))
+  const hash = await derive(next, salt, KDF_ROUNDS)
+
+  await env.ORDERS.prepare(
+    `UPDATE users SET password_hash = ?2, password_salt = ?3, iterations = ?4, kdf_rounds = ?5,
+                      failed_attempts = 0, locked_until = NULL
+       WHERE id = ?1`,
+  )
+    .bind(user.id, toB64(hash), toB64(salt), PBKDF2_ITERATIONS, KDF_ROUNDS)
+    .run()
+
+  /*
+   * Other sessions survive a deliberate change, unlike a reset.
+   *
+   * The two look similar and mean different things. A reset is what somebody
+   * does when they think another person has their password, so it ends
+   * everything. This is routine hygiene from a signed-in device, and quietly
+   * signing the owner out of their phone is an unpleasant surprise — the
+   * button for that is next to this one, and it is theirs to press.
+   */
+  return { status: 200, body: { ok: true, message: 'Password changed.' } }
+}
+
+/**
+ * Starts a change of address. The account keeps working on the old one.
+ *
+ * Confirmation goes to the NEW address, because the point is to prove somebody
+ * reads it. Nothing moves until they click.
+ */
+export async function requestEmailChange(
+  env: AuthEnv,
+  user: User,
+  body: unknown,
+  request: Request,
+): Promise<AuthResult> {
+  const limited = await guard(env, request, 'signup')
+  if (limited) return limited
+
+  if (typeof body !== 'object' || body === null) return { status: 400, body: { error: 'bad request' } }
+  const p = body as { password?: unknown; email?: unknown }
+
+  const email = str(p.email, 200)?.toLowerCase()
+  if (!email || !isEmail(email)) return { status: 400, body: { error: 'That email does not look right.' } }
+  if (email === user.email) {
+    return { status: 400, body: { error: 'That is already the address on this account.' } }
+  }
+  if (!(await passwordMatches(env, user.id, typeof p.password === 'string' ? p.password : ''))) {
+    return WRONG_PASSWORD
+  }
+
+  const mailer = mailerFor(env)
+  if (!mailer) {
+    console.error('email change refused: no mail transport configured')
+    return { status: 503, body: { error: 'Changing your email is temporarily unavailable.' } }
+  }
+
+  /*
+   * Whether the new address is already taken is NOT reported here. It would
+   * turn an ordinary settings form into the account-existence oracle that
+   * registration goes to such lengths to avoid — and this one comes with a
+   * free confirmation that the asker is a real signed-in customer.
+   *
+   * The collision is caught at redemption instead, where the answer is "that
+   * address is no longer available" and the account is unchanged.
+   */
+  const token = randomToken()
+  await env.ORDERS.batch([
+    env.ORDERS.prepare(`UPDATE users SET pending_email = ?2 WHERE id = ?1`).bind(user.id, email),
+    env.ORDERS.prepare(
+      `DELETE FROM email_tokens WHERE user_id = ?1 AND purpose = 'email_change'`,
+    ).bind(user.id),
+    env.ORDERS.prepare(
+      `INSERT INTO email_tokens (token_hash, user_id, purpose, expires_at) VALUES (?1,?2,'email_change',?3)`,
+    ).bind(await sha256(token), user.id, inSeconds(VERIFY_TOKEN_HOURS * 3600)),
+  ])
+
+  const site = siteUrl(env)
+  const mail = verificationEmail(`${site}/verify?token=${encodeURIComponent(token)}`)
+  if (!(await mailer.send({ to: email, ...mail }))) {
+    return { status: 503, body: { error: 'We could not send the confirmation email. Try again shortly.' } }
+  }
+
+  return {
+    status: 200,
+    body: { ok: true, message: `Check ${email} for a link. Nothing changes until you click it.` },
+  }
+}
+
+/* ------------------------------------------------------------- other devices */
+
+/**
+ * Ends every session except the one asking.
+ *
+ * The "I was signed in somewhere I should not have been" button. Keeping the
+ * current one is the difference between this and a reset: nobody wants to sign
+ * themselves out while pressing it.
+ */
+export async function revokeOtherSessions(env: AuthEnv, user: User, request: Request): Promise<AuthResult> {
+  const token = readCookie(request, SESSION_COOKIE)
+  const { meta } = await env.ORDERS.prepare(
+    `DELETE FROM sessions WHERE user_id = ?1 AND token_hash != ?2`,
+  )
+    .bind(user.id, token ? await sha256(token) : '')
+    .run()
+
+  const ended = meta?.changes ?? 0
+  return {
+    status: 200,
+    body: {
+      ok: true,
+      ended,
+      message: ended
+        ? `Signed out of ${ended} other ${ended === 1 ? 'device' : 'devices'}.`
+        : 'No other devices were signed in.',
+    },
+  }
+}
+
+/** How many places this account is currently signed in, this one included. */
+export async function activeSessionCount(env: AuthEnv, user: User): Promise<number> {
+  const row = await env.ORDERS.prepare(
+    `SELECT COUNT(*) AS n FROM sessions WHERE user_id = ?1 AND expires_at > ?2`,
+  )
+    .bind(user.id, nowIso())
+    .first<{ n: number }>()
+  return row?.n ?? 0
+}
+
+/* ------------------------------------------------------------------ closing */
+
+/**
+ * Closes the account.
+ *
+ * Orders are deliberately NOT deleted. They are the record of a transaction
+ * that happened, each one carrying the address it shipped to and the price
+ * that was charged; erasing them on request would erase the shop's side of it
+ * too. What goes is the link — `user_id` is cleared, so the order survives as
+ * a receipt reachable by its own id and belongs to no account.
+ *
+ * This is stated on the page rather than buried here, because it is the sort
+ * of thing somebody should know before pressing the button and not after.
+ */
+export async function deleteAccount(env: AuthEnv, user: User, body: unknown): Promise<AuthResult> {
+  if (typeof body !== 'object' || body === null) return { status: 400, body: { error: 'bad request' } }
+  const password = typeof (body as { password?: unknown }).password === 'string'
+    ? ((body as { password: string }).password)
+    : ''
+
+  if (!(await passwordMatches(env, user.id, password))) return WRONG_PASSWORD
+
+  await env.ORDERS.batch([
+    env.ORDERS.prepare(`UPDATE orders SET user_id = NULL WHERE user_id = ?1`).bind(user.id),
+    env.ORDERS.prepare(`DELETE FROM recovery_codes WHERE user_id = ?1`).bind(user.id),
+    env.ORDERS.prepare(`DELETE FROM email_tokens WHERE user_id = ?1`).bind(user.id),
+    env.ORDERS.prepare(`DELETE FROM sessions WHERE user_id = ?1`).bind(user.id),
+    env.ORDERS.prepare(`DELETE FROM users WHERE id = ?1`).bind(user.id),
+  ])
+
+  return {
+    status: 200,
+    body: { ok: true, message: 'Your account is closed.' },
+    cookie: sessionCookie('', 0),
+  }
+}
+
+/* --------------------------------------------------------- second factor */
+
+/**
+ * Generates a secret and hands back what the app needs to store it.
+ *
+ * Nothing is turned on yet. The secret is written so the confirm step can
+ * check a code against it, but `totp_confirmed_at` stays null until a real
+ * code arrives — a secret that was generated and never successfully used must
+ * not be able to lock anybody out of their own account.
+ */
+export async function startTotpEnrolment(env: AuthEnv, user: User, body: unknown): Promise<AuthResult> {
+  const password = typeof body === 'object' && body !== null && typeof (body as { password?: unknown }).password === 'string'
+    ? (body as { password: string }).password
+    : ''
+  if (!(await passwordMatches(env, user.id, password))) return WRONG_PASSWORD
+
+  const secret = newTotpSecret()
+  await env.ORDERS.prepare(
+    `UPDATE users SET totp_secret = ?2, totp_confirmed_at = NULL WHERE id = ?1`,
+  )
+    .bind(user.id, secret)
+    .run()
+
+  return {
+    status: 200,
+    body: {
+      secret,
+      uri: otpauthUri(user.email, secret),
+    },
+  }
+}
+
+/**
+ * Turns it on, and issues the codes that make it survivable.
+ *
+ * The recovery codes are returned exactly once, here. They are stored as
+ * hashes, so nobody — including this service — can show them again.
+ */
+export async function confirmTotpEnrolment(env: AuthEnv, user: User, body: unknown): Promise<AuthResult> {
+  const code = typeof body === 'object' && body !== null ? str((body as { code?: unknown }).code, 40) : null
+  if (!code) return { status: 400, body: { error: 'Enter the six-digit code.' } }
+
+  const row = await env.ORDERS.prepare(`SELECT totp_secret FROM users WHERE id = ?1`)
+    .bind(user.id)
+    .first<{ totp_secret: string | null }>()
+  if (!row?.totp_secret) {
+    return { status: 400, body: { error: 'Start again — there is no pending setup.' } }
+  }
+  if (!(await verifyTotp(row.totp_secret, code))) {
+    return { status: 400, body: { error: 'That code is not right. Check your phone’s clock and try the next one.' } }
+  }
+
+  const codes = newRecoveryCodes()
+  await env.ORDERS.batch([
+    env.ORDERS.prepare(`UPDATE users SET totp_confirmed_at = ?2 WHERE id = ?1`).bind(user.id, nowIso()),
+    // Any codes from a previous enrolment stop working.
+    env.ORDERS.prepare(`DELETE FROM recovery_codes WHERE user_id = ?1`).bind(user.id),
+    ...(await Promise.all(
+      codes.map(async (code) =>
+        env.ORDERS.prepare(`INSERT INTO recovery_codes (code_hash, user_id) VALUES (?1,?2)`).bind(
+          await sha256(normaliseRecoveryCode(code)),
+          user.id,
+        ),
+      ),
+    )),
+  ])
+
+  return { status: 200, body: { ok: true, recoveryCodes: codes } }
+}
+
+export async function disableTotp(env: AuthEnv, user: User, body: unknown): Promise<AuthResult> {
+  const password = typeof body === 'object' && body !== null && typeof (body as { password?: unknown }).password === 'string'
+    ? (body as { password: string }).password
+    : ''
+  if (!(await passwordMatches(env, user.id, password))) return WRONG_PASSWORD
+
+  await env.ORDERS.batch([
+    env.ORDERS.prepare(
+      `UPDATE users SET totp_secret = NULL, totp_confirmed_at = NULL WHERE id = ?1`,
+    ).bind(user.id),
+    env.ORDERS.prepare(`DELETE FROM recovery_codes WHERE user_id = ?1`).bind(user.id),
+  ])
+
+  return { status: 200, body: { ok: true, message: 'Two-factor authentication is off.' } }
+}
+
+/**
+ * Spends a recovery code, if the string is one.
+ *
+ * Every unused code for the account is hashed and compared, because the code
+ * arrives as text and the table holds hashes — there is nothing to look up by.
+ * The comparison is on hashes of equal length, so it does not leak which one
+ * nearly matched.
+ */
+async function spendRecoveryCode(env: AuthEnv, userId: string, code: string): Promise<boolean> {
+  const normalised = normaliseRecoveryCode(code)
+  if (normalised.length < 8) return false
+
+  const hash = await sha256(normalised)
+  const { meta } = await env.ORDERS.prepare(
+    `UPDATE recovery_codes SET used_at = ?3
+       WHERE code_hash = ?1 AND user_id = ?2 AND used_at IS NULL`,
+  )
+    .bind(hash, userId, nowIso())
+    .run()
+
+  return (meta?.changes ?? 0) > 0
+}
+
+/** Everything the settings page needs to draw itself. */
+export async function accountSettings(env: AuthEnv, user: User) {
+  const row = await env.ORDERS.prepare(
+    `SELECT pending_email, totp_confirmed_at, kdf_rounds FROM users WHERE id = ?1`,
+  )
+    .bind(user.id)
+    .first<{ pending_email: string | null; totp_confirmed_at: string | null; kdf_rounds: number }>()
+
+  const codes = await env.ORDERS.prepare(
+    `SELECT COUNT(*) AS n FROM recovery_codes WHERE user_id = ?1 AND used_at IS NULL`,
+  )
+    .bind(user.id)
+    .first<{ n: number }>()
+
+  return {
+    user,
+    pendingEmail: row?.pending_email ?? null,
+    twoFactor: Boolean(row?.totp_confirmed_at),
+    recoveryCodesLeft: codes?.n ?? 0,
+    sessions: await activeSessionCount(env, user),
   }
 }

@@ -284,8 +284,47 @@ export async function registerAccount(
   }
 }
 
-export const signIn = (email: string, password: string) =>
-  post('/api/auth/login', { email, password })
+/**
+ * Signing in, with an optional second factor.
+ *
+ * `mfaRequired` comes back when the password was right and a code is still
+ * needed — the form switches to asking for one rather than reporting a
+ * failure, because nothing failed.
+ */
+export type SignInResult =
+  | { ok: true; user: Account }
+  | { ok: false; error: string; mfaRequired?: boolean }
+
+export async function signIn(
+  email: string,
+  password: string,
+  code?: string,
+): Promise<SignInResult> {
+  try {
+    const res = await fetch(`${BASE}/api/auth/login`, {
+      ...credentialled,
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ email, password, code }),
+      signal: AbortSignal.timeout(20_000),
+    })
+    const data = (await res.json().catch(() => ({}))) as {
+      user?: Account
+      error?: string
+      mfaRequired?: boolean
+    }
+    if (!res.ok || !data.user) {
+      return {
+        ok: false,
+        error: data.error ?? 'Something went wrong. Try again.',
+        mfaRequired: data.mfaRequired,
+      }
+    }
+    return { ok: true, user: data.user }
+  } catch {
+    return { ok: false, error: 'Could not reach the server. Check your connection.' }
+  }
+}
 
 /** Redeems the link from a verification email, which also signs the user in. */
 export const confirmEmail = (token: string) => post('/api/auth/verify', { token })
@@ -357,3 +396,63 @@ export async function myOrders(): Promise<AccountOrder[] | null> {
     return null
   }
 }
+
+/* -------------------------------------------------------- account settings */
+
+export interface AccountSettings {
+  user: Account
+  /** A requested address waiting for its owner to click the link. */
+  pendingEmail: string | null
+  twoFactor: boolean
+  recoveryCodesLeft: number
+  sessions: number
+}
+
+export type SettingsResult =
+  | { ok: true; data: Record<string, unknown> }
+  | { ok: false; error: string }
+
+async function accountPost(path: string, body: unknown): Promise<SettingsResult> {
+  try {
+    const res = await fetch(`${BASE}/api/account/${path}`, {
+      ...credentialled,
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(20_000),
+    })
+    const data = (await res.json().catch(() => ({}))) as Record<string, unknown>
+    if (!res.ok) return { ok: false, error: String(data.error ?? 'Something went wrong. Try again.') }
+    return { ok: true, data }
+  } catch {
+    return { ok: false, error: 'Could not reach the server. Check your connection.' }
+  }
+}
+
+export async function fetchSettings(): Promise<AccountSettings | null> {
+  try {
+    const res = await fetch(`${BASE}/api/account/settings`, {
+      ...credentialled,
+      signal: AbortSignal.timeout(10_000),
+    })
+    return res.ok ? ((await res.json()) as AccountSettings) : null
+  } catch {
+    return null
+  }
+}
+
+export const changePassword = (current: string, next: string) =>
+  accountPost('password', { current, next })
+
+export const changeEmail = (password: string, email: string) =>
+  accountPost('email', { password, email })
+
+export const revokeOtherSessions = () => accountPost('sessions/revoke', {})
+
+export const closeAccount = (password: string) => accountPost('delete', { password })
+
+export const startTwoFactor = (password: string) => accountPost('totp/start', { password })
+
+export const confirmTwoFactor = (code: string) => accountPost('totp/confirm', { code })
+
+export const disableTwoFactor = (password: string) => accountPost('totp/disable', { password })

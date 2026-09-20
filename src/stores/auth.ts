@@ -56,6 +56,8 @@ export const useAuthStore = defineStore('auth', {
     error: '',
     /** Set after a registration: what to tell them to go and do. */
     notice: '',
+    /** The password was right and a second factor is still needed. */
+    mfaRequired: false,
   }),
 
   getters: {
@@ -154,17 +156,28 @@ export const useAuthStore = defineStore('auth', {
       return true
     },
 
-    async login(email: string, password: string): Promise<boolean> {
+    /**
+     * Signing in, possibly in two steps.
+     *
+     * When the password is right and a second factor is on, this leaves
+     * `mfaRequired` set and no session. Nothing failed — the form just has one
+     * more thing to ask for.
+     */
+    async login(email: string, password: string, code?: string): Promise<boolean> {
       this.busy = true
       this.error = ''
       this.notice = ''
-      const result = await signIn(email, password)
+      const result = await signIn(email, password, code)
       this.busy = false
 
       if (!result.ok) {
         this.error = result.error
+        this.mfaRequired = Boolean(result.mfaRequired)
+        // The first 403 is not an error worth shouting about; it is a prompt.
+        if (this.mfaRequired && !code) this.error = ''
         return false
       }
+      this.mfaRequired = false
       this.apply(result.user)
       return true
     },
