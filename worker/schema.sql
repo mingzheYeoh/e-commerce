@@ -231,3 +231,20 @@ BEGIN SELECT RAISE(ABORT,'audit log is append-only'); END;
 
 CREATE TRIGGER IF NOT EXISTS audit_no_delete BEFORE DELETE ON audit_log
 BEGIN SELECT RAISE(ABORT,'audit log is append-only'); END;
+
+-- ---------------------------------------------------------------- 0007
+-- The 0006 block above must stay byte-identical to migrations/0006-tenancy.sql
+-- (see the drift test), so these columns cannot be inlined into the products
+-- CREATE TABLE above without breaking that test. Added the same way
+-- production gets them: as the ALTER statements from 0007, verbatim.
+
+ALTER TABLE products ADD COLUMN badge TEXT
+  CHECK (badge IS NULL OR badge IN ('NEW_DROP','LIMITED_EDITION','DISCOUNT'));
+
+ALTER TABLE products ADD COLUMN rating REAL NOT NULL DEFAULT 0
+  CHECK (rating >= 0 AND rating <= 5);
+
+ALTER TABLE products ADD COLUMN review_count INTEGER NOT NULL DEFAULT 0
+  CHECK (typeof(review_count) = 'integer' AND review_count >= 0);
+
+ALTER TABLE products ADD COLUMN specs_summary TEXT NOT NULL DEFAULT '[]';

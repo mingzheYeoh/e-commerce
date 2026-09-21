@@ -14,6 +14,15 @@ describe('the migration and the schema', () => {
      * have disagreed on line endings before (autocrlf rewrites them per
      * checkout), and a byte-exact guard would go red the first time an editor
      * normalised one of them. A guard that everyone learns to ignore is dead.
+     *
+     * Coverage stops at 0006 on purpose. 0007 and on are ALTER TABLE
+     * migrations with no CREATE TABLE block of their own to slice out and
+     * compare — schema.sql instead carries them as the same ALTER statements,
+     * appended after the 0006 block ends (inlining their columns into the
+     * CREATE TABLE above would edit text this test requires to stay
+     * byte-identical to 0006, and immediately fail it). Whether schema.sql
+     * still ends up with the columns 0007 promises is exercised by the CHECK
+     * tests below, which run against schema.sql directly.
      */
     const norm = (p: string) => readFileSync(p, 'utf8').replace(/\r\n/g, '\n')
     const mig = norm('worker/migrations/0006-tenancy.sql')
@@ -137,6 +146,47 @@ describe('the schema refuses states that must not exist', () => {
     insert.run('p_a', 'mch_a')
     expect(() => insert.run('p_b', 'mch_b'), 'a different merchant, same sku').not.toThrow()
     expect(() => insert.run('p_c', 'mch_a'), 'the same merchant twice').toThrow(/UNIQUE/)
+  })
+
+  const seedMerchant = (raw: import('node:sqlite').DatabaseSync) =>
+    raw.prepare(`INSERT INTO merchants (id, slug, name, settlement_currency, status)
+                 VALUES ('mch_a','a','A','USD','active')`).run()
+
+  const insertProduct = (raw: import('node:sqlite').DatabaseSync, cols: string, vals: string) =>
+    raw.prepare(`INSERT INTO products (id, merchant_id, sku, title, brand, category,
+                                       price_minor, currency, status${cols})
+                 VALUES ('p1','mch_a','SKU','T','B','C',119900,'USD','draft'${vals})`).run()
+
+  it('will not store a badge outside the three it knows', () => {
+    const { raw } = memoryD1()
+    seedMerchant(raw)
+    expect(() => insertProduct(raw, ', badge', `, 'HALF_PRICE'`)).toThrow(/CHECK/)
+  })
+
+  it('will not store a rating outside 0 to 5', () => {
+    const { raw } = memoryD1()
+    seedMerchant(raw)
+    expect(() => insertProduct(raw, ', rating', ', 9')).toThrow(/CHECK/)
+  })
+
+  it('will not store a review count that is text or negative', () => {
+    const { raw } = memoryD1()
+    seedMerchant(raw)
+    // SQLite's flexible typing stores 'many' in an INTEGER column otherwise.
+    expect(() => insertProduct(raw, ', review_count', `, 'many'`)).toThrow(/CHECK/)
+    expect(() => insertProduct(raw, ', review_count', ', -1')).toThrow(/CHECK/)
+  })
+
+  it('defaults the new columns so an existing row stays legal', () => {
+    const { raw, rows } = memoryD1()
+    seedMerchant(raw)
+    insertProduct(raw, '', '')
+    expect(rows('products')[0]).toMatchObject({
+      badge: null,
+      rating: 0,
+      review_count: 0,
+      specs_summary: '[]',
+    })
   })
 })
 
