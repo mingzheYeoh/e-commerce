@@ -6,12 +6,11 @@
  * order exist somewhere other than the device that placed it, which is what
  * lets /order/NX-4K2P9 open on a phone the shopper did not check out on.
  *
- * Prices and totals are NOT taken from the request. The catalogue and the
- * arithmetic are imported from the same modules the storefront uses, so the
- * server reaches its own number and stores that. A request that posts a $1
- * MacBook gets an order for the real price, not an argument.
+ * Prices and totals are NOT taken from the request. Each line is priced from
+ * the catalogue row it names and the arithmetic is the storefront's own module,
+ * so the server reaches its own number and stores that. A request that posts a
+ * $1 MacBook gets an order for the real price, not an argument.
  */
-import { products } from '../../src/data/products'
 import { totalCents, type ShipMethod } from '../../src/lib/money'
 import { methodAvailable } from '../../src/lib/shipping'
 import {
@@ -25,11 +24,44 @@ export interface OrdersEnv {
   ORDERS: D1Database
 }
 
-/** sku -> price in cents, built once per isolate rather than per request. */
-const PRICE_BY_SKU = new Map(products.map((p) => [p.sku, p.priceMinor]))
-const TITLE_BY_SKU = new Map(products.map((p) => [p.sku, p.title]))
-/** sku -> the finishes that product is actually sold in. */
-const FINISHES_BY_SKU = new Map(products.map((p) => [p.sku, new Set(p.colorways.map((c) => c.name))]))
+interface ProductRow {
+  id: string
+  merchant_id: string
+  sku: string
+  title: string
+  price_minor: number
+  colorways: string
+}
+
+/**
+ * Resolve every line's product in one statement.
+ *
+ * This used to be three Maps built once per isolate from a bundled copy of the
+ * frontend catalogue. That was fast and wrong twice over: the price went stale
+ * until the next deploy, and once two merchants could share a sku the lookup
+ * was a guess rather than a lookup.
+ */
+async function resolve(env: OrdersEnv, ids: string[]) {
+  if (!ids.length) return new Map<string, ProductRow>()
+  const marks = ids.map(() => '?').join(',')
+  const { results } = await env.ORDERS.prepare(
+    `SELECT id, merchant_id, sku, title, price_minor, colorways
+       FROM products WHERE status = 'published' AND id IN (${marks})`,
+  )
+    .bind(...ids)
+    .all<ProductRow>()
+  return new Map((results ?? []).map((r) => [r.id, r]))
+}
+
+/** The finishes a product is actually sold in. Malformed JSON offers none. */
+function finishes(row: ProductRow): Set<string> {
+  try {
+    const parsed = JSON.parse(row.colorways) as { name?: string }[]
+    return new Set(parsed.map((c) => c?.name).filter((n): n is string => typeof n === 'string'))
+  } catch {
+    return new Set()
+  }
+}
 
 const PAYMENT_CODES = ['succeeded', 'card_declined', 'insufficient_funds', 'expired_card'] as const
 type PaymentCode = (typeof PAYMENT_CODES)[number]
@@ -48,7 +80,7 @@ export interface OrderPayload {
     postal: string
   }
   method: string
-  lines: { sku: string; qty: number; finish?: string }[]
+  lines: { productId: string; qty: number; finish?: string }[]
   paymentCode: string
   currency?: string
 }
@@ -162,14 +194,29 @@ export async function placeOrder(
     return { status: 400, body: { error: 'lines are required' } }
   }
 
-  // Resolve each line against the catalogue. An unknown sku is refused rather
-  // than stored at whatever price the caller suggested.
+  /*
+   * Resolve every line against the catalogue in one query, before any of them
+   * is priced. An id the catalogue does not publish is refused rather than
+   * stored at whatever price the caller suggested.
+   */
+  const ids = p.lines.map((raw) => str(raw?.productId, 64))
+  if (ids.some((id) => id === null)) return { status: 400, body: { error: 'unknown product' } }
+  const catalogue = await resolve(env, ids as string[])
+
   const seen = new Set<string>()
-  const lines: { sku: string; title: string; qty: number; unit: number; finish: string }[] = []
-  for (const raw of p.lines) {
-    const sku = str(raw?.sku, 40)
-    const unit = sku ? PRICE_BY_SKU.get(sku) : undefined
-    if (!sku || unit === undefined) return { status: 400, body: { error: 'unknown sku' } }
+  const lines: {
+    productId: string
+    merchantId: string
+    sku: string
+    title: string
+    qty: number
+    unit: number
+    finish: string
+  }[] = []
+  for (const [i, raw] of p.lines.entries()) {
+    const productId = ids[i]!
+    const product = catalogue.get(productId)
+    if (!product) return { status: 400, body: { error: 'unknown product' } }
 
     /*
      * Checked against that product's own colourways, not accepted as written.
@@ -179,12 +226,12 @@ export async function placeOrder(
      */
     const finish = raw?.finish === undefined || raw?.finish === null ? '' : str(raw.finish, 60)
     if (finish === null) return { status: 400, body: { error: 'bad finish' } }
-    if (finish && !FINISHES_BY_SKU.get(sku)?.has(finish)) {
+    if (finish && !finishes(product).has(finish)) {
       return { status: 400, body: { error: 'unknown finish' } }
     }
 
     // Two finishes of one product are two lines; the same one twice is not.
-    const key = `${sku}|${finish}`
+    const key = `${productId}|${finish}`
     if (seen.has(key)) return { status: 400, body: { error: 'duplicate line' } }
     seen.add(key)
 
@@ -192,7 +239,15 @@ export async function placeOrder(
     if (!Number.isInteger(qty) || (qty as number) < 1 || (qty as number) > 99) {
       return { status: 400, body: { error: 'bad quantity' } }
     }
-    lines.push({ sku, title: TITLE_BY_SKU.get(sku)!, qty: qty as number, unit, finish })
+    lines.push({
+      productId,
+      merchantId: product.merchant_id,
+      sku: product.sku,
+      title: product.title,
+      qty: qty as number,
+      unit: product.price_minor,
+      finish,
+    })
   }
 
   const subtotal = lines.reduce((sum, l) => sum + l.unit * l.qty, 0)
@@ -236,9 +291,10 @@ export async function placeOrder(
       ),
       ...lines.map((l) =>
         env.ORDERS.prepare(
-          `INSERT INTO order_lines (order_id, sku, title, qty, unit_price_cents, variant)
-           VALUES (?1,?2,?3,?4,?5,?6)`,
-        ).bind(id, l.sku, l.title, l.qty, l.unit, l.finish),
+          `INSERT INTO order_lines (order_id, product_id, merchant_id, sku, title, qty,
+                                    unit_price_cents, variant)
+           VALUES (?1,?2,?3,?4,?5,?6,?7,?8)`,
+        ).bind(id, l.productId, l.merchantId, l.sku, l.title, l.qty, l.unit, l.finish),
       ),
     ])
   } catch (err) {

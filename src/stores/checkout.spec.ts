@@ -166,9 +166,11 @@ describe('orders beyond this browser', () => {
     mockFetch.mockResolvedValue(null)
   })
 
-  it('sends skus and quantities, never prices', async () => {
+  it('sends catalogue ids and quantities, never prices', async () => {
     // The server prices the order from its own catalogue. Anything this
-    // payload said about money would be a number the client chose.
+    // payload said about money would be a number the client chose — and it
+    // names the product by id, because a sku belongs to a merchant and two of
+    // them may use the same one.
     const cart = useCartStore()
     const checkout = useCheckoutStore()
     cart.add(inStock(), 2)
@@ -179,7 +181,7 @@ describe('orders beyond this browser', () => {
     expect(res.ok).toBe(true)
 
     const sent = mockSave.mock.calls[0][0]
-    expect(sent.lines).toEqual([{ sku: inStock().sku, qty: 2 }])
+    expect(sent.lines).toEqual([{ productId: inStock().id, qty: 2 }])
     expect(JSON.stringify(sent)).not.toMatch(/unitPrice|total|subtotal/i)
   })
 

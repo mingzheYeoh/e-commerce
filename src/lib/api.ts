@@ -150,8 +150,12 @@ export interface OrderRequest {
   id: string
   address: ShipAddress & { email: string }
   method: string
-  /** Skus, quantities and finish. Prices are the server's business, not the browser's. */
-  lines: { sku: string; qty: number; finish?: string }[]
+  /**
+   * Catalogue ids, quantities and finish. Prices are the server's business,
+   * not the browser's — and an id is the only thing that names one product,
+   * since two merchants may list the same sku.
+   */
+  lines: { productId: string; qty: number; finish?: string }[]
   paymentCode: string
   currency: string
 }

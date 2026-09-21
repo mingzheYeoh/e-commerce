@@ -2,6 +2,13 @@ import { defineStore } from 'pinia'
 import type { Product } from '@/types'
 
 export interface CartLine {
+  /**
+   * The catalogue row this line came from, and what the order endpoint prices
+   * against. Two merchants may list one sku at two prices, so a sku does not
+   * name a product and cannot identify a line.
+   */
+  productId: string
+  /** The merchant's own code for it, for the receipt. Nothing is looked up by it. */
   sku: string
   title: string
   brand: string
@@ -24,10 +31,10 @@ export interface CartLine {
 
 /**
  * What identifies a line. Two finishes of one product are two lines, so the
- * sku alone cannot address them.
+ * product alone cannot address them — and a sku does not name a product.
  */
-export const lineKey = (line: Pick<CartLine, 'sku' | 'finish'>) =>
-  line.finish ? `${line.sku}|${line.finish}` : line.sku
+export const lineKey = (line: Pick<CartLine, 'productId' | 'finish'>) =>
+  line.finish ? `${line.productId}|${line.finish}` : line.productId
 
 const CART_KEY = 'nexus:cart'
 
@@ -83,13 +90,14 @@ export const useCartStore = defineStore('cart', {
       // Only a finish the product actually offers. Anything else would travel
       // to the order endpoint and be refused there instead.
       const chosen = product.colorways.some((c) => c.name === finish) ? finish : undefined
-      const key = lineKey({ sku: product.sku, finish: chosen })
+      const key = lineKey({ productId: product.id, finish: chosen })
       const existing = this.items.find((line) => lineKey(line) === key)
 
       if (existing) {
         existing.qty = clamp(existing.qty + qty, product.stockCount)
       } else {
         this.items.push({
+          productId: product.id,
           sku: product.sku,
           title: product.title,
           brand: product.brand,

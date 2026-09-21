@@ -44,7 +44,7 @@ describe('cart store', () => {
   it('drops the line when quantity is set to zero', () => {
     const cart = useCartStore()
     cart.add(anyProduct)
-    cart.setQty(anyProduct.sku, 0)
+    cart.setQty(anyProduct.id, 0)
     expect(cart.items).toHaveLength(0)
   })
 
@@ -74,10 +74,10 @@ describe('cart store', () => {
     expect(cart.isOpen).toBe(false)
   })
 
-  it('removes a line by sku', () => {
+  it('removes a line by its key', () => {
     const cart = useCartStore()
     cart.add(anyProduct)
-    cart.remove(anyProduct.sku)
+    cart.remove(anyProduct.id)
     expect(cart.items).toHaveLength(0)
     expect(cart.subtotalCents).toBe(0)
   })
@@ -125,7 +125,7 @@ describe('finishes', () => {
     cart.add(p, 1, p.colorways[0].name)
     cart.add(p, 5, p.colorways[1].name)
 
-    cart.remove(lineKey({ sku: p.sku, finish: p.colorways[0].name }))
+    cart.remove(lineKey({ productId: p.id, finish: p.colorways[0].name }))
     expect(cart.items).toHaveLength(1)
     expect(cart.items[0].finish).toBe(p.colorways[1].name)
 
