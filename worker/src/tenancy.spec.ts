@@ -213,22 +213,26 @@ describe('the repository', () => {
   it('does not let a rebound `this` move a write to a different scope', async () => {
     // `update` no longer reads `this` at all, so calling it with `this`
     // forced to a different repository must behave exactly as if it had been
-    // called plainly — the guard and the write always agree, because both
+    // called plainly — the guard and the read always agree, because both
     // come from the same closure that built this particular function.
     const { env, rows } = await twoTenants()
     const platformRepo = platformWide(env, 'stf_p')
     const merchantRepo = scopedTo(env, 'mch_a', 'stf_1')
 
     // Platform's own update, `this` forced to a merchant repo: still a
-    // platform-scoped write, so it still succeeds on any row.
+    // platform-scoped read and write, so it still succeeds on any row.
     await platformRepo.products.update.call(merchantRepo.products, 'LEAK_p_b', { title: 'X' })
     expect(rows('products').find((p) => p.id === 'LEAK_p_b')!.title).toBe('X')
 
     // The merchant repo's own update, `this` forced to the platform repo:
-    // still a merchant-scoped write, so it still cannot touch a row it
-    // doesn't own — the borrowed `this` buys it nothing.
-    await merchantRepo.products.update.call(platformRepo.products, 'LEAK_p_b', { title: 'Y' })
-    expect(rows('products').find((p) => p.id === 'LEAK_p_b')!.title).toBe('X')
+    // still a merchant-scoped read and write, so it still cannot read a row it
+    // doesn't own — the borrowed `this` buys it nothing, and returns null.
+    const leaked = await merchantRepo.products.update.call(
+      platformRepo.products,
+      'LEAK_p_b',
+      { title: 'Y' },
+    )
+    expect(leaked, 'pre-fix this returned merchant B whole row').toBeNull()
   })
 
   it('lets the platform see everything', async () => {

@@ -91,10 +91,10 @@ function where(parts: (readonly [string, unknown] | null)[]): { sql: string; arg
   }
 }
 
-/** Money in minor units is an integer or it is a bug in the caller. */
-function assertIntegerMinor(priceMinor: number): void {
-  if (!Number.isInteger(priceMinor)) {
-    throw new Error('priceMinor must be an integer number of minor units')
+/** Integer columns must be safe integers or SQLite stores them as REAL. */
+function assertIntegerMinor(value: number, field: string): void {
+  if (!Number.isSafeInteger(value)) {
+    throw new Error(`${field} must be a whole number of minor units, not ${String(value)}`)
   }
 }
 
@@ -140,7 +140,7 @@ function build(env: TenancyEnv, scope: Scope): Repository {
         if (scope.kind !== 'merchant') {
           throw new Error('platform scope cannot create a product on a merchant behalf')
         }
-        assertIntegerMinor(input.priceMinor)
+        assertIntegerMinor(input.priceMinor, 'priceMinor')
 
         /*
          * Currency is the merchant's settlement currency, never the payload's.
@@ -176,7 +176,8 @@ function build(env: TenancyEnv, scope: Scope): Repository {
       },
 
       async update(productId: string, patch: ProductPatch) {
-        if (patch.priceMinor !== undefined) assertIntegerMinor(patch.priceMinor)
+        if (patch.priceMinor !== undefined) assertIntegerMinor(patch.priceMinor, 'priceMinor')
+        if (patch.stockCount !== undefined) assertIntegerMinor(patch.stockCount, 'stockCount')
 
         const existing = await get(productId)
         if (!existing) return null
