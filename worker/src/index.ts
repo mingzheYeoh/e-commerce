@@ -10,6 +10,7 @@ import { ask, search, type Env as RagEnv } from './rag'
 import { facts, queryOrError } from './graph'
 import { converse } from './agent'
 import { placeOrder, getOrder, type OrdersEnv } from './orders'
+import { publishedProducts } from './catalogue'
 
 /*
  * Re-exported because Cloudflare resolves a Durable Object class by name from
@@ -156,6 +157,12 @@ export default {
         // this endpoint expensive for someone else.
         const k = Math.min(Math.max(Number(url.searchParams.get('k')) || 20, 1), 50)
         return json(await search(env, q, k), { headers })
+      }
+
+      /* The catalogue. Public by definition, so no session and no tenancy
+         predicate — see the note at the top of catalogue.ts. */
+      if (url.pathname === '/api/products' && request.method === 'GET') {
+        return json({ products: await publishedProducts(env) }, { headers })
       }
 
       /*

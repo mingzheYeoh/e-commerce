@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { memoryD1 } from '../test/d1-memory'
 import { products } from '@/data/products'
+import { publishedProducts } from './catalogue'
 
 /**
  * A migration file run into a database, statement by statement.
@@ -208,5 +209,31 @@ describe('order lines name their product', () => {
                      VALUES ('o1', ?, 'T', 1, 100)`).run(p.sku)
 
     expect(() => rebuild(mem)).toThrow(/CHECK constraint failed: qty > 0/)
+  })
+})
+
+describe('publishedProducts', () => {
+  it('returns published products from every merchant', async () => {
+    const { db, raw } = seeded()
+    const rows = await publishedProducts({ ORDERS: db })
+    expect(rows).toHaveLength(45)
+    const merchants = new Set(rows.map((r) => r.merchantId))
+    expect(merchants.size).toBeGreaterThan(1)
+  })
+
+  it('hides drafts and archived products from the storefront', async () => {
+    const { db, raw } = seeded()
+    raw.prepare(`UPDATE products SET status='draft' WHERE id=(SELECT id FROM products LIMIT 1)`).run()
+    raw.prepare(`UPDATE products SET status='archived' WHERE id=(SELECT id FROM products LIMIT 1 OFFSET 1)`).run()
+    const rows = await publishedProducts({ ORDERS: db })
+    expect(rows).toHaveLength(43)
+  })
+
+  it('parses the JSON columns rather than handing back strings', async () => {
+    const { db } = seeded()
+    const [first] = await publishedProducts({ ORDERS: db })
+    expect(Array.isArray(first.specsSummary)).toBe(true)
+    expect(Array.isArray(first.colorways)).toBe(true)
+    expect(typeof first.media).toBe('object')
   })
 })
