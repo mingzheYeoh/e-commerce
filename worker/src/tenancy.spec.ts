@@ -57,6 +57,48 @@ describe('the schema refuses states that must not exist', () => {
     expect(() => raw.prepare(`DELETE FROM audit_log`).run()).toThrow(/append-only/)
   })
 
+  it('refuses a price or stock that is not a whole, non-negative number', async () => {
+    /*
+     * INTEGER is an affinity, not a type: SQLite stores 'free' as text and
+     * 19.99 as a real in an INTEGER column without complaint. And the
+     * application guard is Number.isSafeInteger, which is true of -100000 —
+     * so a negative price goes in through the sanctioned door. Both halves
+     * belong in the column, where every writer meets them.
+     */
+    const { raw } = memoryD1()
+    raw.prepare(`INSERT INTO merchants (id, slug, name, settlement_currency, status)
+                 VALUES ('mch_a','a','A','MYR','active')`).run()
+
+    const insert = (price: unknown, stock: unknown) => () =>
+      raw
+        .prepare(
+          `INSERT INTO products (id, merchant_id, sku, title, brand, category, price_minor, currency, status, stock_count)
+           VALUES (?, 'mch_a', ?, 'Phone','APPLE','phones', ?, 'MYR','published', ?)`,
+        )
+        .run(`p_${String(price)}_${String(stock)}`, `SKU-${String(price)}`, price as never, stock as never)
+
+    expect(insert('free', 0), 'text price').toThrow(/CHECK constraint failed/)
+    expect(insert(19.99, 0), 'fractional price').toThrow(/CHECK constraint failed/)
+    expect(insert(-100, 0), 'negative price').toThrow(/CHECK constraint failed/)
+    expect(insert(100, -1), 'negative stock').toThrow(/CHECK constraint failed/)
+    expect(insert(100, 0), 'a whole non-negative pair').not.toThrow()
+  })
+
+  it('still defaults stock_count to 0 when it is not supplied', async () => {
+    // The CHECK sits on a column with a DEFAULT; a CHECK written against the
+    // supplied value rather than the stored one would break the default.
+    const { raw, rows } = memoryD1()
+    raw.prepare(`INSERT INTO merchants (id, slug, name, settlement_currency, status)
+                 VALUES ('mch_a','a','A','MYR','active')`).run()
+    raw
+      .prepare(
+        `INSERT INTO products (id, merchant_id, sku, title, brand, category, price_minor, currency, status)
+         VALUES ('p_a','mch_a','SKU-A','Phone','APPLE','phones',100,'MYR','published')`,
+      )
+      .run()
+    expect(rows('products')[0].stock_count).toBe(0)
+  })
+
   it('keeps sku unique per merchant rather than globally', async () => {
     // Two merchants may both sell IP18P-256. A global unique would make the
     // second merchant to list it unable to.
@@ -353,6 +395,23 @@ describe('audit', () => {
     const { env, rows } = await twoTenants()
     await scopedTo(env, 'mch_a', 'stf_1').products.list()
     expect(rows('audit_log')).toHaveLength(0)
+  })
+
+  it('names what a create created, since the row can never be amended', async () => {
+    // create's first argument is the payload, not an id, so a subject read
+    // off the arguments is null — and the one row that brings an object into
+    // existence would be the only one that cannot say which object.
+    const { env, rows } = await twoTenants()
+    const created = await scopedTo(env, 'mch_a', 'stf_1').products.create({
+      sku: 'NEW-6',
+      title: 'New',
+      brand: 'APPLE',
+      category: 'phones',
+      priceMinor: 500,
+    })
+
+    const entry = rows('audit_log').find((r) => r.action === 'products.create')!
+    expect(entry.subject).toBe(created.id)
   })
 
   it('records a merchant write, because every write is an event', async () => {

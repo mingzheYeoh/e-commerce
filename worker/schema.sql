@@ -207,10 +207,10 @@ CREATE TABLE IF NOT EXISTS products (
   category     TEXT NOT NULL,
   -- Minor units of `currency`, which is copied from the merchant at write
   -- time and frozen.
-  price_minor  INTEGER NOT NULL,
+  price_minor  INTEGER NOT NULL CHECK (typeof(price_minor) = 'integer' AND price_minor >= 0),
   currency     TEXT NOT NULL,
   status       TEXT NOT NULL CHECK (status IN ('draft','published','archived')),
-  stock_count  INTEGER NOT NULL DEFAULT 0,
+  stock_count  INTEGER NOT NULL DEFAULT 0 CHECK (typeof(stock_count) = 'integer' AND stock_count >= 0),
   -- Document-shaped and never queried by field, so JSON rather than columns.
   specs        TEXT NOT NULL DEFAULT '[]',
   colorways    TEXT NOT NULL DEFAULT '[]',

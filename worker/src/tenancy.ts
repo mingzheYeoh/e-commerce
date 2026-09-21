@@ -98,17 +98,22 @@ function assertIntegerMinor(value: number, field: string): void {
   }
 }
 
-/** Methods that change something. Everything else is a read. */
-const WRITES = new Set(['products.create', 'products.update'])
+/** Methods that only read. Everything else is a write, and every write is an event. */
+const READS = new Set(['products.list', 'products.get'])
 
 /**
  * Whether this call is worth a row.
  *
  * Every write by anyone, and every platform read. A merchant reading their own
  * data is not an event, and recording it would bury the entries that are.
+ *
+ * Listing the reads rather than the writes so that forgetting to update this
+ * set costs a surplus row, not a missing one. A method added without a thought
+ * for auditing is a write until someone says otherwise; a missing row cannot be
+ * added later, because audit_log is append-only.
  */
 const worthAuditing = (scope: Scope, dotted: string): boolean =>
-  scope.kind === 'platform' || WRITES.has(dotted)
+  scope.kind === 'platform' || !READS.has(dotted)
 
 async function record(
   env: TenancyEnv,
@@ -272,7 +277,14 @@ function build(env: TenancyEnv, scope: Scope): Repository {
                 const result = await fn.apply(methods, args)
                 const dotted = `${group}.${name}`
                 if (worthAuditing(scope, dotted)) {
-                  const subject = typeof args[0] === 'string' ? (args[0] as string) : null
+                  // An id argument where there is one, and otherwise whatever
+                  // the call produced: create's first argument is a payload,
+                  // so the one row that records a thing coming into existence
+                  // would be the only one unable to name it.
+                  const subject =
+                    typeof args[0] === 'string'
+                      ? (args[0] as string)
+                      : ((result as { id?: string } | null)?.id ?? null)
                   // ponytail: a platform list across N merchants writes N rows.
                   // The upgrade if that volume ever matters is one row plus a
                   // `detail` JSON of ids — but only alongside a merchant-facing
