@@ -1,5 +1,25 @@
 import { describe, it, expect } from 'vitest'
+import { readFileSync } from 'node:fs'
 import { memoryD1 } from '../test/d1-memory'
+
+describe('the migration and the schema', () => {
+  it('keeps 0006-tenancy.sql and schema.sql identical', () => {
+    /*
+     * Every other test in this file runs against schema.sql, because that is
+     * what d1-memory loads. The file production actually runs is the
+     * migration, and until this test nothing read it at all — so the two
+     * could drift and every test would still pass.
+     *
+     * The \r\n normalisation is load-bearing, not tidiness: these two files
+     * have disagreed on line endings before (autocrlf rewrites them per
+     * checkout), and a byte-exact guard would go red the first time an editor
+     * normalised one of them. A guard that everyone learns to ignore is dead.
+     */
+    const norm = (p: string) => readFileSync(p, 'utf8').replace(/\r\n/g, '\n')
+    const mig = norm('worker/migrations/0006-tenancy.sql')
+    expect(norm('worker/schema.sql')).toContain(mig.slice(mig.indexOf('-- A merchant selling')))
+  })
+})
 
 /**
  * The constraints are the point of this file, so they are tested directly

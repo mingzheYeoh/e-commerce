@@ -115,6 +115,13 @@ const READS = new Set(['products.list', 'products.get'])
 const worthAuditing = (scope: Scope, dotted: string): boolean =>
   scope.kind === 'platform' || !READS.has(dotted)
 
+/**
+ * One audit row.
+ *
+ * Numbered `?1..?6` here, against the anonymous `?` this file argues for
+ * above: a fixed six-column INSERT has no clause that appears or disappears,
+ * so there is no numbering to shift under an off-by-one.
+ */
 async function record(
   env: TenancyEnv,
   scope: Scope,
@@ -335,7 +342,14 @@ function build(env: TenancyEnv, scope: Scope): Repository {
   return audited
 }
 
-/** A merchant's own data, and nothing else. */
+/**
+ * A merchant's own data, and nothing else.
+ *
+ * @param merchantId MUST come from the staff session row, never a request
+ * body. This does not verify staffId belongs to merchantId — the pair is
+ * trusted as given, and until branded ids land this comment is the whole
+ * defence against a caller that supplies its own.
+ */
 export const scopedTo = (env: TenancyEnv, merchantId: string, staffId: string): Repository =>
   build(env, { kind: 'merchant', merchantId, staffId })
 
