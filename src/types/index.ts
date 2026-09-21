@@ -31,8 +31,8 @@ export interface Product {
   brand: BrandId
   title: string
   category: CategoryId
-  /** Base price in USD. Converted for display only — never used for arithmetic. */
-  price: number
+  /** Minor units of `currency`. Divided only by the display formatter. */
+  priceMinor: number
   currency: string
   inStock: boolean
   stockCount: number

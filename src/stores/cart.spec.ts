@@ -4,7 +4,9 @@ import { useCartStore, lineKey } from './cart'
 import { products } from '@/data/products'
 
 const anyProduct = products[0]
-const fractionalPriced = products.find((p) => !Number.isInteger(p.price))!
+// A price that wasn't a round dollar amount (e.g. 899.99) — kept to exercise
+// a non-trivial cents value, even though priceMinor is always an integer now.
+const fractionalPriced = products.find((p) => p.priceMinor % 100 !== 0)!
 const soldOut = products.find((p) => !p.inStock)!
 const lowStock = products.find((p) => p.inStock && p.stockCount < 10)!
 
@@ -50,8 +52,9 @@ describe('cart store', () => {
     const cart = useCartStore()
     cart.add(fractionalPriced, 3)
 
-    // 899.95 * 3 is 2699.8500000000004 in float arithmetic.
-    expect(cart.subtotalCents).toBe(Math.round(fractionalPriced.price * 100) * 3)
+    // 899.95 * 3 would be 2699.8500000000004 in float dollar arithmetic; the
+    // cart never does that multiplication in dollars, only in minor units.
+    expect(cart.subtotalCents).toBe(fractionalPriced.priceMinor * 3)
     expect(Number.isInteger(cart.subtotalCents)).toBe(true)
   })
 
@@ -59,9 +62,7 @@ describe('cart store', () => {
     const cart = useCartStore()
     cart.add(fractionalPriced, 2)
     cart.add(anyProduct, 1)
-    expect(cart.subtotalCents).toBe(
-      Math.round(fractionalPriced.price * 100) * 2 + Math.round(anyProduct.price * 100),
-    )
+    expect(cart.subtotalCents).toBe(fractionalPriced.priceMinor * 2 + anyProduct.priceMinor)
   })
 
   it('leaves the drawer closed when an item is added', () => {

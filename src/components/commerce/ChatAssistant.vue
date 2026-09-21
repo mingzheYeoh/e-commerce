@@ -16,7 +16,7 @@ import { toSegments } from '@/lib/citations'
 import { products } from '@/data/products'
 import { useCurrency } from '@/composables/useCurrency'
 
-const { formatPrice } = useCurrency()
+const { format } = useCurrency()
 const byId = new Map(products.map((p) => [p.id, p]))
 
 interface Turn {
@@ -194,7 +194,7 @@ async function scrollDown() {
               <img :src="p.media.thumb" :alt="p.title" width="40" height="40" class="h-10 w-10 shrink-0 rounded object-cover" />
               <span class="min-w-0">
                 <span class="block truncate text-sm font-medium">{{ p.title }}</span>
-                <span class="nums block text-xs text-text-secondary">{{ formatPrice(p.price) }}</span>
+                <span class="nums block text-xs text-text-secondary">{{ format(p.priceMinor) }}</span>
               </span>
             </RouterLink>
           </div>

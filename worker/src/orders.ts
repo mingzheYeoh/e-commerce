@@ -26,7 +26,7 @@ export interface OrdersEnv {
 }
 
 /** sku -> price in cents, built once per isolate rather than per request. */
-const PRICE_BY_SKU = new Map(products.map((p) => [p.sku, Math.round(p.price * 100)]))
+const PRICE_BY_SKU = new Map(products.map((p) => [p.sku, p.priceMinor]))
 const TITLE_BY_SKU = new Map(products.map((p) => [p.sku, p.title]))
 /** sku -> the finishes that product is actually sold in. */
 const FINISHES_BY_SKU = new Map(products.map((p) => [p.sku, new Set(p.colorways.map((c) => c.name))]))

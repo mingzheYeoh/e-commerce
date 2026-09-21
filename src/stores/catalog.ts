@@ -30,8 +30,8 @@ export const useCatalogStore = defineStore('catalog', {
         return true
       })
 
-      if (state.sort === 'priceDesc') return [...filtered].sort((a, b) => b.price - a.price)
-      if (state.sort === 'priceAsc') return [...filtered].sort((a, b) => a.price - b.price)
+      if (state.sort === 'priceDesc') return [...filtered].sort((a, b) => b.priceMinor - a.priceMinor)
+      if (state.sort === 'priceAsc') return [...filtered].sort((a, b) => a.priceMinor - b.priceMinor)
       return filtered
     },
 

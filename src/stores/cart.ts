@@ -55,7 +55,6 @@ const stored = {
   },
 }
 
-const toCents = (price: number) => Math.round(price * 100)
 const clamp = (value: number, max: number) => Math.min(Math.max(value, 0), max)
 
 export const useCartStore = defineStore('cart', {
@@ -95,7 +94,7 @@ export const useCartStore = defineStore('cart', {
           title: product.title,
           brand: product.brand,
           thumb: product.media.thumb,
-          unitPriceCents: toCents(product.price),
+          unitPriceCents: product.priceMinor,
           qty: clamp(qty, product.stockCount),
           stockCount: product.stockCount,
           finish: chosen,

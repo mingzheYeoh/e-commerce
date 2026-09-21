@@ -130,7 +130,7 @@ describe('checkout store', () => {
 
     const order = checkout.findOrder(result.id)
     expect(order?.totals.total).toBe(expected)
-    expect(order?.lines[0].unitPriceCents).toBe(Math.round(product.price * 100))
+    expect(order?.lines[0].unitPriceCents).toBe(product.priceMinor)
   })
 
   it('carries a declined attempt in the error rather than silently failing', async () => {
@@ -420,7 +420,7 @@ describe('delivery methods follow the destination', () => {
   it('bills international delivery on a basket that would ship free at home', () => {
     const cart = useCartStore()
     const checkout = useCheckoutStore()
-    const cheap = products.find((p) => p.inStock && p.price * 100 < 15000)!
+    const cheap = products.find((p) => p.inStock && p.priceMinor < 15000)!
     cart.add(cheap)
     fill(checkout)
 

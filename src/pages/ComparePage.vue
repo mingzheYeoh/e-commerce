@@ -21,7 +21,7 @@ const route = useRoute()
 const router = useRouter()
 const compare = useCompareStore()
 const cart = useCartStore()
-const { formatPrice } = useCurrency()
+const { format } = useCurrency()
 
 const differencesOnly = ref(false)
 
@@ -134,7 +134,8 @@ const cell = (value: number | string | null, money: boolean, unit?: string) => {
   // An unpublished figure is a dash. Rendering it as 0 would report a claim the
   // manufacturer never made.
   if (value === null) return '—'
-  if (money && typeof value === 'number') return formatPrice(value)
+  // The one money row (Price) is priceMinor, already in minor units.
+  if (money && typeof value === 'number') return format(value)
   return `${value}${unit ?? ''}`
 }
 </script>

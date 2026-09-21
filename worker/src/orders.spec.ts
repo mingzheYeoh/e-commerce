@@ -28,7 +28,7 @@ function fakeD1() {
 }
 
 const sku = products[0].sku
-const unitCents = Math.round(products[0].price * 100)
+const unitCents = products[0].priceMinor
 
 const payload = (over: Partial<OrderPayload> = {}): OrderPayload => ({
   id: 'NX-4K2P9',
@@ -283,7 +283,7 @@ describe('placeOrder addresses', () => {
     // send it to Kuala Lumpur.
     // Under the $75 domestic free-delivery bar, so both legs are actually
     // charged and the comparison is between two prices rather than two zeros.
-    const cheap = products.find((p) => Math.round(p.price * 100) < 7500)!
+    const cheap = products.find((p) => p.priceMinor < 7500)!
     const line = { sku: cheap.sku, qty: 1 }
     const home = fakeD1()
     const away = fakeD1()
@@ -297,7 +297,7 @@ describe('placeOrder addresses', () => {
       }),
     )
 
-    const cents = Math.round(cheap.price * 100)
+    const cents = cheap.priceMinor
     expect((us.body as { total: number }).total).toBe(cents + 895)
     expect((my.body as { total: number }).total).toBe(cents + 2695 + Math.round(cents * 0.08))
   })

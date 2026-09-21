@@ -144,7 +144,7 @@ function addToCart() {
       </div>
 
       <div class="flex items-center justify-between gap-3 border-t border-border-hairline pt-3">
-        <PriceTag :cents="Math.round(product.price * 100)" />
+        <PriceTag :cents="product.priceMinor" />
 
         <button
           type="button"

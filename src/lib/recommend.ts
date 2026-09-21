@@ -186,6 +186,9 @@ export function recommend(query: string, limit = 6): RecommendResult {
     const hay = haystackOf(product)
     const reasons: string[] = []
     let score = 0
+    // budget.value is parsed from the shopper's sentence in dollars; the
+    // catalogue speaks minor units, so the one conversion happens here.
+    const price = product.priceMinor / 100
 
     if (!product.inStock) score -= 6
 
@@ -208,15 +211,15 @@ export function recommend(query: string, limit = 6): RecommendResult {
     }
 
     if (budget) {
-      if (product.price <= budget.value) {
+      if (price <= budget.value) {
         score += 6
-        reasons.push(`within your budget at $${product.price.toLocaleString('en-US')}`)
+        reasons.push(`within your budget at $${price.toLocaleString('en-US')}`)
       } else if (budget.strict) {
         // "under 200" is a ceiling, not a preference.
         score = -Infinity
       } else {
         // An estimate, so a near miss can still surface, weighted by overshoot.
-        score -= Math.min(14, ((product.price - budget.value) / budget.value) * 12)
+        score -= Math.min(14, ((price - budget.value) / budget.value) * 12)
       }
     }
 
@@ -228,7 +231,7 @@ export function recommend(query: string, limit = 6): RecommendResult {
 
     score += product.rating - 4
     if (wantsBest) score += (product.rating - 4) * 4
-    if (wantsCheap) score -= product.price / 400
+    if (wantsCheap) score -= price / 400
     if (score === -Infinity) return { product, score, reasons: [] }
 
     return { product, score, reasons: [...new Set(reasons)] }

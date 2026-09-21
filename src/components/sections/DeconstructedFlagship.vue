@@ -72,7 +72,9 @@ function preorder() {
     brand: flagship.brand,
     title: flagship.title,
     category: 'audio',
-    price: flagship.price,
+    // flagship.price is Flagship's own dollar field, not the catalogue's —
+    // this is the one place a Flagship becomes a Product for the cart.
+    priceMinor: Math.round(flagship.price * 100),
     currency: 'USD',
     inStock: true,
     stockCount: 25,

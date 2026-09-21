@@ -58,7 +58,7 @@ const assurances = [
     </div>
 
     <div class="mt-6">
-      <PriceTag :cents="Math.round(product.price * 100)" size="lg" />
+      <PriceTag :cents="product.priceMinor" size="lg" />
       <p class="mt-1.5 text-sm" :class="stockLine.class">{{ stockLine.text }}</p>
     </div>
 
