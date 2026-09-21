@@ -344,3 +344,16 @@ describe('audit', () => {
     expect(entry.merchant_id).toBe('mch_a')
   })
 })
+
+describe('completeness', () => {
+  it('has an isolation case for every method on the repository', () => {
+    /*
+     * Without this, the two sweeps above are only as good as somebody's
+     * memory, which is the thing this design is trying to remove. Adding
+     * db.payouts.list() and forgetting to add a case turns the suite red here
+     * rather than leaking in production.
+     */
+    const methods = methodNames(scopedTo({} as TenancyEnv, 'mch_a', 'stf_1')).sort()
+    expect(methods).toEqual(Object.keys(CASES).sort())
+  })
+})
