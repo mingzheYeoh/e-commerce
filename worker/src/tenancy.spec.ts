@@ -78,7 +78,7 @@ describe('the schema refuses states that must not exist', () => {
   })
 })
 
-import { scopedTo, platformWide, methodNames, type TenancyEnv } from './tenancy'
+import { scopedTo, platformWide, methodNames, type TenancyEnv, type Repository } from './tenancy'
 
 /**
  * Two merchants, each with one product. B's is marked so a leak is obvious.
@@ -245,5 +245,56 @@ describe('the repository', () => {
     const names = methodNames(scopedTo({} as TenancyEnv, 'mch_a', 'stf_1'))
     expect(names).toContain('products.list')
     expect(names).toContain('products.create')
+  })
+})
+
+/**
+ * The arguments each method is called with during the isolation sweep.
+ *
+ * Every method on the repository needs an entry. Task 5 asserts that this
+ * map's keys are exactly the repository's method names, so adding a method
+ * without adding a case here turns the suite red — which is what makes the
+ * sweep below a proof rather than a sample.
+ */
+const CASES: Record<string, unknown[]> = {
+  'products.list': [],
+  'products.get': ['LEAK_p_b'],
+  'products.create': [
+    { sku: 'SWEEP-1', title: 'Sweep', brand: 'APPLE', category: 'phones', priceMinor: 1 },
+  ],
+  'products.update': ['LEAK_p_b', { title: 'Sweep' }],
+}
+
+const call = (repo: Repository, dotted: string, args: unknown[]) => {
+  const [group, name] = dotted.split('.')
+  const methods = (repo as unknown as Record<string, Record<string, (...a: unknown[]) => unknown>>)[group]
+  return methods[name].apply(methods, args)
+}
+
+describe('isolation', () => {
+  it('never lets one merchant data reach another, through any method', async () => {
+    /*
+     * Merchant B's rows are seeded with a marker. Rather than knowing the
+     * shape of each response, the sweep serialises whatever comes back and
+     * asserts the marker is not in it — which holds for a method that has not
+     * been written yet as much as for the four that have.
+     */
+    const { env } = await twoTenants()
+    const mine = scopedTo(env, 'mch_a', 'stf_1')
+
+    for (const [dotted, args] of Object.entries(CASES)) {
+      const result = await call(mine, dotted, args)
+      expect(JSON.stringify(result ?? null), `${dotted} leaked merchant B`).not.toContain('LEAK_')
+    }
+  })
+
+  it('does not let an update reach across the boundary either', async () => {
+    // A write that silently matches nothing is correct; a write that lands on
+    // another merchant row is the worst outcome in the system.
+    const { env, rows } = await twoTenants()
+    await scopedTo(env, 'mch_a', 'stf_1').products.update('LEAK_p_b', { title: 'taken over' })
+
+    const theirs = rows('products').find((p) => p.id === 'LEAK_p_b')!
+    expect(theirs.title).toBe('LEAK_TITLE')
   })
 })
