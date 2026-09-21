@@ -233,30 +233,60 @@ function build(env: TenancyEnv, scope: Scope): Repository {
   /*
    * Auditing is applied by wrapping rather than by a line inside each method.
    * A line inside each method is a line that can be left out of the next one;
-   * the wrapper covers every method the repository has, including the ones
-   * nobody has written yet.
+   * the wrapper covers every async method added to an existing group — it
+   * does not reach a nested group (that becomes a broken function), a class
+   * instance (its methods aren't own enumerable properties and are lost
+   * entirely), or a synchronous method (it becomes async without complaint).
+   *
+   * Ceiling: the write and its audit row are not atomic. `fn` is awaited and
+   * committed before `record` runs, so a write can succeed while its audit
+   * row does not: the caller is told the call failed, yet the data already
+   * changed. Making the two atomic would mean every write carrying its own
+   * `env.ORDERS.batch([...])` so the row and the change land in one
+   * transaction — done in each write method instead of here, which is
+   * exactly the coverage this wrapper trades away. `record`'s own failure is
+   * still not swallowed: see the catch below.
    */
   return Object.fromEntries(
     Object.entries(raw).map(([group, methods]) => [
       group,
       Object.fromEntries(
         Object.entries(methods as Record<string, (...a: never[]) => Promise<unknown>>).map(
-          ([name, fn]) => [
-            name,
-            async (...args: never[]) => {
-              const result = await fn.apply(methods, args)
-              const dotted = `${group}.${name}`
-              if (worthAuditing(scope, dotted)) {
-                const subject = typeof args[0] === 'string' ? (args[0] as string) : null
-                const touched =
-                  scope.kind === 'merchant'
-                    ? scope.merchantId
-                    : ((result as { merchant_id?: string } | null)?.merchant_id ?? null)
-                await record(env, scope, dotted, touched, subject)
-              }
-              return result
-            },
-          ],
+          ([name, fn]) => {
+            if (typeof fn !== 'function') return [name, fn]
+            return [
+              name,
+              async (...args: never[]) => {
+                const result = await fn.apply(methods, args)
+                const dotted = `${group}.${name}`
+                if (worthAuditing(scope, dotted)) {
+                  const subject = typeof args[0] === 'string' ? (args[0] as string) : null
+                  const touched =
+                    scope.kind === 'merchant'
+                      ? scope.merchantId
+                      : ((result as { merchant_id?: string } | null)?.merchant_id ?? null)
+                  try {
+                    await record(env, scope, dotted, touched, subject)
+                  } catch (err) {
+                    // The write already committed and the caller is about to
+                    // be told it failed. Nothing in the database will ever
+                    // hold this row, so the log stream is the only place it
+                    // can survive — printed in full before the rethrow.
+                    console.error('audit record failed after committed call', {
+                      actor: scope.staffId,
+                      scope: scope.kind,
+                      merchantId: touched,
+                      action: dotted,
+                      subject,
+                      error: err,
+                    })
+                    throw err
+                  }
+                }
+                return result
+              },
+            ]
+          },
         ),
       ),
     ]),

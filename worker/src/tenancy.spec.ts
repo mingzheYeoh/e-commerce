@@ -107,7 +107,7 @@ async function twoTenants() {
   raw
     .prepare(
       `INSERT INTO products (id, merchant_id, sku, title, brand, category, price_minor, currency, status)
-       VALUES ('LEAK_p_b','mch_b','LEAK_SKU','LEAK_TITLE','SONY','audio',200,'MYR','published')`,
+       VALUES ('LEAK_p_b','mch_b','LEAK_SKU','LEAK_TITLE','LEAK_SONY','LEAK_audio',200,'MYR','published')`,
     )
     .run()
   return { env: { ORDERS: db } as TenancyEnv, raw, rows }
@@ -318,6 +318,12 @@ describe('audit', () => {
     expect(actions).toContain('products.list')
     expect(actions).toContain('products.get')
     expect(rows('audit_log').every((r) => r.actor_scope === 'platform')).toBe(true)
+
+    // The platform's merchant_id column is derived from the row that was
+    // actually read, not from the scope (platform has none) or left null.
+    const getEntry = rows('audit_log').find((r) => r.action === 'products.get')!
+    expect(getEntry.merchant_id).toBe('mch_b')
+    expect(getEntry.subject).toBe('LEAK_p_b')
   })
 
   it('does not record a merchant reading their own data', async () => {
