@@ -49,8 +49,19 @@ export function memoryD1(): MemoryD1 {
   direct('PRAGMA foreign_keys = ON')
   // One statement at a time rather than the whole file at once: a schema that
   // fails to load then names the statement that failed.
+  //
+  // A trigger body (BEGIN ... ; END) contains a semicolon of its own, so a
+  // naive split on every ';' would cut it in half. Chunks are re-joined
+  // until BEGIN and END balance, which keeps that granularity for every
+  // other statement.
+  let pending = ''
   for (const chunk of readFileSync(SCHEMA, 'utf8').split(';')) {
-    if (isStatement(chunk)) direct(chunk)
+    pending += (pending ? ';' : '') + chunk
+    const begins = (pending.match(/\bBEGIN\b/gi) ?? []).length
+    const ends = (pending.match(/\bEND\b/gi) ?? []).length
+    if (begins > ends) continue
+    if (isStatement(pending)) direct(pending)
+    pending = ''
   }
 
   const run = (sql: string, args: unknown[]) => {
