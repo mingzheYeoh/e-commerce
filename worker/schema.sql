@@ -36,6 +36,14 @@ CREATE TABLE IF NOT EXISTS orders (
 
 CREATE TABLE IF NOT EXISTS order_lines (
   order_id      TEXT NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+  -- The catalogue id, globally unique. sku is kept because it is what a
+  -- customer reads on a receipt, but it no longer identifies anything.
+  product_id    TEXT NOT NULL,
+  -- Whose product this was at the moment of purchase. Recorded, not yet acted
+  -- on: splitting an order across merchants is a later plan, and attribution
+  -- cannot be reconstructed afterwards because a product's owner can change
+  -- and a completed transaction's cannot.
+  merchant_id   TEXT NOT NULL,
   sku           TEXT NOT NULL,
   title         TEXT NOT NULL,
   qty           INTEGER NOT NULL CHECK (qty > 0),
@@ -47,9 +55,9 @@ CREATE TABLE IF NOT EXISTS order_lines (
   -- SQLite treats NULLs in a primary key as distinct from one another — which
   -- would let the same line be inserted twice.
   variant       TEXT NOT NULL DEFAULT '',
-  -- Two finishes of one product are two lines. Keyed on (order_id, sku) alone,
-  -- ordering a black one and a silver one loses the second.
-  PRIMARY KEY (order_id, sku, variant)
+  -- Two finishes of one product are two lines. Keyed on (order_id, product_id)
+  -- alone, ordering a black one and a silver one loses the second.
+  PRIMARY KEY (order_id, product_id, variant)
 );
 
 -- Accounts. What one buys is narrow on purpose: the orders you placed while
@@ -119,6 +127,7 @@ CREATE TABLE IF NOT EXISTS sessions (
 CREATE INDEX IF NOT EXISTS orders_email_idx ON orders(email);
 CREATE INDEX IF NOT EXISTS orders_created_idx ON orders(created_at DESC);
 CREATE INDEX IF NOT EXISTS orders_user_idx ON orders(user_id);
+CREATE INDEX IF NOT EXISTS order_lines_merchant_idx ON order_lines(merchant_id);
 CREATE INDEX IF NOT EXISTS sessions_user_idx ON sessions(user_id);
 CREATE INDEX IF NOT EXISTS email_tokens_user_idx ON email_tokens(user_id);
 CREATE INDEX IF NOT EXISTS recovery_codes_user_idx ON recovery_codes(user_id);

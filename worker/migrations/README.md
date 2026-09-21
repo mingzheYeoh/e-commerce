@@ -17,6 +17,15 @@ so a failure leaves the database exactly as it was.
 querying tables that do not exist. A migration ahead of its worker is harmless —
 it only adds tables nobody reads yet.
 
+**`0009` is the exception, and it is the first one.** The rule holds for
+migrations that add tables or nullable columns. `0009` adds `product_id` and
+`merchant_id` to `order_lines` as `NOT NULL`, and the worker's checkout still
+inserts neither — so from the moment it lands, every checkout against that
+database fails on `NOT NULL constraint failed: order_lines.product_id` and
+`/api/checkout` returns 503. That is true on staging right now. The worker that
+writes the two columns has to follow, and until it does this rule is inverted
+for this one table.
+
 ## Where each one has been applied
 
 Verified against `sqlite_master` on 2026-09-21.
@@ -32,6 +41,7 @@ Verified against `sqlite_master` on 2026-09-21.
 | `0006` tenancy | ✅ | ✅ re-applied 2026-09-21 |
 | `0007` catalogue columns | ❌ | ✅ |
 | `0008` seed catalogue | ❌ | ✅ |
+| `0009` order lines product id | ❌ | ✅ applied 2026-09-21 |
 
 Production currently holds six tables: `orders`, `order_lines`, and the four
 from `0006`. It has never had `users`, `sessions`, `email_tokens` or
@@ -53,6 +63,15 @@ staging by the whole accounts phase, not broken by it.
 2. **Apply `0007` too.** It is on staging and not on production. It only adds
    columns, so it is safe ahead of the worker that reads them — the ordering
    rule above runs one way.
+
+3. **`0009` needs `0008` in front of it, and a worker behind it.** Its backfill
+   resolves `order_lines.sku` against `products`, and production has the
+   `products` table from `0006` but none of the rows from `0008`. Run against
+   production as it stands, every line would fail to resolve — the count guard
+   then aborts the import rather than emptying the table, which is the outcome
+   it exists for, but it means `0009` cannot land on production until `0008`
+   has. Print `SELECT COUNT(*) FROM order_lines` first either way: `DROP TABLE`
+   leaves no second chance to check what came across.
 
 ## Done, kept for the record
 
