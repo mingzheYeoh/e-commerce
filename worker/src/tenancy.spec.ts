@@ -161,12 +161,16 @@ describe('the schema refuses states that must not exist', () => {
     const { raw } = memoryD1()
     seedMerchant(raw)
     expect(() => insertProduct(raw, ', badge', `, 'HALF_PRICE'`)).toThrow(/CHECK/)
+    raw.prepare(`INSERT INTO products (id, merchant_id, sku, title, brand, category,
+                                       price_minor, currency, status, badge)
+                 VALUES ('p2','mch_a','SKU2','T','B','C',119900,'USD','draft','NEW_DROP')`).run()
   })
 
   it('will not store a rating outside 0 to 5', () => {
     const { raw } = memoryD1()
     seedMerchant(raw)
     expect(() => insertProduct(raw, ', rating', ', 9')).toThrow(/CHECK/)
+    expect(() => insertProduct(raw, ', rating', ', -1')).toThrow(/CHECK/)
   })
 
   it('will not store a review count that is text or negative', () => {

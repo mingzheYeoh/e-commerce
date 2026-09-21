@@ -30,6 +30,7 @@ Verified against `sqlite_master` on 2026-09-21.
 | `0004` recovery tokens | ❌ | ✅ |
 | `0005` account settings | ❌ | ✅ |
 | `0006` tenancy | ✅ | ⚠️ see below |
+| `0007` catalogue columns | ❌ | ✅ |
 
 Production currently holds six tables: `orders`, `order_lines`, and the four
 from `0006`. It has never had `users`, `sessions`, `email_tokens` or
