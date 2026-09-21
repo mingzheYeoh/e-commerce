@@ -64,12 +64,24 @@ export function memoryD1(): MemoryD1 {
     pending = ''
   }
 
+  /**
+   * Numbered `?1` binds as an object in node:sqlite; anonymous `?` binds
+   * positionally. This worker uses both — tenancy.ts deliberately uses
+   * anonymous — so the style is read off the statement rather than assumed.
+   */
+  const bindArgs = (sql: string, args: unknown[]): unknown[] =>
+    /\?\d/.test(sql) ? [named(args)] : args
+
   const run = (sql: string, args: unknown[]) => {
     const statement = sqlite.prepare(sql)
     if (/^\s*(SELECT|PRAGMA|WITH)/i.test(sql)) {
-      return { results: statement.all(named(args)) as Row[], meta: { changes: 0 }, success: true }
+      return {
+        results: statement.all(...bindArgs(sql, args)) as Row[],
+        meta: { changes: 0 },
+        success: true,
+      }
     }
-    const { changes } = statement.run(named(args))
+    const { changes } = statement.run(...bindArgs(sql, args))
     return { results: [] as Row[], meta: { changes: Number(changes) }, success: true }
   }
 

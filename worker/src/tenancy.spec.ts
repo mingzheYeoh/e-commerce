@@ -77,3 +77,75 @@ describe('the schema refuses states that must not exist', () => {
     expect(() => insert.run('p_c', 'mch_a'), 'the same merchant twice').toThrow(/UNIQUE/)
   })
 })
+
+import { scopedTo, platformWide, methodNames, type TenancyEnv } from './tenancy'
+
+/** Two merchants, each with one product. B's is marked so a leak is obvious. */
+async function twoTenants() {
+  const { db, raw, rows } = memoryD1()
+  for (const [id, slug] of [['mch_a', 'a'], ['mch_b', 'b']]) {
+    raw
+      .prepare(
+        `INSERT INTO merchants (id, slug, name, settlement_currency, status) VALUES (?,?,'M','MYR','active')`,
+      )
+      .run(id, slug)
+  }
+  raw
+    .prepare(
+      `INSERT INTO products (id, merchant_id, sku, title, brand, category, price_minor, currency, status)
+       VALUES ('p_a','mch_a','SKU-A','Mine','APPLE','phones',100,'MYR','published')`,
+    )
+    .run()
+  raw
+    .prepare(
+      `INSERT INTO products (id, merchant_id, sku, title, brand, category, price_minor, currency, status)
+       VALUES ('LEAK_p_b','mch_b','LEAK_SKU','LEAK_TITLE','SONY','audio',200,'MYR','published')`,
+    )
+    .run()
+  return { env: { ORDERS: db } as TenancyEnv, raw, rows }
+}
+
+describe('the repository', () => {
+  it('returns only this merchant rows', async () => {
+    const { env } = await twoTenants()
+    const mine = await scopedTo(env, 'mch_a', 'stf_1').products.list()
+    expect(mine.map((p) => p.id)).toEqual(['p_a'])
+  })
+
+  it('refuses to fetch another merchant row by id', async () => {
+    // Guessing an id must not be a way around the predicate.
+    const { env } = await twoTenants()
+    expect(await scopedTo(env, 'mch_a', 'stf_1').products.get('LEAK_p_b')).toBeNull()
+  })
+
+  it('stamps a created product with the scope merchant, not the input', async () => {
+    /*
+     * The merchant is taken from the scope and never from the payload. A
+     * caller that could name its own merchant_id could write into somebody
+     * else's catalogue.
+     */
+    const { env, rows } = await twoTenants()
+    const created = await scopedTo(env, 'mch_a', 'stf_1').products.create({
+      sku: 'NEW-1',
+      title: 'New',
+      brand: 'APPLE',
+      category: 'phones',
+      priceMinor: 500,
+      currency: 'MYR',
+    })
+    expect(created.merchant_id).toBe('mch_a')
+    expect(rows('products').find((p) => p.id === created.id)!.merchant_id).toBe('mch_a')
+  })
+
+  it('lets the platform see everything', async () => {
+    const { env } = await twoTenants()
+    const all = await platformWide(env, 'stf_p').products.list()
+    expect(all.map((p) => p.id).sort()).toEqual(['LEAK_p_b', 'p_a'])
+  })
+
+  it('lists its own methods, so a test can enumerate them', () => {
+    const names = methodNames(scopedTo({} as TenancyEnv, 'mch_a', 'stf_1'))
+    expect(names).toContain('products.list')
+    expect(names).toContain('products.create')
+  })
+})
