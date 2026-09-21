@@ -7,6 +7,7 @@ import SiteFooter from '@/components/layout/SiteFooter.vue'
 import { onMounted } from 'vue'
 import { useCompareStore } from '@/stores/compare'
 import { useAuthStore } from '@/stores/auth'
+import { useCatalogStore } from '@/stores/catalog'
 import { useLenis } from '@/composables/useLenis'
 import { useReducedMotion } from '@/composables/useReducedMotion'
 
@@ -21,6 +22,14 @@ useLenis()
  */
 const auth = useAuthStore()
 onMounted(() => void auth.hydrate())
+
+/*
+ * Revalidate the baked catalogue snapshot against the live one, once the
+ * static page has already painted from it. A failed or slow fetch leaves the
+ * snapshot in place - see catalog.ts's refresh().
+ */
+const catalog = useCatalogStore()
+onMounted(() => void catalog.refresh())
 
 // The comparison tray is fixed, so it cannot push anything out of its way. The
 // footer has to be told to get out of the way instead.
