@@ -41,7 +41,6 @@ export interface NewProduct {
   brand: string
   category: string
   priceMinor: number
-  currency: string
 }
 
 export interface ProductPatch {
@@ -92,7 +91,30 @@ function where(parts: (readonly [string, unknown] | null)[]): { sql: string; arg
   }
 }
 
+/** Money in minor units is an integer or it is a bug in the caller. */
+function assertIntegerMinor(priceMinor: number): void {
+  if (!Number.isInteger(priceMinor)) {
+    throw new Error('priceMinor must be an integer number of minor units')
+  }
+}
+
 function build(env: TenancyEnv, scope: Scope): Repository {
+  /*
+   * A local closure rather than `this.get(...)`. `this` inside an object
+   * literal's methods is bound by call site, not by where the method was
+   * defined — `platformRepo.products.update.call(merchantRepo.products, ...)`
+   * would run this lookup under one scope and the write under another, and
+   * destructuring a method off the object (`const { update } = repo.products`)
+   * loses `this` entirely and throws. Closing over `get` instead means every
+   * caller of `create`/`update` gets the same scope no matter how they're
+   * invoked.
+   */
+  const get = async (productId: string) => {
+    const w = where([['id = ?', productId], tenant(scope)])
+    return env.ORDERS.prepare(`SELECT * FROM products${w.sql}`)
+      .bind(...w.args)
+      .first<ProductRow>()
+  }
 
   return {
     products: {
@@ -106,12 +128,7 @@ function build(env: TenancyEnv, scope: Scope): Repository {
         return results ?? []
       },
 
-      async get(productId: string) {
-        const w = where([['id = ?', productId], tenant(scope)])
-        return env.ORDERS.prepare(`SELECT * FROM products${w.sql}`)
-          .bind(...w.args)
-          .first<ProductRow>()
-      },
+      get,
 
       async create(input: NewProduct) {
         /*
@@ -123,10 +140,26 @@ function build(env: TenancyEnv, scope: Scope): Repository {
         if (scope.kind !== 'merchant') {
           throw new Error('platform scope cannot create a product on a merchant behalf')
         }
+        assertIntegerMinor(input.priceMinor)
+
+        /*
+         * Currency is the merchant's settlement currency, never the payload's.
+         * Merchants price in what they're settled in; a payload-supplied
+         * currency would create a conversion leg with no rate behind it.
+         */
+        const merchant = await env.ORDERS.prepare(
+          `SELECT settlement_currency FROM merchants WHERE id = ?`,
+        )
+          .bind(scope.merchantId)
+          .first<{ settlement_currency: string }>()
+        if (!merchant) {
+          throw new Error('cannot price a product for a merchant that does not exist')
+        }
+
         const productId = id('prd')
         await env.ORDERS.prepare(
           `INSERT INTO products (id, merchant_id, sku, title, brand, category, price_minor, currency, status)
-           VALUES (?1,?2,?3,?4,?5,?6,?7,?8,'draft')`,
+           VALUES (?,?,?,?,?,?,?,?,'draft')`,
         )
           .bind(
             productId,
@@ -136,14 +169,16 @@ function build(env: TenancyEnv, scope: Scope): Repository {
             input.brand,
             input.category,
             input.priceMinor,
-            input.currency,
+            merchant.settlement_currency,
           )
           .run()
-        return (await this.get(productId))!
+        return (await get(productId))!
       },
 
       async update(productId: string, patch: ProductPatch) {
-        const existing = await this.get(productId)
+        if (patch.priceMinor !== undefined) assertIntegerMinor(patch.priceMinor)
+
+        const existing = await get(productId)
         if (!existing) return null
 
         // SET bindings come first and the WHERE bindings after, because
@@ -162,7 +197,7 @@ function build(env: TenancyEnv, scope: Scope): Repository {
             ...w.args,
           )
           .run()
-        return this.get(productId)
+        return get(productId)
       },
     },
   }

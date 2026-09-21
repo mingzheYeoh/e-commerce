@@ -80,15 +80,23 @@ describe('the schema refuses states that must not exist', () => {
 
 import { scopedTo, platformWide, methodNames, type TenancyEnv } from './tenancy'
 
-/** Two merchants, each with one product. B's is marked so a leak is obvious. */
+/**
+ * Two merchants, each with one product. B's is marked so a leak is obvious.
+ * The merchants settle in different currencies on purpose, so a test that
+ * asserts a product's currency came from its own merchant can't pass by
+ * accident (both being 'MYR' would hide a hardcoded value).
+ */
 async function twoTenants() {
   const { db, raw, rows } = memoryD1()
-  for (const [id, slug] of [['mch_a', 'a'], ['mch_b', 'b']]) {
+  for (const [id, slug, currency] of [
+    ['mch_a', 'a', 'MYR'],
+    ['mch_b', 'b', 'SGD'],
+  ]) {
     raw
       .prepare(
-        `INSERT INTO merchants (id, slug, name, settlement_currency, status) VALUES (?,?,'M','MYR','active')`,
+        `INSERT INTO merchants (id, slug, name, settlement_currency, status) VALUES (?,?,'M',?,'active')`,
       )
-      .run(id, slug)
+      .run(id, slug, currency)
   }
   raw
     .prepare(
@@ -131,10 +139,96 @@ describe('the repository', () => {
       brand: 'APPLE',
       category: 'phones',
       priceMinor: 500,
-      currency: 'MYR',
     })
     expect(created.merchant_id).toBe('mch_a')
     expect(rows('products').find((p) => p.id === created.id)!.merchant_id).toBe('mch_a')
+  })
+
+  it('takes currency from the merchant, never the payload', async () => {
+    const { env } = await twoTenants()
+    // A caller shaped like an attacker trying to name its own currency. Cast
+    // past NewProduct, which no longer has the field at all.
+    const input = {
+      sku: 'NEW-2',
+      title: 'New',
+      brand: 'APPLE',
+      category: 'phones',
+      priceMinor: 500,
+      currency: 'ZZZ',
+    }
+    const created = await scopedTo(env, 'mch_a', 'stf_1').products.create(input as never)
+    expect(created.currency).toBe('MYR')
+
+    const createdForB = await scopedTo(env, 'mch_b', 'stf_2').products.create({
+      sku: 'NEW-3',
+      title: 'New',
+      brand: 'APPLE',
+      category: 'phones',
+      priceMinor: 500,
+    })
+    expect(createdForB.currency).toBe('SGD')
+  })
+
+  it('throws creating a product for a merchant that does not exist', async () => {
+    const { env } = await twoTenants()
+    await expect(
+      scopedTo(env, 'mch_missing', 'stf_1').products.create({
+        sku: 'NEW-4',
+        title: 'New',
+        brand: 'APPLE',
+        category: 'phones',
+        priceMinor: 500,
+      }),
+    ).rejects.toThrow()
+  })
+
+  it('rejects a non-integer priceMinor on create', async () => {
+    const { env } = await twoTenants()
+    await expect(
+      scopedTo(env, 'mch_a', 'stf_1').products.create({
+        sku: 'NEW-5',
+        title: 'New',
+        brand: 'APPLE',
+        category: 'phones',
+        priceMinor: 19.99,
+      }),
+    ).rejects.toThrow()
+  })
+
+  it('rejects a non-integer priceMinor on update', async () => {
+    const { env } = await twoTenants()
+    await expect(
+      scopedTo(env, 'mch_a', 'stf_1').products.update('p_a', { priceMinor: 19.99 }),
+    ).rejects.toThrow()
+  })
+
+  it('works when destructured off the repository, not just called as a method', async () => {
+    // A normal call style must not depend on `this`.
+    const { env } = await twoTenants()
+    const { update } = scopedTo(env, 'mch_a', 'stf_1').products
+    const result = await update('p_a', { title: 'Renamed' })
+    expect(result?.title).toBe('Renamed')
+  })
+
+  it('does not let a rebound `this` move a write to a different scope', async () => {
+    // `update` no longer reads `this` at all, so calling it with `this`
+    // forced to a different repository must behave exactly as if it had been
+    // called plainly — the guard and the write always agree, because both
+    // come from the same closure that built this particular function.
+    const { env, rows } = await twoTenants()
+    const platformRepo = platformWide(env, 'stf_p')
+    const merchantRepo = scopedTo(env, 'mch_a', 'stf_1')
+
+    // Platform's own update, `this` forced to a merchant repo: still a
+    // platform-scoped write, so it still succeeds on any row.
+    await platformRepo.products.update.call(merchantRepo.products, 'LEAK_p_b', { title: 'X' })
+    expect(rows('products').find((p) => p.id === 'LEAK_p_b')!.title).toBe('X')
+
+    // The merchant repo's own update, `this` forced to the platform repo:
+    // still a merchant-scoped write, so it still cannot touch a row it
+    // doesn't own — the borrowed `this` buys it nothing.
+    await merchantRepo.products.update.call(platformRepo.products, 'LEAK_p_b', { title: 'Y' })
+    expect(rows('products').find((p) => p.id === 'LEAK_p_b')!.title).toBe('X')
   })
 
   it('lets the platform see everything', async () => {
