@@ -15,7 +15,7 @@
  * Test-only, and outside `src/` so it cannot be pulled into the worker bundle
  * — `node:sqlite` does not exist in the Workers runtime.
  */
-import { DatabaseSync } from 'node:sqlite'
+import { DatabaseSync, type SQLInputValue } from 'node:sqlite'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
@@ -28,8 +28,8 @@ type Row = Record<string, unknown>
  * D1 writes `?1, ?2`; node:sqlite binds those by name rather than by position,
  * so the argument list becomes `{1: …, 2: …}`.
  */
-const named = (args: unknown[]): Record<string, unknown> =>
-  Object.fromEntries(args.map((value, i) => [String(i + 1), value as never]))
+const named = (args: unknown[]): Record<string, SQLInputValue> =>
+  Object.fromEntries(args.map((value, i) => [String(i + 1), value as SQLInputValue]))
 
 /** Whether a chunk of the schema file is a statement or just commentary. */
 const isStatement = (sql: string): boolean => sql.replace(/--[^\n]*/g, '').trim().length > 0
@@ -49,16 +49,47 @@ export function memoryD1(): MemoryD1 {
   direct('PRAGMA foreign_keys = ON')
   // One statement at a time rather than the whole file at once: a schema that
   // fails to load then names the statement that failed.
+  //
+  // A trigger body (BEGIN ... ; END) contains a semicolon of its own, so a
+  // naive split on every ';' would cut it in half. Chunks are re-joined
+  // until BEGIN and END balance, which keeps that granularity for every
+  // other statement.
+  let pending = ''
   for (const chunk of readFileSync(SCHEMA, 'utf8').split(';')) {
-    if (isStatement(chunk)) direct(chunk)
+    pending += (pending ? ';' : '') + chunk
+    const begins = (pending.match(/\bBEGIN\b/gi) ?? []).length
+    const ends = (pending.match(/\bEND\b/gi) ?? []).length
+    if (begins > ends) continue
+    if (isStatement(pending)) direct(pending)
+    pending = ''
   }
+
+  /**
+   * Numbered `?1` binds as an object in node:sqlite; anonymous `?` binds
+   * positionally. This worker uses both — tenancy.ts deliberately uses
+   * anonymous — so the style is read off the statement rather than assumed.
+   *
+   * The two are separate overloads on the node:sqlite side, because a
+   * named-parameter object is not itself a bindable value. So the choice is
+   * made once, here, and each call site takes one branch — a single argument
+   * array covering both cannot be typed without a cast that claims the object
+   * is a value.
+   */
+  const byName = (sql: string, args: unknown[]): Record<string, SQLInputValue> | null =>
+    /\?\d/.test(sql) ? named(args) : null
 
   const run = (sql: string, args: unknown[]) => {
     const statement = sqlite.prepare(sql)
+    const bound = byName(sql, args)
+    const positional = args as SQLInputValue[]
     if (/^\s*(SELECT|PRAGMA|WITH)/i.test(sql)) {
-      return { results: statement.all(named(args)) as Row[], meta: { changes: 0 }, success: true }
+      return {
+        results: (bound ? statement.all(bound) : statement.all(...positional)) as Row[],
+        meta: { changes: 0 },
+        success: true,
+      }
     }
-    const { changes } = statement.run(named(args))
+    const { changes } = bound ? statement.run(bound) : statement.run(...positional)
     return { results: [] as Row[], meta: { changes: Number(changes) }, success: true }
   }
 
