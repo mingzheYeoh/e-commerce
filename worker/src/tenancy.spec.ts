@@ -107,7 +107,7 @@ async function twoTenants() {
   raw
     .prepare(
       `INSERT INTO products (id, merchant_id, sku, title, brand, category, price_minor, currency, status)
-       VALUES ('LEAK_p_b','mch_b','LEAK_SKU','LEAK_TITLE','LEAK_SONY','LEAK_audio',200,'MYR','published')`,
+       VALUES ('LEAK_p_b','mch_b','LEAK_SKU','LEAK_TITLE','LEAK_SONY','LEAK_audio',200,'LEAK_SGD','published')`,
     )
     .run()
   return { env: { ORDERS: db } as TenancyEnv, raw, rows }

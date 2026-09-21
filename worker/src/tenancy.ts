@@ -234,9 +234,10 @@ function build(env: TenancyEnv, scope: Scope): Repository {
    * Auditing is applied by wrapping rather than by a line inside each method.
    * A line inside each method is a line that can be left out of the next one;
    * the wrapper covers every async method added to an existing group — it
-   * does not reach a nested group (that becomes a broken function), a class
-   * instance (its methods aren't own enumerable properties and are lost
-   * entirely), or a synchronous method (it becomes async without complaint).
+   * does not reach a nested group (that throws at construction time with a
+   * named message), a class instance (its methods aren't own enumerable
+   * properties and are lost entirely), or a synchronous method (it becomes
+   * async without complaint).
    *
    * Ceiling: the write and its audit row are not atomic. `fn` is awaited and
    * committed before `record` runs, so a write can succeed while its audit
@@ -253,6 +254,15 @@ function build(env: TenancyEnv, scope: Scope): Repository {
       Object.fromEntries(
         Object.entries(methods as Record<string, (...a: never[]) => Promise<unknown>>).map(
           ([name, fn]) => {
+            // A nested group would pass through this map untouched and its methods
+            // would work, unaudited and invisible to methodNames(). Failing here is
+            // the point: an unaudited path that quietly works is what this wrapper
+            // exists to prevent.
+            if (fn !== null && typeof fn === 'object') {
+              throw new Error(`audit wrapper does not support nested groups: ${group}.${name}`)
+            }
+            // A non-function property is left exactly as it is rather than being
+            // turned into one.
             if (typeof fn !== 'function') return [name, fn]
             return [
               name,
@@ -268,11 +278,12 @@ function build(env: TenancyEnv, scope: Scope): Repository {
                   try {
                     await record(env, scope, dotted, touched, subject)
                   } catch (err) {
-                    // The write already committed and the caller is about to
-                    // be told it failed. Nothing in the database will ever
-                    // hold this row, so the log stream is the only place it
-                    // can survive — printed in full before the rethrow.
-                    console.error('audit record failed after committed call', {
+                    // The call already did its work (read or write), and the
+                    // caller is about to be told it failed. Nothing in the
+                    // database will ever hold this row, so the log stream is
+                    // the only place it can survive — printed in full before
+                    // the rethrow.
+                    console.error('audit record lost, call already completed', {
                       actor: scope.staffId,
                       scope: scope.kind,
                       merchantId: touched,
