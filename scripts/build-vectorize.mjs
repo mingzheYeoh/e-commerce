@@ -63,7 +63,7 @@ const lines = products.map((p, i) => {
   return JSON.stringify({
     id: p.id,
     values,
-    metadata: { title: p.title, category: p.category, brand: p.brand, price: p.price, text: passages[i] },
+    metadata: { title: p.title, category: p.category, brand: p.brand, price: p.priceMinor / 100, text: passages[i] },
   })
 })
 await fs.writeFile(OUT, lines.join('\n') + '\n')
