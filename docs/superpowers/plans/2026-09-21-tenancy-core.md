@@ -477,33 +477,49 @@ const id = (prefix: string) =>
     .slice(0, 20)}`
 
 /**
- * The tenant predicate, produced once per repository.
+ * The tenant clause and its binding, or nothing at all.
  *
- * Merchant scope yields a clause and its binding; platform scope yields
- * neither. Callers never see this — that is the point.
+ * Merchant scope yields the predicate; platform scope yields null and the
+ * clause is genuinely absent from the SQL rather than satisfied by a null
+ * binding. `WHERE (? IS NULL OR merchant_id = ?)` would be shorter and is the
+ * same "null means everything" shape this design rejected in the staff table.
  */
-const predicate = (scope: Scope): { sql: string; args: string[] } =>
-  scope.kind === 'merchant'
-    ? { sql: ' AND merchant_id = ?2', args: [scope.merchantId] }
-    : { sql: '', args: [] }
+const tenant = (scope: Scope) =>
+  scope.kind === 'merchant' ? (['merchant_id = ?', scope.merchantId] as const) : null
+
+/**
+ * Assembles clauses into a WHERE and its bindings, in order.
+ *
+ * Anonymous `?` rather than the numbered `?1` used elsewhere in this worker.
+ * The tenant clause is present or absent, and numbering that shifts with it is
+ * exactly where an off-by-one silently drops the predicate.
+ */
+function where(parts: (readonly [string, unknown] | null)[]): { sql: string; args: unknown[] } {
+  const live = parts.filter((p): p is readonly [string, unknown] => p !== null)
+  return {
+    sql: live.length ? ` WHERE ${live.map(([clause]) => clause).join(' AND ')}` : '',
+    args: live.map(([, value]) => value),
+  }
+}
 
 function build(env: TenancyEnv, scope: Scope): Repository {
-  const where = predicate(scope)
 
   return {
     products: {
       async list() {
+        const w = where([tenant(scope)])
         const { results } = await env.ORDERS.prepare(
-          `SELECT * FROM products WHERE 1 = ?1${where.sql} ORDER BY created_at DESC`,
+          `SELECT * FROM products${w.sql} ORDER BY created_at DESC`,
         )
-          .bind(1, ...where.args)
+          .bind(...w.args)
           .all<ProductRow>()
         return results ?? []
       },
 
       async get(productId: string) {
-        return env.ORDERS.prepare(`SELECT * FROM products WHERE id = ?1${where.sql}`)
-          .bind(productId, ...where.args)
+        const w = where([['id = ?', productId], tenant(scope)])
+        return env.ORDERS.prepare(`SELECT * FROM products${w.sql}`)
+          .bind(...w.args)
           .first<ProductRow>()
       },
 
@@ -540,19 +556,20 @@ function build(env: TenancyEnv, scope: Scope): Repository {
         const existing = await this.get(productId)
         if (!existing) return null
 
+        // SET bindings come first and the WHERE bindings after, because
+        // anonymous `?` binds by position within the whole statement.
+        const w = where([['id = ?', productId], tenant(scope)])
         await env.ORDERS.prepare(
           `UPDATE products
-              SET title = ?3, price_minor = ?4, status = ?5, stock_count = ?6,
-                  updated_at = datetime('now')
-            WHERE id = ?1${where.sql}`,
+              SET title = ?, price_minor = ?, status = ?, stock_count = ?,
+                  updated_at = datetime('now')${w.sql}`,
         )
           .bind(
-            productId,
-            ...where.args,
             patch.title ?? existing.title,
             patch.priceMinor ?? existing.price_minor,
             patch.status ?? existing.status,
             patch.stockCount ?? existing.stock_count,
+            ...w.args,
           )
           .run()
         return this.get(productId)
@@ -587,16 +604,51 @@ export function methodNames(repo: Repository): string[] {
 }
 ```
 
-Note on `WHERE 1 = ?1`: the predicate is appended as `AND merchant_id = ?2`, so
-every statement needs a first binding to keep the numbering stable whether or
-not the clause is present. The alternative is building the numbering
-dynamically, which is where an off-by-one silently drops the predicate.
+This file uses anonymous `?` while the rest of the worker uses numbered `?1`.
+The inconsistency is deliberate and worth it: the tenant clause is present or
+absent, and numbering that shifts with it is exactly where an off-by-one drops
+the predicate without anything failing. `worker/test/d1-memory.ts` binds
+numbered parameters as an object, so it has to handle both — Step 3b.
+
+- [ ] **Step 3b: Teach the test harness to bind positional parameters**
+
+In `worker/test/d1-memory.ts`, replace the body of `run` so both binding styles
+work:
+
+```ts
+  /**
+   * Numbered `?1` binds as an object in node:sqlite; anonymous `?` binds
+   * positionally. This worker uses both — tenancy.ts deliberately uses
+   * anonymous — so the style is read off the statement rather than assumed.
+   */
+  const bindArgs = (sql: string, args: unknown[]): unknown[] =>
+    /\?\d/.test(sql) ? [named(args)] : args
+
+  const run = (sql: string, args: unknown[]) => {
+    const statement = sqlite.prepare(sql)
+    if (/^\s*(SELECT|PRAGMA|WITH)/i.test(sql)) {
+      return {
+        results: statement.all(...bindArgs(sql, args)) as Row[],
+        meta: { changes: 0 },
+        success: true,
+      }
+    }
+    const { changes } = statement.run(...bindArgs(sql, args))
+    return { results: [] as Row[], meta: { changes: Number(changes) }, success: true }
+  }
+```
 
 - [ ] **Step 4: Run the test to verify it passes**
 
 Run: `npm run test -- --run worker/src/tenancy.spec.ts`
 
 Expected: PASS, 9 tests.
+
+Then confirm nothing bound with numbered parameters regressed:
+
+Run: `npm run test -- --run worker/src/auth.spec.ts worker/src/orders.spec.ts`
+
+Expected: PASS, both files.
 
 - [ ] **Step 5: Run the whole suite and the type check**
 
