@@ -1,6 +1,6 @@
 # Merchant admin — design
 
-**Status:** in progress. Sections 1 and 2 are settled; section 3 onward is still
+**Status:** in progress. Sections 1 to 3 are settled; section 4 onward is still
 being worked through.
 
 **Date:** 2026-09-21
@@ -270,11 +270,120 @@ at the rate of a particular day and that day has to be recoverable.
 
 ---
 
+
+---
+
+## Section 3 — tenancy and identity
+
+### `merchants`
+
+```sql
+CREATE TABLE merchants (
+  id                  TEXT PRIMARY KEY,
+  slug                TEXT NOT NULL UNIQUE,
+  name                TEXT NOT NULL,
+  settlement_currency TEXT NOT NULL,
+  status              TEXT NOT NULL CHECK (status IN ('pending','active','suspended')),
+  created_at          TEXT NOT NULL DEFAULT (datetime('now'))
+);
+```
+
+`status` is not decoration. A suspended merchant's products leave the
+storefront; their orders stay, because those are transactions that happened.
+
+### `staff` — the dangerous state is unrepresentable
+
+Merchant and platform staff share one table, one auth path and one login form.
+They do **not** share the customer `users` table.
+
+```sql
+CREATE TABLE staff (
+  id           TEXT PRIMARY KEY,
+  email        TEXT NOT NULL UNIQUE,
+  scope        TEXT NOT NULL CHECK (scope IN ('merchant','platform')),
+  merchant_id  TEXT REFERENCES merchants(id),
+  role         TEXT NOT NULL,   -- merchant: owner|member    platform: admin
+  -- auth columns reuse the existing module: password_hash, kdf_rounds, totp_secret, …
+  CHECK ((scope = 'merchant' AND merchant_id IS NOT NULL)
+      OR (scope = 'platform' AND merchant_id IS NULL))
+);
+```
+
+The obvious encoding is "`merchant_id IS NULL` means platform". That is the
+shape of a privilege-escalation bug: anything that writes NULL into that column
+hands out a platform pass. An explicit `scope` plus the paired CHECK means the
+database refuses an incoherent row — verified against SQLite:
+
+```
+merchant staff with merchant_id = NULL  → CHECK constraint failed
+platform staff with a merchant_id       → CHECK constraint failed
+```
+
+This is not validation. Validation is something you remember to do; a
+constraint is something you cannot avoid.
+
+Platform staff all carry `role = 'admin'` for now. The column exists so that
+adding a read-only `support` role later is data rather than schema.
+
+### Scope, and the asymmetry
+
+```ts
+type Scope =
+  | { kind: 'merchant'; merchantId: string; staffId: string }
+  | { kind: 'platform'; staffId: string }
+```
+
+The query layer accepts only a `Scope`. Merchant scope adds the predicate;
+platform scope does not — **but every platform read of merchant data is
+audited.**
+
+The asymmetry is deliberate. A merchant reading their own data is not an event.
+The platform reading it is.
+
+### `audit_log` — genuinely append-only
+
+```sql
+CREATE TRIGGER audit_no_update BEFORE UPDATE ON audit_log
+BEGIN SELECT RAISE(ABORT,'audit log is append-only'); END;
+CREATE TRIGGER audit_no_delete BEFORE DELETE ON audit_log
+BEGIN SELECT RAISE(ABORT,'audit log is append-only'); END;
+```
+
+Verified: both an UPDATE and a DELETE are refused. A log whose history can be
+rewritten is not a log.
+
+Recorded: every write by anyone, plus every **platform** read of merchant-scoped
+data. Not merchant reads of their own data — that is noise and write volume.
+
+**Merchants can read the entries about themselves.** "NEXUS support viewed your
+orders on 21 September" is the part that makes the log a reason to join the
+platform rather than only the platform's own defence.
+
+### Orders split at checkout
+
+A cart can hold products from several merchants. One customer `order_group`
+becomes N merchant orders, which is what real marketplaces do.
+
+The alternative — one order whose lines carry a `merchant_id` — makes every
+merchant-facing query a join plus a caveat that the total on screen is not the
+order's total. **Refunds break it first:** refunding an order spanning two
+merchants has no obvious answer to whose money goes back.
+
+This restructures the existing `orders` table, which is live. The migration is
+part of the foundation work rather than an afterthought.
+
+### Consequences for existing code
+
+- **SKUs stop being globally unique.** Two merchants may both sell
+  `IP18P-256`. `PRICE_BY_SKU`, a global map in `worker/src/orders.ts`, cannot
+  survive this; order lines reference a stable `product_id` and carry a frozen
+  copy of sku, title and price.
+- `UNIQUE (merchant_id, sku)` replaces any global uniqueness assumption.
+
+---
+
 ## Open
 
-- **Section 3 — tenant model and identity.** Table shapes; how the platform
-  role is expressed; how the audit log records a platform user reading a
-  merchant's data.
 - **Section 4 — the catalogue in the database**, including how the static
   on-device embedding index stays honest once merchants can edit products.
 - **Section 5 — testing**, in particular the test that proves isolation.
