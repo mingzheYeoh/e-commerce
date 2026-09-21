@@ -257,7 +257,9 @@ function build(env: TenancyEnv, scope: Scope): Repository {
             // A nested group would pass through this map untouched and its methods
             // would work, unaudited and invisible to methodNames(). Failing here is
             // the point: an unaudited path that quietly works is what this wrapper
-            // exists to prevent.
+            // exists to prevent. This branch is unreachable through the module's public
+            // entry points (scopedTo and platformWide); the guard exists for developers
+            // editing the repository literal below.
             if (fn !== null && typeof fn === 'object') {
               throw new Error(`audit wrapper does not support nested groups: ${group}.${name}`)
             }
