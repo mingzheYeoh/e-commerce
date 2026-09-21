@@ -8,7 +8,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "typecheck": "vue-tsc --noEmit",
+    "typecheck": "vue-tsc --noEmit && tsc --noEmit -p worker/tsconfig.json",
     "assets": "node scripts/fetch-assets.mjs",
     "build:embeddings": "node scripts/build-embeddings.mjs",
     "build:graph": "node scripts/build-graph.mjs",

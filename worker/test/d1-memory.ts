@@ -15,7 +15,7 @@
  * Test-only, and outside `src/` so it cannot be pulled into the worker bundle
  * — `node:sqlite` does not exist in the Workers runtime.
  */
-import { DatabaseSync } from 'node:sqlite'
+import { DatabaseSync, type SQLInputValue } from 'node:sqlite'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
@@ -28,8 +28,8 @@ type Row = Record<string, unknown>
  * D1 writes `?1, ?2`; node:sqlite binds those by name rather than by position,
  * so the argument list becomes `{1: …, 2: …}`.
  */
-const named = (args: unknown[]): Record<string, unknown> =>
-  Object.fromEntries(args.map((value, i) => [String(i + 1), value as never]))
+const named = (args: unknown[]): Record<string, SQLInputValue> =>
+  Object.fromEntries(args.map((value, i) => [String(i + 1), value as SQLInputValue]))
 
 /** Whether a chunk of the schema file is a statement or just commentary. */
 const isStatement = (sql: string): boolean => sql.replace(/--[^\n]*/g, '').trim().length > 0
@@ -68,20 +68,28 @@ export function memoryD1(): MemoryD1 {
    * Numbered `?1` binds as an object in node:sqlite; anonymous `?` binds
    * positionally. This worker uses both — tenancy.ts deliberately uses
    * anonymous — so the style is read off the statement rather than assumed.
+   *
+   * The two are separate overloads on the node:sqlite side, because a
+   * named-parameter object is not itself a bindable value. So the choice is
+   * made once, here, and each call site takes one branch — a single argument
+   * array covering both cannot be typed without a cast that claims the object
+   * is a value.
    */
-  const bindArgs = (sql: string, args: unknown[]): unknown[] =>
-    /\?\d/.test(sql) ? [named(args)] : args
+  const byName = (sql: string, args: unknown[]): Record<string, SQLInputValue> | null =>
+    /\?\d/.test(sql) ? named(args) : null
 
   const run = (sql: string, args: unknown[]) => {
     const statement = sqlite.prepare(sql)
+    const bound = byName(sql, args)
+    const positional = args as SQLInputValue[]
     if (/^\s*(SELECT|PRAGMA|WITH)/i.test(sql)) {
       return {
-        results: statement.all(...bindArgs(sql, args)) as Row[],
+        results: (bound ? statement.all(bound) : statement.all(...positional)) as Row[],
         meta: { changes: 0 },
         success: true,
       }
     }
-    const { changes } = statement.run(...bindArgs(sql, args))
+    const { changes } = bound ? statement.run(bound) : statement.run(...positional)
     return { results: [] as Row[], meta: { changes: Number(changes) }, success: true }
   }
 

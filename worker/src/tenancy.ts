@@ -252,80 +252,87 @@ function build(env: TenancyEnv, scope: Scope): Repository {
    * transaction — done in each write method instead of here, which is
    * exactly the coverage this wrapper trades away. `record`'s own failure is
    * still not swallowed: see the catch below.
+   *
+   * One group at a time, named explicitly at the call site below, so that the
+   * result is an object literal TypeScript can check against Repository. A
+   * sweep over Object.entries(raw) produced an index-signature type that only
+   * a cast could turn back into a Repository — and a cast is exactly what
+   * would have let a new group be wrapped but never declared.
    */
-  return Object.fromEntries(
-    Object.entries(raw).map(([group, methods]) => [
-      group,
-      Object.fromEntries(
-        Object.entries(methods as Record<string, (...a: never[]) => Promise<unknown>>).map(
-          ([name, fn]) => {
-            // A nested group would pass through this map untouched and its methods
-            // would work, unaudited and invisible to methodNames(). Failing here is
-            // the point: an unaudited path that quietly works is what this wrapper
-            // exists to prevent. This branch is unreachable through the module's public
-            // entry points (scopedTo and platformWide); the guard exists for developers
-            // editing the repository literal below.
-            if (fn !== null && typeof fn === 'object') {
-              throw new Error(`audit wrapper does not support nested groups: ${group}.${name}`)
-            }
-            // A non-function property is left exactly as it is rather than being
-            // turned into one.
-            if (typeof fn !== 'function') return [name, fn]
-            return [
-              name,
-              async (...args: never[]) => {
-                const result = await fn.apply(methods, args)
-                const dotted = `${group}.${name}`
-                if (worthAuditing(scope, dotted)) {
-                  // An id argument where there is one, and otherwise whatever
-                  // the call produced: create's first argument is a payload,
-                  // so the one row that records a thing coming into existence
-                  // would be the only one unable to name it.
-                  const subject =
-                    typeof args[0] === 'string'
-                      ? (args[0] as string)
-                      : ((result as { id?: string } | null)?.id ?? null)
-                  // ponytail: a platform list across N merchants writes N rows.
-                  // The upgrade if that volume ever matters is one row plus a
-                  // `detail` JSON of ids — but only alongside a merchant-facing
-                  // query that reads it, or the row becomes unfindable again.
-                  const touched: (string | null)[] =
-                    scope.kind === 'merchant'
-                      ? [scope.merchantId]
-                      : Array.isArray(result)
-                        ? [
-                            ...new Set(
-                              (result as { merchant_id: string }[]).map((r) => r.merchant_id),
-                            ),
-                          ]
-                        : [(result as { merchant_id?: string } | null)?.merchant_id ?? null]
-                  try {
-                    for (const m of touched) await record(env, scope, dotted, m, subject)
-                  } catch (err) {
-                    // The call already did its work (read or write), and the
-                    // caller is about to be told it failed. Nothing in the
-                    // database will ever hold this row, so the log stream is
-                    // the only place it can survive — printed in full before
-                    // the rethrow.
-                    console.error('audit record lost, call already completed', {
-                      actor: scope.staffId,
-                      scope: scope.kind,
-                      merchantId: touched,
-                      action: dotted,
-                      subject,
-                      error: err,
-                    })
-                    throw err
-                  }
+  const wrap = (group: string, methods: object) =>
+    Object.fromEntries(
+      Object.entries(methods as Record<string, (...a: never[]) => Promise<unknown>>).map(
+        ([name, fn]) => {
+          // A nested group would pass through this map untouched and its methods
+          // would work, unaudited and invisible to methodNames(). Failing here is
+          // the point: an unaudited path that quietly works is what this wrapper
+          // exists to prevent. This branch is unreachable through the module's public
+          // entry points (scopedTo and platformWide); the guard exists for developers
+          // editing the repository literal below.
+          if (fn !== null && typeof fn === 'object') {
+            throw new Error(`audit wrapper does not support nested groups: ${group}.${name}`)
+          }
+          // A non-function property is left exactly as it is rather than being
+          // turned into one.
+          if (typeof fn !== 'function') return [name, fn]
+          return [
+            name,
+            async (...args: never[]) => {
+              const result = await fn.apply(methods, args)
+              const dotted = `${group}.${name}`
+              if (worthAuditing(scope, dotted)) {
+                // An id argument where there is one, and otherwise whatever
+                // the call produced: create's first argument is a payload,
+                // so the one row that records a thing coming into existence
+                // would be the only one unable to name it.
+                const subject =
+                  typeof args[0] === 'string'
+                    ? (args[0] as string)
+                    : ((result as { id?: string } | null)?.id ?? null)
+                // ponytail: a platform list across N merchants writes N rows.
+                // The upgrade if that volume ever matters is one row plus a
+                // `detail` JSON of ids — but only alongside a merchant-facing
+                // query that reads it, or the row becomes unfindable again.
+                const touched: (string | null)[] =
+                  scope.kind === 'merchant'
+                    ? [scope.merchantId]
+                    : Array.isArray(result)
+                      ? [
+                          ...new Set(
+                            (result as { merchant_id: string }[]).map((r) => r.merchant_id),
+                          ),
+                        ]
+                      : [(result as { merchant_id?: string } | null)?.merchant_id ?? null]
+                try {
+                  for (const m of touched) await record(env, scope, dotted, m, subject)
+                } catch (err) {
+                  // The call already did its work (read or write), and the
+                  // caller is about to be told it failed. Nothing in the
+                  // database will ever hold this row, so the log stream is
+                  // the only place it can survive — printed in full before
+                  // the rethrow.
+                  console.error('audit record lost, call already completed', {
+                    actor: scope.staffId,
+                    scope: scope.kind,
+                    merchantId: touched,
+                    action: dotted,
+                    subject,
+                    error: err,
+                  })
+                  throw err
                 }
-                return result
-              },
-            ]
-          },
-        ),
+              }
+              return result
+            },
+          ]
+        },
       ),
-    ]),
-  ) as Repository
+    )
+
+  const audited: Repository = {
+    products: wrap('products', raw.products) as Repository['products'],
+  }
+  return audited
 }
 
 /** A merchant's own data, and nothing else. */
