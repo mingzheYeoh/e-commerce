@@ -98,6 +98,33 @@ function assertIntegerMinor(value: number, field: string): void {
   }
 }
 
+/** Methods that change something. Everything else is a read. */
+const WRITES = new Set(['products.create', 'products.update'])
+
+/**
+ * Whether this call is worth a row.
+ *
+ * Every write by anyone, and every platform read. A merchant reading their own
+ * data is not an event, and recording it would bury the entries that are.
+ */
+const worthAuditing = (scope: Scope, dotted: string): boolean =>
+  scope.kind === 'platform' || WRITES.has(dotted)
+
+async function record(
+  env: TenancyEnv,
+  scope: Scope,
+  dotted: string,
+  merchantId: string | null,
+  subject: string | null,
+): Promise<void> {
+  await env.ORDERS.prepare(
+    `INSERT INTO audit_log (id, actor_id, actor_scope, merchant_id, action, subject)
+     VALUES (?1,?2,?3,?4,?5,?6)`,
+  )
+    .bind(id('aud'), scope.staffId, scope.kind, merchantId, dotted, subject)
+    .run()
+}
+
 function build(env: TenancyEnv, scope: Scope): Repository {
   /*
    * A local closure rather than `this.get(...)`. `this` inside an object
@@ -116,7 +143,7 @@ function build(env: TenancyEnv, scope: Scope): Repository {
       .first<ProductRow>()
   }
 
-  return {
+  const raw: Repository = {
     products: {
       async list() {
         const w = where([tenant(scope)])
@@ -202,6 +229,38 @@ function build(env: TenancyEnv, scope: Scope): Repository {
       },
     },
   }
+
+  /*
+   * Auditing is applied by wrapping rather than by a line inside each method.
+   * A line inside each method is a line that can be left out of the next one;
+   * the wrapper covers every method the repository has, including the ones
+   * nobody has written yet.
+   */
+  return Object.fromEntries(
+    Object.entries(raw).map(([group, methods]) => [
+      group,
+      Object.fromEntries(
+        Object.entries(methods as Record<string, (...a: never[]) => Promise<unknown>>).map(
+          ([name, fn]) => [
+            name,
+            async (...args: never[]) => {
+              const result = await fn.apply(methods, args)
+              const dotted = `${group}.${name}`
+              if (worthAuditing(scope, dotted)) {
+                const subject = typeof args[0] === 'string' ? (args[0] as string) : null
+                const touched =
+                  scope.kind === 'merchant'
+                    ? scope.merchantId
+                    : ((result as { merchant_id?: string } | null)?.merchant_id ?? null)
+                await record(env, scope, dotted, touched, subject)
+              }
+              return result
+            },
+          ],
+        ),
+      ),
+    ]),
+  ) as Repository
 }
 
 /** A merchant's own data, and nothing else. */

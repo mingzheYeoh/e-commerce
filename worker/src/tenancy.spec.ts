@@ -298,3 +298,43 @@ describe('isolation', () => {
     expect(theirs.title).toBe('LEAK_TITLE')
   })
 })
+
+describe('audit', () => {
+  it('records every platform call against merchant data', async () => {
+    /*
+     * The asymmetry is the design. A merchant reading their own data is not an
+     * event; the platform reading it is, and a merchant who cannot see that
+     * happen has no reason to trust the platform with their orders.
+     */
+    const { env, rows } = await twoTenants()
+    const platform = platformWide(env, 'stf_p')
+
+    for (const [dotted, args] of Object.entries(CASES)) {
+      if (dotted === 'products.create') continue // platform scope refuses this
+      await call(platform, dotted, args)
+    }
+
+    const actions = rows('audit_log').map((r) => r.action)
+    expect(actions).toContain('products.list')
+    expect(actions).toContain('products.get')
+    expect(rows('audit_log').every((r) => r.actor_scope === 'platform')).toBe(true)
+  })
+
+  it('does not record a merchant reading their own data', async () => {
+    // Otherwise the log is mostly noise, and the entries that matter are
+    // buried in it.
+    const { env, rows } = await twoTenants()
+    await scopedTo(env, 'mch_a', 'stf_1').products.list()
+    expect(rows('audit_log')).toHaveLength(0)
+  })
+
+  it('records a merchant write, because every write is an event', async () => {
+    const { env, rows } = await twoTenants()
+    await scopedTo(env, 'mch_a', 'stf_1').products.update('p_a', { title: 'Renamed' })
+
+    const entry = rows('audit_log')[0]
+    expect(entry.action).toBe('products.update')
+    expect(entry.actor_scope).toBe('merchant')
+    expect(entry.merchant_id).toBe('mch_a')
+  })
+})
