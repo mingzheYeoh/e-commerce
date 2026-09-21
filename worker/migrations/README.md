@@ -31,6 +31,7 @@ Verified against `sqlite_master` on 2026-09-21.
 | `0005` account settings | ❌ | ✅ |
 | `0006` tenancy | ✅ | ✅ re-applied 2026-09-21 |
 | `0007` catalogue columns | ❌ | ✅ |
+| `0008` seed catalogue | ❌ | ✅ |
 
 Production currently holds six tables: `orders`, `order_lines`, and the four
 from `0006`. It has never had `users`, `sessions`, `email_tokens` or
