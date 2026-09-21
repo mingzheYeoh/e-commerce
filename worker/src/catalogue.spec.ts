@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { memoryD1 } from '../test/d1-memory'
+import { products } from '@/data/products'
 
 /** The seed migration loaded into a real database, statement by statement. */
 function seeded() {
@@ -48,5 +49,69 @@ describe('the seeded catalogue', () => {
       .prepare(`SELECT id FROM products WHERE typeof(price_minor) != 'integer'`)
       .all()
     expect(bad).toEqual([])
+  })
+
+  it('stores JSON columns that serialize correctly', () => {
+    // The seed migration builds SQL by string concatenation into four free-text
+    // JSON columns: specs, colorways, media, and specs_summary. These are the
+    // highest-risk data in the catalogue because a malformed value corrupts
+    // without a schema violation. JSON.parse inside the assertion names the
+    // product if parsing fails, so the error is not an opaque SyntaxError.
+    const { raw } = seeded()
+    const rows = raw.prepare(`SELECT id, specs, colorways, media, specs_summary FROM products`).all() as Array<{
+      id: string
+      specs: string
+      colorways: string
+      media: string
+      specs_summary: string
+    }>
+
+    for (const row of rows) {
+      let parsed: object
+      try {
+        parsed = JSON.parse(row.specs)
+        expect(Array.isArray(parsed)).toBe(true)
+      } catch (err) {
+        throw new Error(`specs for ${row.id}: ${err}`)
+      }
+
+      try {
+        parsed = JSON.parse(row.colorways)
+        expect(Array.isArray(parsed)).toBe(true)
+      } catch (err) {
+        throw new Error(`colorways for ${row.id}: ${err}`)
+      }
+
+      try {
+        parsed = JSON.parse(row.media)
+        expect(typeof parsed).toBe('object')
+      } catch (err) {
+        throw new Error(`media for ${row.id}: ${err}`)
+      }
+
+      try {
+        parsed = JSON.parse(row.specs_summary)
+        expect(Array.isArray(parsed)).toBe(true)
+      } catch (err) {
+        throw new Error(`specs_summary for ${row.id}: ${err}`)
+      }
+    }
+
+    // Verify one product's structures match the TypeScript catalogue.
+    const iphonePro = rows.find((r) => r.id === 'iphone-18-pro')
+    expect(iphonePro).toBeDefined()
+
+    const catalogProduct = products.find((p) => p.id === 'iphone-18-pro')
+    expect(catalogProduct).toBeDefined()
+
+    const specs = JSON.parse(iphonePro!.specs) as Array<{ label: string; value: string }>
+    const colorways = JSON.parse(iphonePro!.colorways) as Array<{ name: string; hex: string }>
+    const media = JSON.parse(iphonePro!.media) as { heroImage: string; hoverImage: string; thumb: string; gallery: string[] }
+    const specsSummary = JSON.parse(iphonePro!.specs_summary) as string[]
+
+    expect(specs).toEqual(catalogProduct!.specs)
+    expect(colorways).toEqual(catalogProduct!.colorways)
+    expect(media).toEqual(catalogProduct!.media)
+    expect(specsSummary).toEqual(catalogProduct!.specsSummary)
   })
 })
