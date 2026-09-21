@@ -1,7 +1,7 @@
 # Merchant admin — design
 
-**Status:** in progress. Sections 1 to 3 are settled; section 4 onward is still
-being worked through.
+**Status:** design complete and approved section by section. Ready for an
+implementation plan.
 
 **Date:** 2026-09-21
 
@@ -32,8 +32,7 @@ products.json      same                                the hard one
 worker price table imported from the TS file           the hard one
 ```
 
-That tension is unresolved at the time of writing and is addressed in the
-foundation section.
+That tension is resolved in section 4.
 
 ---
 
@@ -224,19 +223,38 @@ the rate afterwards cannot change what was charged.
 This is the same discipline as freezing `unitPriceCents` onto a cart line,
 which this project already got right once.
 
-The order freezes:
+**A marketplace order touches three currencies, not two.** This was missed on
+the first pass of this section and caught in review: merchants pricing in their
+own currency (below) adds a third leg, and a payout that does not reconcile
+with a charge is the worst kind of bug to find late.
 
-```sql
-total_cents     INTEGER  -- platform currency (USD cents), the ledger
-currency        TEXT     -- the currency transacted in
-fx_rate         TEXT     -- frozen; TEXT not REAL, same reason money is integer cents
-fx_rate_at      TEXT     -- when that rate was published
-fx_source       TEXT     -- 'ECB' — provenance is what settles a dispute
-total_charged   INTEGER  -- minor units of the transacted currency, frozen
+```
+merchant settlement   MYR   what the merchant priced in and is owed
+platform ledger       USD   the books
+shopper charged       EUR   what the card was actually debited
 ```
 
-Once `total_charged` is stored it is never recomputed. Reading an old order
-shows what was actually taken, not today's rate applied to a dollar figure.
+Every amount a human is ever shown or paid is stored, along with the rate that
+produced it. Nothing is recomputed:
+
+```sql
+-- on each merchant order
+settlement_minor     INTEGER  -- what this merchant is owed
+settlement_currency  TEXT
+ledger_cents         INTEGER  -- USD cents, the books
+charged_minor        INTEGER  -- what the shopper was actually debited
+charged_currency     TEXT
+fx_settlement_rate   TEXT     -- settlement → ledger; TEXT not REAL, same reason money is integer cents
+fx_charged_rate      TEXT     -- ledger → charged
+fx_rate_at           TEXT     -- when those rates were published
+fx_source            TEXT     -- 'ECB' — provenance is what settles a dispute
+```
+
+Once stored, none of it is recomputed. Reading an old order shows what was
+actually taken and what is actually owed, not today's rate applied to a dollar
+figure. Two derived amounts and two rates look like more than is needed until
+the first month-end where a payout and a charge disagree by four cents and
+nobody can say which number was wrong.
 
 ### Source and schedule
 
@@ -380,10 +398,152 @@ part of the foundation work rather than an afterthought.
   copy of sku, title and price.
 - `UNIQUE (merchant_id, sku)` replaces any global uniqueness assumption.
 
+
 ---
 
-## Open
+## Section 4 — the catalogue in the database
 
-- **Section 4 — the catalogue in the database**, including how the static
-  on-device embedding index stays honest once merchants can edit products.
-- **Section 5 — testing**, in particular the test that proves isolation.
+### `products`
+
+```sql
+CREATE TABLE products (
+  id           TEXT PRIMARY KEY,            -- the slug already used in URLs
+  merchant_id  TEXT NOT NULL REFERENCES merchants(id),
+  sku          TEXT NOT NULL,
+  title        TEXT NOT NULL,
+  brand        TEXT NOT NULL,
+  category     TEXT NOT NULL,
+  price_minor  INTEGER NOT NULL,            -- minor units of the merchant's currency
+  currency     TEXT NOT NULL,               -- denormalised from the merchant, frozen on write
+  status       TEXT NOT NULL CHECK (status IN ('draft','published','archived')),
+  stock_count  INTEGER NOT NULL DEFAULT 0,
+  specs        TEXT NOT NULL DEFAULT '[]',  -- JSON
+  colorways    TEXT NOT NULL DEFAULT '[]',  -- JSON
+  media        TEXT NOT NULL DEFAULT '{}',  -- JSON
+  UNIQUE (merchant_id, sku)
+);
+```
+
+Currency is denormalised onto the row and frozen. A merchant changing their
+settlement currency must not silently reinterpret the price of everything they
+have already listed.
+
+Queryable things get real columns; document-shaped things get JSON. `specs` is
+`{label, value}[]` of free text that is never queried by field — it is a
+document, not a relation.
+
+### What happens to each derived artifact
+
+```
+worker price table   read from D1 instead of importing the TS file   solved
+Vectorize index      queue consumer, incremental upsert              solved
+Neo4j graph          same                                            solved
+products.json        small; generated live by the worker             solved
+products.bin         ← the real problem
+```
+
+### The real problem, stated precisely
+
+```
+on-device query embedding   Xenova/all-MiniLM-L6-v2      runs in the browser
+hosted index                @cf/baai/bge-small-en-v1.5   runs in a Worker
+```
+
+Two models are two incompatible vector spaces. Keyless, offline, instant search
+requires the *query* to be embedded in the browser, which means MiniLM; MiniLM
+cannot run in a Worker — its 26.8MB of wasm is exactly what had to be dropped
+to get under the 25MiB deploy limit.
+
+So `products.bin` can only be rebuilt where Node runs: CI. A merchant editing a
+product cannot update it in place.
+
+### The resolution falls out of what is already there
+
+Search is already two arms fused by reciprocal rank fusion
+(`src/lib/retrieval.ts`).
+
+```
+keyword arm    reads product text    → live from D1      a new product is findable at once
+semantic arm   reads products.bin    → rebuilt nightly   up to a day behind
+               fused by RRF
+```
+
+**Names are fresh; meanings can be a day old.**
+
+Someone searching "iPhone 18" finds a just-listed iPhone immediately, through
+the keyword arm. Someone searching "something for taking calls in an open-plan
+office" gets last night's semantic index. The degradation is honest and close
+to invisible, because nobody looks for a product by abstract description two
+minutes after it is listed.
+
+`products.bin` is rebuilt by a scheduled GitHub Action — nightly, plus a
+debounced trigger on catalogue change. That action is the only new piece of CI
+infrastructure this project takes on.
+
+### One pattern, three times
+
+```
+catalogue        build-time snapshot + revalidate on load
+FX rates         last good + daily refresh
+semantic index   nightly rebuild + live keyword arm
+```
+
+All three are *use what is in hand, then correct it*. The storefront is
+currently a static site that renders without the API, and that property is
+worth keeping — so the catalogue is not "fetched from an API", it is **baked in
+at build time and revalidated after load**. First paint stays as fast as it is
+today and becomes current within a second.
+
+---
+
+## Section 5 — proving the isolation
+
+Tenant isolation is the one invariant that cannot be got wrong, so it gets
+tests that are about *proof* rather than coverage.
+
+The weak version is a test per endpoint asserting merchant A cannot read
+merchant B. It only covers the endpoints somebody remembered, and the failure
+mode being defended against is **a query added later without the predicate**.
+
+### Three tests that hold each other up
+
+**1. A poisoned second tenant.** The fixture seeds merchant B with values
+marked so they are trivially detectable — ids prefixed `LEAK_`. Every method on
+the scoped repository is called with merchant A's scope, and the serialised
+result is asserted never to contain that marker. No knowledge of each
+response's shape is needed; only that B's data never appears in A's answer.
+
+**2. Audit completeness.** Every method called with a *platform* scope must
+leave a row in `audit_log`. The asymmetry from section 3, enforced rather than
+remembered.
+
+**3. The completeness test that makes the first two structural.**
+
+```ts
+it('every method on the scoped repository has an isolation case', () => {
+  expect(allMethodsOf(scopedTo('mch_a')).sort()).toEqual(Object.keys(CASES).sort())
+})
+```
+
+Adding `db.payouts.list()` without adding a case turns the suite red. Without
+this third test the first two are only as good as somebody's memory, which is
+the thing being designed out.
+
+### Why behaviour and not SQL text
+
+Asserting the generated SQL contains `merchant_id = ?` is tempting and weak:
+`WHERE something OR merchant_id = ?` passes it, and it tests a string rather
+than an outcome. Seeding two tenants and looking at what comes back tests the
+thing that actually matters.
+
+### Schema drift is already covered
+
+The test harness loads the project's own `schema.sql` into real SQLite, so a
+statement naming a column that does not exist fails in the suite. That is what
+surfaced `schema.sql` having drifted three migrations behind, and it keeps
+working as a guard without a further test.
+
+Going forward, a `migrations/0000-initial.sql` should exist so that "fresh
+database from schema.sql" and "existing database through every migration" are
+two paths that can be compared rather than assumed to agree.
+
