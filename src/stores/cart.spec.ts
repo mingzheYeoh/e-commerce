@@ -83,6 +83,60 @@ describe('cart store', () => {
   })
 })
 
+describe('reading a cart saved before productId existed', () => {
+  // `nexus:cart` is written by whichever deploy was live when a shopper last
+  // touched their basket, and read by whichever deploy is live now, with no
+  // migration in between. A line saved before `CartLine.productId` existed
+  // still has only a sku on disk.
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    localStorage.clear()
+  })
+
+  it('repairs a stale line by looking its sku up in the catalogue', () => {
+    localStorage.setItem(
+      'nexus:cart',
+      JSON.stringify([
+        {
+          sku: anyProduct.sku,
+          title: anyProduct.title,
+          brand: anyProduct.brand,
+          thumb: anyProduct.media.thumb,
+          unitPriceCents: anyProduct.priceMinor,
+          qty: 1,
+          stockCount: anyProduct.stockCount,
+        },
+      ]),
+    )
+
+    const cart = useCartStore()
+
+    expect(cart.items).toHaveLength(1)
+    expect(cart.items[0].productId).toBe(anyProduct.id)
+  })
+
+  it('drops a stale line whose sku no longer resolves', () => {
+    localStorage.setItem(
+      'nexus:cart',
+      JSON.stringify([
+        {
+          sku: 'DISCONTINUED-SKU',
+          title: 'Retired Product',
+          brand: anyProduct.brand,
+          thumb: anyProduct.media.thumb,
+          unitPriceCents: anyProduct.priceMinor,
+          qty: 1,
+          stockCount: anyProduct.stockCount,
+        },
+      ]),
+    )
+
+    const cart = useCartStore()
+
+    expect(cart.items).toHaveLength(0)
+  })
+})
+
 describe('finishes', () => {
   beforeEach(() => {
     setActivePinia(createPinia())

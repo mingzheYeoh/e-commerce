@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import type { Product } from '@/types'
+import { products } from '@/data/products'
 
 export interface CartLine {
   /**
@@ -48,7 +49,27 @@ const stored = {
   read(): CartLine[] {
     try {
       const raw = localStorage.getItem(CART_KEY)
-      return raw ? (JSON.parse(raw) as CartLine[]) : []
+      if (!raw) return []
+
+      // `nexus:cart` is written by whichever deploy was last live when a
+      // shopper touched their basket, and read by whichever deploy is live
+      // now — there is no migration step in between. `as CartLine[]` only
+      // asserts the compile-time shape; it proves nothing about the bytes on
+      // disk. `productId` was added to `CartLine` after some baskets were
+      // already sitting in storage, so a line from before that deploy has no
+      // productId at runtime even though the type says it must.
+      //
+      // Repair it the way `checkout.ts`'s `loadOrder()` repairs a delisted
+      // product: look the sku up in the bundled catalogue, which every
+      // stored line has always carried. A sku that no longer resolves is
+      // dropped, same as this app already treats a delisted product.
+      const bySku = new Map(products.map((p) => [p.sku, p]))
+      const lines = JSON.parse(raw) as CartLine[]
+      return lines.flatMap((line) => {
+        if (line.productId) return [line]
+        const product = bySku.get(line.sku)
+        return product ? [{ ...line, productId: product.id }] : []
+      })
     } catch {
       return []
     }
