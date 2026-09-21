@@ -29,7 +29,7 @@ Verified against `sqlite_master` on 2026-09-21.
 | `0003` auth hardening | ❌ | ✅ |
 | `0004` recovery tokens | ❌ | ✅ |
 | `0005` account settings | ❌ | ✅ |
-| `0006` tenancy | ✅ | ⚠️ see below |
+| `0006` tenancy | ✅ | ✅ re-applied 2026-09-21 |
 | `0007` catalogue columns | ❌ | ✅ |
 
 Production currently holds six tables: `orders`, `order_lines`, and the four
@@ -49,11 +49,21 @@ staging by the whole accounts phase, not broken by it.
    before touching the database when the request carries no session cookie, and
    in production nothing can issue one.
 
-2. **Re-apply `0006` to staging.** Staging received the tenancy tables while
-   Task 1 was being verified, which was before `price_minor` and `stock_count`
-   gained their `CHECK (typeof(...) = 'integer' AND ... >= 0)` clauses. Staging's
-   copies therefore lack those constraints and no longer match this file. The
-   tables are empty, so the fix is to drop the four and re-run `0006`.
+2. **Apply `0007` too.** It is on staging and not on production. It only adds
+   columns, so it is safe ahead of the worker that reads them — the ordering
+   rule above runs one way.
+
+## Done, kept for the record
+
+**Staging's `0006` was re-applied on 2026-09-21.** Staging had received the
+tenancy tables while the tenancy plan's Task 1 was being verified, which was
+before `price_minor` and `stock_count` gained their
+`CHECK (typeof(...) = 'integer' AND ... >= 0)` clauses — so for a while the
+test environment's constraints were *weaker* than production's, which is the
+wrong way round and the hardest kind of drift to notice. The four empty tables
+were dropped and `0006` re-run. Verified by probe: a negative price is refused
+with `CHECK constraint failed: ... AND price_minor >= 0`, and the failed batch
+rolled back so the probe merchant left nothing behind.
 
 ## Why the two files
 
