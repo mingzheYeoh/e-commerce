@@ -326,6 +326,27 @@ describe('audit', () => {
     expect(getEntry.subject).toBe('LEAK_p_b')
   })
 
+  it('names every merchant a platform list touched, one row each', async () => {
+    /*
+     * A list returns an array, so a single row derived from `result` lands
+     * with merchant_id NULL — and the merchant-facing query the
+     * audit_merchant_idx exists to serve (`WHERE merchant_id = ?`) returns
+     * nothing for the single broadest platform read of their data. Each
+     * merchant must be able to find the read in their own log.
+     */
+    const { env, raw } = await twoTenants()
+    await platformWide(env, 'stf_p').products.list()
+
+    // The merchant-facing query, run as a merchant's own console would.
+    const theirLog = raw.prepare(`SELECT action FROM audit_log WHERE merchant_id = ?`)
+    for (const merchantId of ['mch_a', 'mch_b']) {
+      expect(
+        theirLog.all(merchantId).map((r) => (r as { action: string }).action),
+        `${merchantId} cannot see the platform read of their catalogue`,
+      ).toEqual(['products.list'])
+    }
+  })
+
   it('does not record a merchant reading their own data', async () => {
     // Otherwise the log is mostly noise, and the entries that matter are
     // buried in it.

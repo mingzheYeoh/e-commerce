@@ -273,12 +273,22 @@ function build(env: TenancyEnv, scope: Scope): Repository {
                 const dotted = `${group}.${name}`
                 if (worthAuditing(scope, dotted)) {
                   const subject = typeof args[0] === 'string' ? (args[0] as string) : null
-                  const touched =
+                  // ponytail: a platform list across N merchants writes N rows.
+                  // The upgrade if that volume ever matters is one row plus a
+                  // `detail` JSON of ids — but only alongside a merchant-facing
+                  // query that reads it, or the row becomes unfindable again.
+                  const touched: (string | null)[] =
                     scope.kind === 'merchant'
-                      ? scope.merchantId
-                      : ((result as { merchant_id?: string } | null)?.merchant_id ?? null)
+                      ? [scope.merchantId]
+                      : Array.isArray(result)
+                        ? [
+                            ...new Set(
+                              (result as { merchant_id: string }[]).map((r) => r.merchant_id),
+                            ),
+                          ]
+                        : [(result as { merchant_id?: string } | null)?.merchant_id ?? null]
                   try {
-                    await record(env, scope, dotted, touched, subject)
+                    for (const m of touched) await record(env, scope, dotted, m, subject)
                   } catch (err) {
                     // The call already did its work (read or write), and the
                     // caller is about to be told it failed. Nothing in the
