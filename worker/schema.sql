@@ -257,3 +257,13 @@ ALTER TABLE products ADD COLUMN review_count INTEGER NOT NULL DEFAULT 0
   CHECK (typeof(review_count) = 'integer' AND review_count >= 0);
 
 ALTER TABLE products ADD COLUMN specs_summary TEXT NOT NULL DEFAULT '[]';
+
+-- ---------------------------------------------------------------- 0010
+-- Same reason as the 0007 block above: appended as the migration's own ALTER
+-- rather than inlined into the CREATE TABLE, which would break the byte-for-byte
+-- comparison against 0006-tenancy.sql.
+--
+-- Only the column is mirrored. 0010's 45 UPDATEs belong to the seeded rows,
+-- not to the shape of the table.
+
+ALTER TABLE products ADD COLUMN display_order INTEGER NOT NULL DEFAULT 0;

@@ -66,7 +66,11 @@ const parse = <T>(text: string, fallback: T): T => {
 
 export async function publishedProducts(env: { ORDERS: D1Database }): Promise<CatalogueProduct[]> {
   const { results } = await env.ORDERS.prepare(
-    `SELECT * FROM products WHERE status = 'published' ORDER BY created_at DESC, id`,
+    // display_order first. 0008 seeded every row in one batch, so they all
+    // share a created_at and ordering by that alone hands back the catalogue
+    // alphabetically by id - a visibly different shop page. See
+    // migrations/0010-display-order.sql.
+    `SELECT * FROM products WHERE status = 'published' ORDER BY display_order, created_at DESC, id`,
   ).all<Row>()
 
   return (results ?? []).map((r) => ({

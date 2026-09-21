@@ -42,6 +42,7 @@ Verified against `sqlite_master` on 2026-09-21.
 | `0007` catalogue columns | ❌ | ✅ |
 | `0008` seed catalogue | ❌ | ✅ |
 | `0009` order lines product id | ❌ | ✅ applied 2026-09-21 |
+| `0010` display order | ❌ | ✅ applied 2026-09-21 |
 
 Production currently holds six tables: `orders`, `order_lines`, and the four
 from `0006`. It has never had `users`, `sessions`, `email_tokens` or
@@ -72,6 +73,15 @@ staging by the whole accounts phase, not broken by it.
    it exists for, but it means `0009` cannot land on production until `0008`
    has. Print `SELECT COUNT(*) FROM order_lines` first either way: `DROP TABLE`
    leaves no second chance to check what came across.
+
+4. **`0010` needs `0008` in front of it too, and it is what `npm run build:catalog`
+   reads.** Its ALTER is harmless anywhere, but its 45 UPDATEs address rows by
+   id and match nothing on a database that has not been seeded — so on
+   production as it stands every product would keep `display_order = 0`, and
+   the generator would fall through to the `id` tiebreaker and write the
+   storefront out alphabetically. That is why `build` still runs plain
+   `vite build`: pointing it at production today would either fail on an empty
+   table or reorder the shop page.
 
 ## Done, kept for the record
 

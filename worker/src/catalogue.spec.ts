@@ -27,6 +27,19 @@ function seeded() {
   return mem
 }
 
+/**
+ * 0010's 45 UPDATEs, without its ALTER. schema.sql already carries that column
+ * — mirrored the way 0007's were — so replaying the ALTER here is a
+ * duplicate-column error rather than a migration. Hence not apply().
+ */
+function withDisplayOrder(mem: ReturnType<typeof memoryD1>) {
+  const sql = readFileSync('worker/migrations/0010-display-order.sql', 'utf8')
+  for (const stmt of sql.split(';')) {
+    const bare = stmt.trim()
+    if (bare.startsWith('UPDATE')) mem.raw.prepare(bare).run()
+  }
+}
+
 describe('the seeded catalogue', () => {
   it('gives every product a merchant that exists', () => {
     const { raw } = seeded()
@@ -227,6 +240,29 @@ describe('publishedProducts', () => {
     raw.prepare(`UPDATE products SET status='archived' WHERE id=(SELECT id FROM products LIMIT 1 OFFSET 1)`).run()
     const rows = await publishedProducts({ ORDERS: db })
     expect(rows).toHaveLength(43)
+  })
+
+  it('returns the catalogue in display order rather than alphabetically', async () => {
+    /*
+     * The regression this exists for: 0008 inserted all 45 rows in one batch,
+     * so every row shares a created_at and `ORDER BY created_at DESC, id` falls
+     * straight through to its tiebreaker. Generating src/data/products.ts from
+     * that query reorders the whole shop page alphabetically, interleaving
+     * phones with laptops — and nothing else here notices, because the counts,
+     * the merchants and the JSON all stay correct.
+     *
+     * Asserted against products.ts rather than a literal list, which ties the
+     * three together: the migration that records the order, the query that
+     * reads it, and the generated file the storefront actually renders.
+     */
+    const mem = seeded()
+    withDisplayOrder(mem)
+    const ids = (await publishedProducts({ ORDERS: mem.db })).map((r) => r.id)
+
+    expect(ids).toEqual(products.map((p) => p.id))
+    // Named, because alphabetical is exactly what the broken version returns
+    // and `toEqual` above would be satisfied by both sides drifting together.
+    expect(ids).not.toEqual([...ids].sort())
   })
 
   it('parses the JSON columns rather than handing back strings', async () => {
