@@ -53,7 +53,7 @@ work — `/api/auth/me` returns 404 there and `/api/health` carries no `auth`
 key — so the code and the schema agree with each other. Production is behind
 staging by the whole accounts phase, not broken by it.
 
-## Two things to do before production next deploys
+## Before production next deploys
 
 1. **Apply `0002` through `0005` first.** The moment a worker with
    `/api/auth/*` reaches production, every one of those routes queries a table
