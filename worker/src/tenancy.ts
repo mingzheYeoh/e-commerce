@@ -191,6 +191,12 @@ function build(env: TenancyEnv, scope: Scope): Repository {
         )
           .bind(scope.merchantId)
           .first<{ settlement_currency: string }>()
+        // This branch is unreachable through the module's public entry points
+        // (scopedTo and platformWide); scopedTo verifies the merchant exists before
+        // handing out a Repository. The guard tests existence, not status, and would
+        // only catch a merchant row deleted after vending. No DELETE FROM merchants
+        // path exists in this codebase today, but the guard remains for developers
+        // who might add one.
         if (!merchant) {
           throw new Error('cannot price a product for a merchant that does not exist')
         }
@@ -352,6 +358,12 @@ function build(env: TenancyEnv, scope: Scope): Repository {
  *
  * The check lives here rather than in a route so that a route added later gets
  * it without its author knowing the rule exists.
+ *
+ * A Repository vended while the merchant was active remains valid even after
+ * the merchant is suspended—the check is at the door, not on each operation.
+ * Callers must obtain a fresh Repository per request and never cache it across
+ * requests. The per-request SELECT is the authorization itself, not overhead
+ * to optimize away.
  *
  * @param merchantId MUST come from the staff session row, never a request
  * body. This does not verify staffId belongs to merchantId — the pair is
