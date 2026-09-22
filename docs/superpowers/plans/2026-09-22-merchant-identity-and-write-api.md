@@ -771,6 +771,8 @@ const db = await scopedTo(env, session.merchantId!, session.staffId)
 - **Call `scopedTo` fresh on every request. Never cache a `Repository`, never hang one off a session.** Its active-merchant check runs once, when the repository is vended — proven by suspending a merchant after `scopedTo` returned and successfully calling `.products.create()` on the stale object. A repository held across requests keeps working for a merchant who has since been suspended, which silently reopens the hole Task 3 exists to close. The per-request `SELECT status FROM merchants` is not overhead to optimise away; it is the authorisation.
 
 - Patching a product that belongs to someone else is a **404, not a 403**. The repository returns nothing for it, and "this exists but is not yours" tells a stranger the id is real.
+- **`approveMerchant(env, staffId, merchantId)` cannot check that the caller is platform staff.** Its `staffId` argument is an unverified claim — the same trust `scopedTo` places in its `merchantId`, and documented in the function the same way. The platform routes must therefore refuse anything whose session `scope` is not `'platform'` **before** calling it. A merchant staffer reaching `/api/platform/merchants/:id/approve` and approving their own pending application is the concrete failure, and nothing below the route will stop it.
+
 - The create body type has **no `merchantId` field**. That is what makes the fourth test pass without a check.
 - The top-level catch returns a generic 500 and logs the error, matching `index.ts`.
 - `scopedTo` throwing for a non-active merchant becomes a 403, not a 500 — a suspended seller's own request is refused, not broken.
