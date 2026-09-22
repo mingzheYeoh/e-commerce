@@ -768,6 +768,8 @@ if (session.scope !== 'merchant') return json({ error: 'not a merchant account' 
 const db = await scopedTo(env, session.merchantId!, session.staffId)
 ```
 
+- **Call `scopedTo` fresh on every request. Never cache a `Repository`, never hang one off a session.** Its active-merchant check runs once, when the repository is vended — proven by suspending a merchant after `scopedTo` returned and successfully calling `.products.create()` on the stale object. A repository held across requests keeps working for a merchant who has since been suspended, which silently reopens the hole Task 3 exists to close. The per-request `SELECT status FROM merchants` is not overhead to optimise away; it is the authorisation.
+
 - Patching a product that belongs to someone else is a **404, not a 403**. The repository returns nothing for it, and "this exists but is not yours" tells a stranger the id is real.
 - The create body type has **no `merchantId` field**. That is what makes the fourth test pass without a check.
 - The top-level catch returns a generic 500 and logs the error, matching `index.ts`.
