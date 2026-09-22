@@ -264,14 +264,14 @@ async function twoTenants() {
 describe('the repository', () => {
   it('returns only this merchant rows', async () => {
     const { env } = await twoTenants()
-    const mine = await scopedTo(env, 'mch_a', 'stf_1').products.list()
+    const mine = await (await scopedTo(env, 'mch_a', 'stf_1')).products.list()
     expect(mine.map((p) => p.id)).toEqual(['p_a'])
   })
 
   it('refuses to fetch another merchant row by id', async () => {
     // Guessing an id must not be a way around the predicate.
     const { env } = await twoTenants()
-    expect(await scopedTo(env, 'mch_a', 'stf_1').products.get('LEAK_p_b')).toBeNull()
+    expect(await (await scopedTo(env, 'mch_a', 'stf_1')).products.get('LEAK_p_b')).toBeNull()
   })
 
   it('stamps a created product with the scope merchant, not the input', async () => {
@@ -281,7 +281,7 @@ describe('the repository', () => {
      * else's catalogue.
      */
     const { env, rows } = await twoTenants()
-    const created = await scopedTo(env, 'mch_a', 'stf_1').products.create({
+    const created = await (await scopedTo(env, 'mch_a', 'stf_1')).products.create({
       sku: 'NEW-1',
       title: 'New',
       brand: 'APPLE',
@@ -304,10 +304,10 @@ describe('the repository', () => {
       priceMinor: 500,
       currency: 'ZZZ',
     }
-    const created = await scopedTo(env, 'mch_a', 'stf_1').products.create(input as never)
+    const created = await (await scopedTo(env, 'mch_a', 'stf_1')).products.create(input as never)
     expect(created.currency).toBe('MYR')
 
-    const createdForB = await scopedTo(env, 'mch_b', 'stf_2').products.create({
+    const createdForB = await (await scopedTo(env, 'mch_b', 'stf_2')).products.create({
       sku: 'NEW-3',
       title: 'New',
       brand: 'APPLE',
@@ -320,20 +320,22 @@ describe('the repository', () => {
   it('throws creating a product for a merchant that does not exist', async () => {
     const { env } = await twoTenants()
     await expect(
-      scopedTo(env, 'mch_missing', 'stf_1').products.create({
-        sku: 'NEW-4',
-        title: 'New',
-        brand: 'APPLE',
-        category: 'phones',
-        priceMinor: 500,
-      }),
+      (async () =>
+        (await scopedTo(env, 'mch_missing', 'stf_1')).products.create({
+          sku: 'NEW-4',
+          title: 'New',
+          brand: 'APPLE',
+          category: 'phones',
+          priceMinor: 500,
+        }))(),
     ).rejects.toThrow()
   })
 
   it('rejects a non-integer priceMinor on create', async () => {
     const { env } = await twoTenants()
+    const repo = await scopedTo(env, 'mch_a', 'stf_1')
     await expect(
-      scopedTo(env, 'mch_a', 'stf_1').products.create({
+      repo.products.create({
         sku: 'NEW-5',
         title: 'New',
         brand: 'APPLE',
@@ -345,15 +347,14 @@ describe('the repository', () => {
 
   it('rejects a non-integer priceMinor on update', async () => {
     const { env } = await twoTenants()
-    await expect(
-      scopedTo(env, 'mch_a', 'stf_1').products.update('p_a', { priceMinor: 19.99 }),
-    ).rejects.toThrow()
+    const repo = await scopedTo(env, 'mch_a', 'stf_1')
+    await expect(repo.products.update('p_a', { priceMinor: 19.99 })).rejects.toThrow()
   })
 
   it('works when destructured off the repository, not just called as a method', async () => {
     // A normal call style must not depend on `this`.
     const { env } = await twoTenants()
-    const { update } = scopedTo(env, 'mch_a', 'stf_1').products
+    const { update } = (await scopedTo(env, 'mch_a', 'stf_1')).products
     const result = await update('p_a', { title: 'Renamed' })
     expect(result?.title).toBe('Renamed')
   })
@@ -364,8 +365,8 @@ describe('the repository', () => {
     // called plainly — the guard and the read always agree, because both
     // come from the same closure that built this particular function.
     const { env, rows } = await twoTenants()
-    const platformRepo = platformWide(env, 'stf_p')
-    const merchantRepo = scopedTo(env, 'mch_a', 'stf_1')
+    const platformRepo = await platformWide(env, 'stf_p')
+    const merchantRepo = await scopedTo(env, 'mch_a', 'stf_1')
 
     // Platform's own update, `this` forced to a merchant repo: still a
     // platform-scoped read and write, so it still succeeds on any row.
@@ -385,12 +386,13 @@ describe('the repository', () => {
 
   it('lets the platform see everything', async () => {
     const { env } = await twoTenants()
-    const all = await platformWide(env, 'stf_p').products.list()
+    const all = await (await platformWide(env, 'stf_p')).products.list()
     expect(all.map((p) => p.id).sort()).toEqual(['LEAK_p_b', 'p_a'])
   })
 
-  it('lists its own methods, so a test can enumerate them', () => {
-    const names = methodNames(scopedTo({} as TenancyEnv, 'mch_a', 'stf_1'))
+  it('lists its own methods, so a test can enumerate them', async () => {
+    const { env } = await twoTenants()
+    const names = methodNames(await scopedTo(env, 'mch_a', 'stf_1'))
     expect(names).toContain('products.list')
     expect(names).toContain('products.create')
   })
@@ -428,7 +430,7 @@ describe('isolation', () => {
      * been written yet as much as for the four that have.
      */
     const { env } = await twoTenants()
-    const mine = scopedTo(env, 'mch_a', 'stf_1')
+    const mine = await scopedTo(env, 'mch_a', 'stf_1')
 
     for (const [dotted, args] of Object.entries(CASES)) {
       const result = await call(mine, dotted, args)
@@ -440,7 +442,7 @@ describe('isolation', () => {
     // A write that silently matches nothing is correct; a write that lands on
     // another merchant row is the worst outcome in the system.
     const { env, rows } = await twoTenants()
-    await scopedTo(env, 'mch_a', 'stf_1').products.update('LEAK_p_b', { title: 'taken over' })
+    await (await scopedTo(env, 'mch_a', 'stf_1')).products.update('LEAK_p_b', { title: 'taken over' })
 
     const theirs = rows('products').find((p) => p.id === 'LEAK_p_b')!
     expect(theirs.title).toBe('LEAK_TITLE')
@@ -455,7 +457,7 @@ describe('audit', () => {
      * happen has no reason to trust the platform with their orders.
      */
     const { env, rows } = await twoTenants()
-    const platform = platformWide(env, 'stf_p')
+    const platform = await platformWide(env, 'stf_p')
 
     for (const [dotted, args] of Object.entries(CASES)) {
       if (dotted === 'products.create') continue // platform scope refuses this
@@ -483,7 +485,7 @@ describe('audit', () => {
      * merchant must be able to find the read in their own log.
      */
     const { env, raw } = await twoTenants()
-    await platformWide(env, 'stf_p').products.list()
+    await (await platformWide(env, 'stf_p')).products.list()
 
     // The merchant-facing query, run as a merchant's own console would.
     const theirLog = raw.prepare(`SELECT action FROM audit_log WHERE merchant_id = ?`)
@@ -499,7 +501,7 @@ describe('audit', () => {
     // Otherwise the log is mostly noise, and the entries that matter are
     // buried in it.
     const { env, rows } = await twoTenants()
-    await scopedTo(env, 'mch_a', 'stf_1').products.list()
+    await (await scopedTo(env, 'mch_a', 'stf_1')).products.list()
     expect(rows('audit_log')).toHaveLength(0)
   })
 
@@ -508,7 +510,7 @@ describe('audit', () => {
     // off the arguments is null — and the one row that brings an object into
     // existence would be the only one that cannot say which object.
     const { env, rows } = await twoTenants()
-    const created = await scopedTo(env, 'mch_a', 'stf_1').products.create({
+    const created = await (await scopedTo(env, 'mch_a', 'stf_1')).products.create({
       sku: 'NEW-6',
       title: 'New',
       brand: 'APPLE',
@@ -522,7 +524,7 @@ describe('audit', () => {
 
   it('records a merchant write, because every write is an event', async () => {
     const { env, rows } = await twoTenants()
-    await scopedTo(env, 'mch_a', 'stf_1').products.update('p_a', { title: 'Renamed' })
+    await (await scopedTo(env, 'mch_a', 'stf_1')).products.update('p_a', { title: 'Renamed' })
 
     const entry = rows('audit_log')[0]
     expect(entry.action).toBe('products.update')
@@ -532,14 +534,52 @@ describe('audit', () => {
 })
 
 describe('completeness', () => {
-  it('has an isolation case for every method on the repository', () => {
+  it('has an isolation case for every method on the repository', async () => {
     /*
      * Without this, the two sweeps above are only as good as somebody's
      * memory, which is the thing this design is trying to remove. Adding
      * db.payouts.list() and forgetting to add a case turns the suite red here
      * rather than leaking in production.
      */
-    const methods = methodNames(scopedTo({} as TenancyEnv, 'mch_a', 'stf_1')).sort()
+    const { env } = await twoTenants()
+    const methods = methodNames(await scopedTo(env, 'mch_a', 'stf_1')).sort()
     expect(methods).toEqual(Object.keys(CASES).sort())
+  })
+})
+
+const db4 = (db: D1Database): TenancyEnv => ({ ORDERS: db })
+
+describe('a merchant who is not active', () => {
+  const seed = (status: string) => {
+    const mem = memoryD1()
+    mem.raw.prepare(`INSERT INTO merchants (id, slug, name, settlement_currency, status)
+                     VALUES ('mch_a','a','A','USD', ?)`).run(status)
+    mem.raw.prepare(`INSERT INTO products (id, merchant_id, sku, title, brand, category,
+                                           price_minor, currency, status, stock_count)
+                     VALUES ('p1','mch_a','S','T','B','C',100,'USD','published',1)`).run()
+    return mem
+  }
+
+  it('hands out no repository at all while the application is pending', async () => {
+    // Refused here rather than at the route, so a route added later inherits it
+    // without its author having to know this rule exists.
+    const { db } = seed('pending')
+    await expect(scopedTo(db4(db), 'mch_a', 'stf_1')).rejects.toThrow(/not active/i)
+  })
+
+  it('hands out no repository once a merchant is suspended', async () => {
+    const { db } = seed('suspended')
+    await expect(scopedTo(db4(db), 'mch_a', 'stf_1')).rejects.toThrow(/not active/i)
+  })
+
+  it('hands one out for an active merchant', async () => {
+    const { db } = seed('active')
+    const repo = await scopedTo(db4(db), 'mch_a', 'stf_1')
+    expect(await repo.products.list()).toHaveLength(1)
+  })
+
+  it('refuses a merchant id that does not exist', async () => {
+    const { db } = seed('active')
+    await expect(scopedTo(db4(db), 'mch_ghost', 'stf_1')).rejects.toThrow(/not active/i)
   })
 })
