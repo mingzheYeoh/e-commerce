@@ -161,7 +161,7 @@ that decides whether a session is allowed to act."
   - `randomB64(bytes: number): string`, `randomToken(): string`
   - `toB64(bytes: Uint8Array): string`, `fromB64(text: string): Uint8Array`, `toB64Url(bytes: Uint8Array): string`
   - `nowIso(): string`, `inSeconds(s: number): string`, `isPast(iso: string | null | undefined): boolean`
-  - `LOCKOUT_THRESHOLD: number`, `LOCKOUT_MINUTES: number`
+  - `LOCKOUT_THRESHOLD: number`, `BACKOFF_BASE_SECONDS: number`, `BACKOFF_MAX_SECONDS: number`, `backoffSeconds(failures: number): number`
 - Task 5 consumes all of these.
 
 This task has no new behaviour. **Its acceptance test is that the whole existing suite still passes** — 389 tests, none edited.
@@ -619,7 +619,9 @@ Requirements the tests encode:
 - **Every sign-in starts as `totp_pending = 1`,** whether or not TOTP was already confirmed. The last test is the one that matters: a password alone must never produce an active session, not even on the hundredth sign-in.
 - `staffSession` returns `{ kind: 'enrolling' }` when the row's `totp_pending` is 1, and `{ kind: 'active', merchantId, scope }` when it is 0. **Only the active branch carries `merchantId`.**
 - A wrong password and an unknown email answer identically, with a 401 and no detail.
-- Lockout: `failed_attempts` increments, and at 5 the row gets a `locked_until` some minutes ahead; a locked account answers 423 even with the right password. Reuse the constants moved in Task 2.
+- Lockout: reuse `backoffSeconds` from `credentials.ts` — **do not invent a flat duration.** The customer side does exponential backoff (5 failures → 60s, then doubling to a 900s cap), and the decision for this feature was that staff get a *stricter* posture than customers, not a looser one. A flat lock would be looser. `failed_attempts` increments on each failure and `locked_until` is set to `backoffSeconds(failures)` ahead; a locked account answers 423 even with the right password.
+
+  The plan originally named a `LOCKOUT_MINUTES` constant here. That was a misreading of what `auth.ts` does, caught during Task 2 — there is no flat duration to share, only the backoff function.
 - `confirmTotpEnrolment` on success writes `totp_confirmed_at` and sets `totp_pending = 0` on **that session row only**. Other sessions for the same staff member stay pending.
 - The cookie is `HttpOnly; Secure; SameSite=Strict; Path=/`. Strict rather than Lax, because the console is same-origin with its own SPA and has no cross-site navigation to accommodate.
 
