@@ -202,6 +202,28 @@ describe('the schema refuses states that must not exist', () => {
       specs_summary: '[]',
     })
   })
+
+  it('will not store a staff session for a staff member who does not exist', () => {
+    const { raw } = memoryD1()
+    expect(() =>
+      raw.prepare(`INSERT INTO staff_sessions (token_hash, staff_id, expires_at)
+                   VALUES ('hash','stf_ghost','2099-01-01T00:00:00Z')`).run(),
+    ).toThrow(/FOREIGN KEY/)
+  })
+
+  it('will not store a totp_pending flag that is not 0 or 1', () => {
+    // SQLite has no boolean. Without the CHECK, 'yes' and 2 both store, and
+    // `totp_pending` is what decides whether a session may act at all.
+    const { raw } = memoryD1()
+    seedMerchant(raw)
+    raw.prepare(`INSERT INTO staff (id, email, scope, merchant_id, role,
+                                    password_hash, password_salt, iterations)
+                 VALUES ('stf_1','a@b.c','merchant','mch_a','owner','h','s',600000)`).run()
+    expect(() =>
+      raw.prepare(`INSERT INTO staff_sessions (token_hash, staff_id, expires_at, totp_pending)
+                   VALUES ('hash','stf_1','2099-01-01T00:00:00Z', 2)`).run(),
+    ).toThrow(/CHECK/)
+  })
 })
 
 import { scopedTo, platformWide, methodNames, type TenancyEnv, type Repository } from './tenancy'

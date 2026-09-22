@@ -43,6 +43,7 @@ Verified against `sqlite_master` on 2026-09-21.
 | `0008` seed catalogue | ❌ | ✅ |
 | `0009` order lines product id | ❌ | ✅ applied 2026-09-21 |
 | `0010` display order | ❌ | ✅ applied 2026-09-21, rebuilt 2026-09-22 |
+| `0011` staff sessions | ❌ | ✅ applied 2026-09-22 |
 
 Production currently holds six tables: `orders`, `order_lines`, and the four
 from `0006`. It has never had `users`, `sessions`, `email_tokens` or
