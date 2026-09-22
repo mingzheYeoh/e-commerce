@@ -59,7 +59,8 @@ export interface Repository {
   }
 }
 
-const id = (prefix: string) =>
+/** Exported so staff-auth mints `mch_`/`stf_` the one way this worker mints ids. */
+export const id = (prefix: string) =>
   `${prefix}_${[...crypto.getRandomValues(new Uint8Array(12))]
     .map((b) => b.toString(36).padStart(2, '0'))
     .join('')
