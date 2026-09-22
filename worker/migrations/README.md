@@ -83,6 +83,20 @@ staging by the whole accounts phase, not broken by it.
    `vite build`: pointing it at production today would either fail on an empty
    table or reorder the shop page.
 
+5. **`0008` has to land before this worker does, or production takes orders
+   and throws them away.** `orders.ts`'s `resolve()` is now the only pricing
+   path — the bundled copy of the frontend catalogue it replaced is gone — so
+   `POST /api/orders` reads `products` for every line it is given. Production
+   has that table from `0006` with zero rows, so every id fails to resolve and
+   the route answers 400 `unknown product` for every order placed. Nothing
+   surfaces it: `../../src/lib/api.ts`'s `saveOrder` collapses any non-2xx to
+   `false`, and `checkout.ts` calls it with `void` on purpose, so the receipt
+   is already written and the shopper sees a normal confirmation for an order
+   the database never received. This is the failure the migrate-before-deploy
+   rule exists to prevent and the one it does not cover, because no query
+   errors — the table is there, it is just empty. Print
+   `SELECT COUNT(*) FROM products` before deploying: 45 is right, 0 means stop.
+
 ## Done, kept for the record
 
 **Staging's `0006` was re-applied on 2026-09-21.** Staging had received the
