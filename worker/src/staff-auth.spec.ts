@@ -43,7 +43,11 @@ describe('registerMerchant', () => {
   it('creates a pending merchant and its owner', async () => {
     const { db, raw } = memoryD1()
     const res = await registerMerchant(env(db), good)
-    expect(res.status).toBe(201)
+    // 202, not 201: a fresh application and a duplicate email must return the
+    // identical status, or the status line becomes a yes/no oracle on its own,
+    // read before the (identical) body is even parsed. See the duplicate-email
+    // test below.
+    expect(res.status).toBe(202)
 
     const merchant = raw.prepare(`SELECT status, slug FROM merchants`).get()
     expect(merchant).toMatchObject({ status: 'pending', slug: 'acme' })
@@ -68,6 +72,13 @@ describe('registerMerchant', () => {
   it('refuses a duplicate email without saying it is taken', async () => {
     // The same reason the customer side refuses to confirm an address exists:
     // a signup form that distinguishes is an account-enumeration oracle.
+    //
+    // 202 here, and 202 for a fresh application above — the same code, not
+    // just the same body. A registration form that returns 201 for "created"
+    // and 202 for "already exists" has not fixed the oracle, only moved it
+    // into the status line, which is readable before any body is, without
+    // parsing anything. Do not "fix" the success case back to 201 for REST
+    // tidiness; that reopens exactly this hole.
     const { db } = memoryD1()
     await registerMerchant(env(db), good)
     const res = await registerMerchant(env(db), { ...good, slug: 'other' })

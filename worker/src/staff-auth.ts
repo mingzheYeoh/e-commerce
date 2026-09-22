@@ -11,9 +11,12 @@
  *
  * Two answers here are deliberately shaped rather than convenient:
  *
- * 1. A taken email gets the same body a success does. A registration form
- *    that distinguishes tells a stranger which addresses have merchant
- *    accounts, and that is worth more to them than the form is.
+ * 1. A taken email gets the same status *and* body a success does — 202
+ *    either way. A registration form that distinguishes, even only by the
+ *    status line and never by what the body says, tells a stranger which
+ *    addresses have merchant accounts, and that is worth more to them than
+ *    the form is. 201-for-created would leak exactly that: a status line
+ *    arrives before the body and needs no parsing to read.
  *
  * 2. The merchant row and its owner are written in one batch. A merchant with
  *    no owner is an application nobody can ever claim — and nobody can ever
@@ -113,6 +116,11 @@ export async function registerMerchant(env: StaffEnv, body: unknown): Promise<St
   const taken = await env.ORDERS.prepare(`SELECT 1 AS yes FROM staff WHERE email = ?1`)
     .bind(email)
     .first<{ yes: number }>()
+  // 202, matching the status a fresh application gets below — not 200 or 409.
+  // A status line is read before any body and needs no parsing; giving this
+  // branch a status the other branch can't also produce would put the
+  // enumeration oracle back one layer up, in the thing that's supposed to
+  // close it.
   if (taken) return { status: 202, body: APPLICATION_RECEIVED }
 
   const merchantId = id('mch')
@@ -141,7 +149,10 @@ export async function registerMerchant(env: StaffEnv, body: unknown): Promise<St
     return { status: 503, body: { error: 'Could not take the application. Try again shortly.' } }
   }
 
-  return { status: 201, body: APPLICATION_RECEIVED }
+  // Also 202, not 201: a status line that told the two outcomes apart would
+  // still be a yes/no oracle even with an identical body, since it arrives
+  // and can be read before the body does.
+  return { status: 202, body: APPLICATION_RECEIVED }
 }
 
 /**
