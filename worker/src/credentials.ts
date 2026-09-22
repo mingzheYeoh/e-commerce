@@ -98,12 +98,22 @@ export const isPast = (iso: string | null | undefined): boolean =>
   Boolean(iso) && new Date(iso as string).getTime() < Date.now()
 
 /**
- * Per-account lockout, shared shape.
+ * Per-account backoff, shared implementation.
  *
- * How a threshold and a duration turn into a `locked_until` is up to whoever
- * is signing someone in — customer login doubles the wait on repeated
- * failures, which is a policy that belongs with customer login, not here.
- * What both need to agree on is when to start and the unit to start with.
+ * Both customer and staff sign-in use exponential backoff on repeated password
+ * failures. A flat lock is either short enough to grind through or long enough
+ * to become a way to deny an account's real owner access — and turning "guess
+ * wrong five times" into a denial-of-service is the only way to make a flat
+ * lock either secure or usable. Doubling from a short base makes a typo cheap
+ * and a campaign expensive: after one wrong guess past the threshold, the wait
+ * is 60 seconds; after five, it is 15 minutes; unlimited, it would be weeks.
  */
 export const LOCKOUT_THRESHOLD = 5
-export const LOCKOUT_MINUTES = 1
+export const BACKOFF_BASE_SECONDS = 60
+export const BACKOFF_MAX_SECONDS = 900
+
+export function backoffSeconds(failures: number): number {
+  if (failures < LOCKOUT_THRESHOLD) return 0
+  const doublings = failures - LOCKOUT_THRESHOLD
+  return Math.min(BACKOFF_BASE_SECONDS * 2 ** doublings, BACKOFF_MAX_SECONDS)
+}

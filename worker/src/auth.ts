@@ -61,7 +61,7 @@ import {
   inSeconds,
   isPast,
   LOCKOUT_THRESHOLD,
-  LOCKOUT_MINUTES,
+  backoffSeconds,
 } from './credentials'
 
 /** Cloudflare's rate limiting binding. Absent in tests and local dev. */
@@ -189,22 +189,9 @@ async function guard(
  * a password list; it never sees a botnet spreading one account's guesses over
  * a thousand addresses. This does, because it counts against the account.
  *
- * Deliberately a backoff and not a lockout: a permanent lock turns "guess
- * wrong five times" into a way to deny a real customer their account. The wait
- * doubles and caps, and clears the moment a correct password arrives.
- *
- * The threshold and the base wait are shared with staff sign-in via
- * `credentials.ts`; the doubling and the cap are a customer-login policy
- * choice and stay here.
+ * The threshold and exponential backoff are shared with staff sign-in via
+ * `credentials.ts`. Both use the same implementation for consistency.
  */
-const BACKOFF_BASE_SECONDS = LOCKOUT_MINUTES * 60
-const BACKOFF_MAX_SECONDS = 900
-
-function backoffSeconds(failures: number): number {
-  if (failures < LOCKOUT_THRESHOLD) return 0
-  const doublings = failures - LOCKOUT_THRESHOLD
-  return Math.min(BACKOFF_BASE_SECONDS * 2 ** doublings, BACKOFF_MAX_SECONDS)
-}
 
 /* -------------------------------------------------------------------- types */
 
