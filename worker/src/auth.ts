@@ -47,6 +47,22 @@ import {
   newRecoveryCodes,
   normaliseRecoveryCode,
 } from './totp'
+import {
+  toB64,
+  fromB64,
+  PBKDF2_ITERATIONS,
+  KDF_ROUNDS,
+  derive,
+  sameBytes,
+  sha256,
+  randomB64,
+  randomToken,
+  nowIso,
+  inSeconds,
+  isPast,
+  LOCKOUT_THRESHOLD,
+  LOCKOUT_MINUTES,
+} from './credentials'
 
 /** Cloudflare's rate limiting binding. Absent in tests and local dev. */
 export interface RateLimiterBinding {
@@ -75,92 +91,8 @@ const SIGNUP_PER_MINUTE = 5
 
 /* --------------------------------------------------------------- primitives */
 
-const encoder = new TextEncoder()
-
-const toB64 = (bytes: Uint8Array): string => btoa(String.fromCharCode(...bytes))
-const fromB64 = (text: string): Uint8Array => Uint8Array.from(atob(text), (c) => c.charCodeAt(0))
-
-/** URL-safe, because these travel in a link people click out of an email. */
-const toB64Url = (bytes: Uint8Array): string =>
-  toB64(bytes).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
-
-/**
- * PBKDF2-HMAC-SHA256, at the highest iteration count this runtime allows.
- *
- * Not bcrypt or argon2: neither exists in the Workers runtime, and shipping a
- * WASM build of one to hash a demo store's passwords is a larger risk surface
- * than the thing it protects. PBKDF2 is the strongest primitive available here
- * natively, which makes the work factor the only real dial.
- *
- * Workers refuses outright above 100,000 in a single call —
- * `NotSupportedError: Pbkdf2 failed: iteration counts above 100000 are not
- * supported` — which on its own is below OWASP's figure for this algorithm.
- * There is no configuration for it; it is the platform's ceiling.
- */
-const PBKDF2_ITERATIONS = 100_000
-
 /** What the runtime will accept in one call. Above this, `deriveBits` throws. */
 export const MAX_PBKDF2_ITERATIONS = 100_000
-
-/**
- * Passes of PBKDF2, chained — which is the way past that ceiling.
- *
- * Each pass takes the previous pass's output as its input, so six of them is
- * 600,000 iterations of work an attacker has to repeat for every single guess.
- * That is OWASP's current figure, reached without a WASM KDF. Measured at
- * 139ms against a 30-second CPU budget, so the headroom is in the hundreds of
- * rounds rather than the ones.
- *
- * Stored per user rather than assumed, which is what lets it be raised again:
- * a row hashed at an older setting still verifies, and is re-hashed at the
- * current one the next time its owner signs in — nobody is locked out by a
- * change they did not ask for.
- */
-const KDF_ROUNDS = 6
-
-async function derive(password: string, salt: Uint8Array, rounds: number): Promise<Uint8Array> {
-  // One round, with the password itself as the input, reproduces exactly what a
-  // single PBKDF2 call used to produce. That is why every row written before
-  // this still verifies against `kdf_rounds = 1`.
-  let material = encoder.encode(password) as Uint8Array
-  for (let i = 0; i < Math.max(1, rounds); i++) {
-    const key = await crypto.subtle.importKey('raw', material, 'PBKDF2', false, ['deriveBits'])
-    material = new Uint8Array(
-      await crypto.subtle.deriveBits(
-        { name: 'PBKDF2', hash: 'SHA-256', salt, iterations: PBKDF2_ITERATIONS },
-        key,
-        256,
-      ),
-    )
-  }
-  return material
-}
-
-/**
- * Comparison that takes the same time whatever the answer.
- *
- * `a === b` on secrets leaks their contents one byte at a time to anyone
- * willing to measure, and the measurement is not exotic.
- */
-function sameBytes(a: Uint8Array, b: Uint8Array): boolean {
-  if (a.length !== b.length) return false
-  let diff = 0
-  for (let i = 0; i < a.length; i++) diff |= a[i] ^ b[i]
-  return diff === 0
-}
-
-async function sha256(text: string): Promise<string> {
-  const digest = await crypto.subtle.digest('SHA-256', encoder.encode(text))
-  return toB64(new Uint8Array(digest))
-}
-
-const randomB64 = (bytes: number): string => toB64(crypto.getRandomValues(new Uint8Array(bytes)))
-const randomToken = (): string => toB64Url(crypto.getRandomValues(new Uint8Array(32)))
-
-const nowIso = () => new Date().toISOString()
-const inSeconds = (s: number) => new Date(Date.now() + s * 1000).toISOString()
-const isPast = (iso: string | null | undefined) =>
-  Boolean(iso) && new Date(iso as string).getTime() < Date.now()
 
 /* ------------------------------------------------------------------ cookies */
 
@@ -260,14 +192,17 @@ async function guard(
  * Deliberately a backoff and not a lockout: a permanent lock turns "guess
  * wrong five times" into a way to deny a real customer their account. The wait
  * doubles and caps, and clears the moment a correct password arrives.
+ *
+ * The threshold and the base wait are shared with staff sign-in via
+ * `credentials.ts`; the doubling and the cap are a customer-login policy
+ * choice and stay here.
  */
-const LOCK_AFTER_FAILURES = 5
-const BACKOFF_BASE_SECONDS = 60
+const BACKOFF_BASE_SECONDS = LOCKOUT_MINUTES * 60
 const BACKOFF_MAX_SECONDS = 900
 
 function backoffSeconds(failures: number): number {
-  if (failures < LOCK_AFTER_FAILURES) return 0
-  const doublings = failures - LOCK_AFTER_FAILURES
+  if (failures < LOCKOUT_THRESHOLD) return 0
+  const doublings = failures - LOCKOUT_THRESHOLD
   return Math.min(BACKOFF_BASE_SECONDS * 2 ** doublings, BACKOFF_MAX_SECONDS)
 }
 
