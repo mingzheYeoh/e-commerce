@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs'
 import { memoryD1 } from '../test/d1-memory'
 import { products } from '@/data/products'
 import { publishedProducts } from './catalogue'
+import { QUERY, toProduct } from '../../scripts/build-catalog.mjs'
 
 /**
  * A migration file run into a database, statement by statement.
@@ -271,5 +272,51 @@ describe('publishedProducts', () => {
     expect(Array.isArray(first.specsSummary)).toBe(true)
     expect(Array.isArray(first.colorways)).toBe(true)
     expect(typeof first.media).toBe('object')
+  })
+})
+
+describe('the generated catalogue file', () => {
+  /*
+   * scripts/build-catalog.mjs writes src/data/products.ts and nothing tested
+   * it. The endpoint got the order test above; the generator did not, and the
+   * divergence below grew in the untested half. Importing it costs nothing —
+   * everything that reaches for wrangler sits behind its run-as-a-script
+   * guard, so QUERY and toProduct run here with no network and no D1.
+   */
+  it('maps rows into exactly the file it has already written', () => {
+    const mem = seeded()
+    withDisplayOrder(mem)
+    // src/data/products.ts is this mapper's own output, committed. Asserting
+    // against it pins the whole generator — order, the inStock the API has no
+    // column for, the absent badge, and the four parsed JSON columns.
+    expect(mem.raw.prepare(QUERY).all().map(toProduct)).toEqual(products)
+  })
+
+  it('orders identically to the endpoint when two products tie', async () => {
+    /*
+     * The two queries agreed only by luck: every seeded row has a distinct
+     * display_order, so neither tiebreaker ever ran. The column is DEFAULT 0
+     * and tenancy.ts's create never sets it, so the first product added
+     * through the write API ties with iphone-18-pro — and the generator's
+     * `ORDER BY display_order, id` then placed it second while the endpoint's
+     * `display_order, created_at DESC, id` placed it first. The shop page
+     * would paint one order and /api/products would report another.
+     */
+    const mem = seeded()
+    withDisplayOrder(mem)
+    // Deliberately a row the two tiebreakers disagree about: its id sorts
+    // after iphone-18-pro's, its created_at after the whole seed's.
+    mem.raw.prepare(`INSERT INTO products (id, merchant_id, sku, title, brand, category,
+                                           price_minor, currency, status, created_at)
+                     VALUES ('zz-new-drop','mch_apple','APL-ZZ-1','New Drop','APPLE','phones',
+                             9900,'USD','published','2030-01-01 00:00:00')`).run()
+
+    const generated = mem.raw.prepare(QUERY).all().map(toProduct)
+    const served = await publishedProducts({ ORDERS: mem.db })
+
+    expect(generated.map((p) => p.id)).toEqual(served.map((p) => p.id))
+    // Named, because the assertion above is equally happy with both sides
+    // falling back to the same wrong tiebreaker.
+    expect(generated[0].id).toBe('zz-new-drop')
   })
 })
