@@ -83,17 +83,45 @@ when it refused to put staff in the `users` table.
 
 ```
 POST /api/staff/register    merchants(status='pending') + staff(scope='merchant', role='owner')
-                            password checked against HIBP's range API — keyless,
+                            body is name, email, password - NO slug
+                            slug is minted as pending_<random>, replaced at approval
+                            password checked against HIBP's range API - keyless,
                             already implemented in pwned.ts
                             no TOTP secret yet
 
-platform approves           status → 'active'
+platform approves           assigns the real slug, status → 'active'
 
 first sign-in               password correct, but totp_confirmed_at is NULL
                             → a restricted session that can do exactly one thing:
                               enrol TOTP
                             → a full session is issued only after a code verifies
 ```
+
+### The applicant does not choose the storefront address
+
+Registration originally took a slug. A review found that this leaks, and that no
+local change to the registration function closes it:
+
+```
+probe twice with one throwaway slug
+  target IS registered   → 202 (nothing created), then 202   the slug stays free
+  target NOT registered  → 202 (merchant created), then 409  the slug is now taken
+```
+
+The identical bodies and identical statuses are intact in both rows. What leaks
+is not the answer — it is the **side effect**. A successful registration consumes
+a globally unique, publicly probeable resource, and that consumption is readable
+by anyone who can try to consume it too.
+
+A leak of that shape cannot be patched where it is observed. It closes only by
+changing what the operation consumes, so registration no longer takes a slug at
+all: one is minted as `pending_<random>` and the platform assigns the real
+storefront address when it approves. An attacker cannot collide with a value
+they cannot choose.
+
+It is also the more honest model. A marketplace decides what address a seller
+gets; letting an applicant reserve `apple` before anyone has looked at their
+application was never right.
 
 **TOTP is a gate, not a setting.** An account that can change prices, read
 orders and list or delist products is worth more than a customer account, so it
