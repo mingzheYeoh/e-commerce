@@ -60,7 +60,6 @@ import {
   nowIso,
   inSeconds,
   isPast,
-  LOCKOUT_THRESHOLD,
   backoffSeconds,
 } from './credentials'
 
@@ -181,17 +180,6 @@ async function guard(
   }
   return null
 }
-
-/**
- * Per-account backoff, on top of the per-IP limit.
- *
- * These catch different things. The IP limit stops one machine working through
- * a password list; it never sees a botnet spreading one account's guesses over
- * a thousand addresses. This does, because it counts against the account.
- *
- * The threshold and exponential backoff are shared with staff sign-in via
- * `credentials.ts`. Both use the same implementation for consistency.
- */
 
 /* -------------------------------------------------------------------- types */
 

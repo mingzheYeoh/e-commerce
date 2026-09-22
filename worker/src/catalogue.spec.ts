@@ -228,7 +228,7 @@ describe('order lines name their product', () => {
 
 describe('publishedProducts', () => {
   it('returns published products from every merchant', async () => {
-    const { db, raw } = seeded()
+    const { db } = seeded()
     const rows = await publishedProducts({ ORDERS: db })
     expect(rows).toHaveLength(45)
     const merchants = new Set(rows.map((r) => r.merchantId))

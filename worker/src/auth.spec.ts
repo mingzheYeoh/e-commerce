@@ -54,7 +54,7 @@ async function markBreached(password: string, count = 50_000) {
   breached.set(await sha1Suffix(password), count)
 }
 
-function captureSends(url: string, init?: RequestInit): Response {
+function captureSends(_url: string, init?: RequestInit): Response {
   const parsed = JSON.parse(String(init?.body)) as { to: string[]; subject: string; text: string }
   sent.push({ to: parsed.to[0], subject: parsed.subject, text: parsed.text })
   return new Response('{}', { status: 200 })
