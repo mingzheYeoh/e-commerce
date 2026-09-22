@@ -12,8 +12,14 @@
 -- DEFAULT 0 rather than NULL: a product added later sorts to the front,
 -- which is where a new drop belongs, and it means no read has to cope with a
 -- missing value.
+--
+-- The CHECK is the one price_minor, stock_count and review_count all carry.
+-- INTEGER is an affinity, not a type: SQLite stores 'abc' and 1.5 in an
+-- INTEGER column without a word, and this is the column the whole
+-- ordering invariant rests on.
 
-ALTER TABLE products ADD COLUMN display_order INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE products ADD COLUMN display_order INTEGER NOT NULL DEFAULT 0
+  CHECK (typeof(display_order) = 'integer' AND display_order >= 0);
 
 UPDATE products SET display_order = 0 WHERE id = 'iphone-18-pro';
 UPDATE products SET display_order = 1 WHERE id = 'iphone-18-pro-max';

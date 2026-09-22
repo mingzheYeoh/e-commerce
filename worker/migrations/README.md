@@ -42,7 +42,7 @@ Verified against `sqlite_master` on 2026-09-21.
 | `0007` catalogue columns | ❌ | ✅ |
 | `0008` seed catalogue | ❌ | ✅ |
 | `0009` order lines product id | ❌ | ✅ applied 2026-09-21 |
-| `0010` display order | ❌ | ✅ applied 2026-09-21 |
+| `0010` display order | ❌ | ✅ applied 2026-09-21, rebuilt 2026-09-22 |
 
 Production currently holds six tables: `orders`, `order_lines`, and the four
 from `0006`. It has never had `users`, `sessions`, `email_tokens` or
@@ -94,6 +94,30 @@ wrong way round and the hardest kind of drift to notice. The four empty tables
 were dropped and `0006` re-run. Verified by probe: a negative price is refused
 with `CHECK constraint failed: ... AND price_minor >= 0`, and the failed batch
 rolled back so the probe merchant left nothing behind.
+
+**Staging's `products` was rebuilt on 2026-09-22.** `0010` landed on staging
+before its `display_order` gained
+`CHECK (typeof(display_order) = 'integer' AND display_order >= 0)` — the same
+drift as `0006` above, and the same wrong way round: the test environment's
+constraints were weaker than what every database that runs `0010` from here on
+will get. Amending the file cannot reach a database that has already run it,
+and SQLite cannot add a CHECK to an existing column with `ALTER TABLE`, so
+`products` was rebuilt the way `0009` rebuilds `order_lines` — new table, copy,
+drop, rename, recreate `products_merchant_idx` — through one `--file` import,
+with a guard comparing the copy to a backup of the original row for row rather
+than only by count, because a 20-column copy loses data to two same-typed
+columns swapping places, which a count cannot see. Production is unaffected: it
+has never run `0010` and gets the CHECK from the file directly.
+
+The recovery script was a one-off and is not in this directory. Reproducing it
+means reading `0009` and the `products` block of `../schema.sql`, which is
+where its shape came from.
+
+Verified by probe: `display_order = 'abc'` and `display_order = -1` are both
+refused with `CHECK constraint failed: typeof(display_order) = 'integer' AND
+display_order >= 0`, and each failed batch rolled back — the probe merchant
+inserted by the statement before left nothing behind. The 45 rows survived with
+`display_order` 0–44, still distinct.
 
 ## Why the two files
 

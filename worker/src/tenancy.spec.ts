@@ -181,6 +181,16 @@ describe('the schema refuses states that must not exist', () => {
     expect(() => insertProduct(raw, ', review_count', ', -1')).toThrow(/CHECK/)
   })
 
+  it('will not store a display order that is text or negative', () => {
+    // The column the catalogue's order rests on, and the one integer column
+    // that shipped without this CHECK: `ORDER BY display_order` on a column
+    // holding 'abc' sorts it before every number and reshuffles the shop page.
+    const { raw } = memoryD1()
+    seedMerchant(raw)
+    expect(() => insertProduct(raw, ', display_order', `, 'first'`)).toThrow(/CHECK/)
+    expect(() => insertProduct(raw, ', display_order', ', -1')).toThrow(/CHECK/)
+  })
+
   it('defaults the new columns so an existing row stays legal', () => {
     const { raw, rows } = memoryD1()
     seedMerchant(raw)

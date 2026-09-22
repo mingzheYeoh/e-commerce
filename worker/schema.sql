@@ -266,4 +266,5 @@ ALTER TABLE products ADD COLUMN specs_summary TEXT NOT NULL DEFAULT '[]';
 -- Only the column is mirrored. 0010's 45 UPDATEs belong to the seeded rows,
 -- not to the shape of the table.
 
-ALTER TABLE products ADD COLUMN display_order INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE products ADD COLUMN display_order INTEGER NOT NULL DEFAULT 0
+  CHECK (typeof(display_order) = 'integer' AND display_order >= 0);
