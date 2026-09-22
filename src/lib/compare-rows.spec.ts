@@ -14,7 +14,7 @@ describe('buildRows', () => {
   it('picks the cheapest as the winner on price, not the dearest', () => {
     const items = [phones[0], phones[1], phones[2]]
     const rows = buildRows(items)
-    const prices = items.map((p) => p.price)
+    const prices = items.map((p) => p.priceMinor)
     const cheapest = prices.indexOf(Math.min(...prices))
     expect(winners(rows, 'Price')).toEqual([cheapest])
   })

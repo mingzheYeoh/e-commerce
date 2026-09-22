@@ -238,10 +238,12 @@ export const useCheckoutStore = defineStore('checkout', {
         id: order.id,
         address: order.address,
         method: order.method,
-        // Skus, quantities and the chosen finish. Still no prices: the server
-        // prices the order from its own catalogue, and it checks the finish
-        // against that product's colourways rather than taking the word for it.
-        lines: order.lines.map((l) => ({ sku: l.sku, qty: l.qty, finish: l.finish })),
+        // Catalogue ids, quantities and the chosen finish. Still no prices:
+        // the server prices the order from its own catalogue, and it checks the
+        // finish against that product's colourways rather than taking the word
+        // for it. The id rather than the sku, because two merchants may list one
+        // sku and the server would be guessing which one was bought.
+        lines: order.lines.map((l) => ({ productId: l.productId, qty: l.qty, finish: l.finish })),
         paymentCode: order.paymentCode,
         currency: useUiStore().currency,
       }).then((stored) => {
@@ -279,6 +281,11 @@ export const useCheckoutStore = defineStore('checkout', {
           // renders without a thumbnail.
           const p = bySku.get(l.sku)
           return {
+            // A stored order keeps the sku, not the catalogue id, so this is the
+            // one place a sku lookup is still all there is. It feeds the render
+            // key and nothing that costs money, and a delisted product falls
+            // back to its sku rather than to a key every such line shares.
+            productId: p?.id ?? l.sku,
             sku: l.sku,
             title: l.title,
             finish: l.finish,

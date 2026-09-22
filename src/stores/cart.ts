@@ -1,7 +1,15 @@
 import { defineStore } from 'pinia'
 import type { Product } from '@/types'
+import { products } from '@/data/products'
 
 export interface CartLine {
+  /**
+   * The catalogue row this line came from, and what the order endpoint prices
+   * against. Two merchants may list one sku at two prices, so a sku does not
+   * name a product and cannot identify a line.
+   */
+  productId: string
+  /** The merchant's own code for it, for the receipt. Nothing is looked up by it. */
   sku: string
   title: string
   brand: string
@@ -24,10 +32,10 @@ export interface CartLine {
 
 /**
  * What identifies a line. Two finishes of one product are two lines, so the
- * sku alone cannot address them.
+ * product alone cannot address them — and a sku does not name a product.
  */
-export const lineKey = (line: Pick<CartLine, 'sku' | 'finish'>) =>
-  line.finish ? `${line.sku}|${line.finish}` : line.sku
+export const lineKey = (line: Pick<CartLine, 'productId' | 'finish'>) =>
+  line.finish ? `${line.productId}|${line.finish}` : line.productId
 
 const CART_KEY = 'nexus:cart'
 
@@ -41,7 +49,27 @@ const stored = {
   read(): CartLine[] {
     try {
       const raw = localStorage.getItem(CART_KEY)
-      return raw ? (JSON.parse(raw) as CartLine[]) : []
+      if (!raw) return []
+
+      // `nexus:cart` is written by whichever deploy was last live when a
+      // shopper touched their basket, and read by whichever deploy is live
+      // now — there is no migration step in between. `as CartLine[]` only
+      // asserts the compile-time shape; it proves nothing about the bytes on
+      // disk. `productId` was added to `CartLine` after some baskets were
+      // already sitting in storage, so a line from before that deploy has no
+      // productId at runtime even though the type says it must.
+      //
+      // Repair it the way `checkout.ts`'s `loadOrder()` repairs a delisted
+      // product: look the sku up in the bundled catalogue, which every
+      // stored line has always carried. A sku that no longer resolves is
+      // dropped, same as this app already treats a delisted product.
+      const bySku = new Map(products.map((p) => [p.sku, p]))
+      const lines = JSON.parse(raw) as CartLine[]
+      return lines.flatMap((line) => {
+        if (line.productId) return [line]
+        const product = bySku.get(line.sku)
+        return product ? [{ ...line, productId: product.id }] : []
+      })
     } catch {
       return []
     }
@@ -55,7 +83,6 @@ const stored = {
   },
 }
 
-const toCents = (price: number) => Math.round(price * 100)
 const clamp = (value: number, max: number) => Math.min(Math.max(value, 0), max)
 
 export const useCartStore = defineStore('cart', {
@@ -84,18 +111,19 @@ export const useCartStore = defineStore('cart', {
       // Only a finish the product actually offers. Anything else would travel
       // to the order endpoint and be refused there instead.
       const chosen = product.colorways.some((c) => c.name === finish) ? finish : undefined
-      const key = lineKey({ sku: product.sku, finish: chosen })
+      const key = lineKey({ productId: product.id, finish: chosen })
       const existing = this.items.find((line) => lineKey(line) === key)
 
       if (existing) {
         existing.qty = clamp(existing.qty + qty, product.stockCount)
       } else {
         this.items.push({
+          productId: product.id,
           sku: product.sku,
           title: product.title,
           brand: product.brand,
           thumb: product.media.thumb,
-          unitPriceCents: toCents(product.price),
+          unitPriceCents: product.priceMinor,
           qty: clamp(qty, product.stockCount),
           stockCount: product.stockCount,
           finish: chosen,

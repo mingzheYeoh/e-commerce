@@ -15,7 +15,7 @@ import { useFocusTrap } from '@/composables/useFocusTrap'
 const router = useRouter()
 const ui = useUiStore()
 const cart = useCartStore()
-const { formatPrice } = useCurrency()
+const { format } = useCurrency()
 
 const panel = ref<HTMLElement | null>(null)
 const query = ref('')
@@ -241,7 +241,7 @@ onUnmounted(() => document.removeEventListener('keydown', onKeydown))
                     </span>
                   </span>
                   <span class="nums shrink-0 text-sm font-medium">
-                    {{ formatPrice(row.product.price) }}
+                    {{ format(row.product.priceMinor) }}
                   </span>
                 </button>
 

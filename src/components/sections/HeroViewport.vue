@@ -7,7 +7,7 @@ import { useCartStore } from '@/stores/cart'
 import { useCurrency } from '@/composables/useCurrency'
 
 const cart = useCartStore()
-const { formatPrice } = useCurrency()
+const { format } = useCurrency()
 
 const assurances = [
   { icon: Truck, text: 'Free standard delivery over $75' },
@@ -77,7 +77,7 @@ const assurances = [
             {{ brandName(featuredDrop.brand) }} {{ featuredDrop.title }}
           </p>
           <p class="nums text-sm text-text-secondary">
-            {{ formatPrice(featuredDrop.price) }}
+            {{ format(featuredDrop.priceMinor) }}
             <span class="text-text-muted">· {{ featuredDrop.stockCount }} in stock</span>
           </p>
         </div>

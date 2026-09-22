@@ -36,6 +36,14 @@ CREATE TABLE IF NOT EXISTS orders (
 
 CREATE TABLE IF NOT EXISTS order_lines (
   order_id      TEXT NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+  -- The catalogue id, globally unique. sku is kept because it is what a
+  -- customer reads on a receipt, but it no longer identifies anything.
+  product_id    TEXT NOT NULL,
+  -- Whose product this was at the moment of purchase. Recorded, not yet acted
+  -- on: splitting an order across merchants is a later plan, and attribution
+  -- cannot be reconstructed afterwards because a product's owner can change
+  -- and a completed transaction's cannot.
+  merchant_id   TEXT NOT NULL,
   sku           TEXT NOT NULL,
   title         TEXT NOT NULL,
   qty           INTEGER NOT NULL CHECK (qty > 0),
@@ -47,9 +55,9 @@ CREATE TABLE IF NOT EXISTS order_lines (
   -- SQLite treats NULLs in a primary key as distinct from one another — which
   -- would let the same line be inserted twice.
   variant       TEXT NOT NULL DEFAULT '',
-  -- Two finishes of one product are two lines. Keyed on (order_id, sku) alone,
-  -- ordering a black one and a silver one loses the second.
-  PRIMARY KEY (order_id, sku, variant)
+  -- Two finishes of one product are two lines. Keyed on (order_id, product_id)
+  -- alone, ordering a black one and a silver one loses the second.
+  PRIMARY KEY (order_id, product_id, variant)
 );
 
 -- Accounts. What one buys is narrow on purpose: the orders you placed while
@@ -119,6 +127,7 @@ CREATE TABLE IF NOT EXISTS sessions (
 CREATE INDEX IF NOT EXISTS orders_email_idx ON orders(email);
 CREATE INDEX IF NOT EXISTS orders_created_idx ON orders(created_at DESC);
 CREATE INDEX IF NOT EXISTS orders_user_idx ON orders(user_id);
+CREATE INDEX IF NOT EXISTS order_lines_merchant_idx ON order_lines(merchant_id);
 CREATE INDEX IF NOT EXISTS sessions_user_idx ON sessions(user_id);
 CREATE INDEX IF NOT EXISTS email_tokens_user_idx ON email_tokens(user_id);
 CREATE INDEX IF NOT EXISTS recovery_codes_user_idx ON recovery_codes(user_id);
@@ -231,3 +240,31 @@ BEGIN SELECT RAISE(ABORT,'audit log is append-only'); END;
 
 CREATE TRIGGER IF NOT EXISTS audit_no_delete BEFORE DELETE ON audit_log
 BEGIN SELECT RAISE(ABORT,'audit log is append-only'); END;
+
+-- ---------------------------------------------------------------- 0007
+-- The 0006 block above must stay byte-identical to migrations/0006-tenancy.sql
+-- (see the drift test), so these columns cannot be inlined into the products
+-- CREATE TABLE above without breaking that test. Added the same way
+-- production gets them: as the ALTER statements from 0007, verbatim.
+
+ALTER TABLE products ADD COLUMN badge TEXT
+  CHECK (badge IS NULL OR badge IN ('NEW_DROP','LIMITED_EDITION','DISCOUNT'));
+
+ALTER TABLE products ADD COLUMN rating REAL NOT NULL DEFAULT 0
+  CHECK (rating >= 0 AND rating <= 5);
+
+ALTER TABLE products ADD COLUMN review_count INTEGER NOT NULL DEFAULT 0
+  CHECK (typeof(review_count) = 'integer' AND review_count >= 0);
+
+ALTER TABLE products ADD COLUMN specs_summary TEXT NOT NULL DEFAULT '[]';
+
+-- ---------------------------------------------------------------- 0010
+-- Same reason as the 0007 block above: appended as the migration's own ALTER
+-- rather than inlined into the CREATE TABLE, which would break the byte-for-byte
+-- comparison against 0006-tenancy.sql.
+--
+-- Only the column is mirrored. 0010's 45 UPDATEs belong to the seeded rows,
+-- not to the shape of the table.
+
+ALTER TABLE products ADD COLUMN display_order INTEGER NOT NULL DEFAULT 0
+  CHECK (typeof(display_order) = 'integer' AND display_order >= 0);

@@ -58,7 +58,7 @@ const BADGES: Record<NonNullable<Product['badge']>, string> = {
  * - Colours, badge and SKU rank against nothing at all.
  */
 const UNIVERSAL: CompareRow[] = [
-  { label: 'Price', get: (p) => p.price, money: true, direction: 'lower' },
+  { label: 'Price', get: (p) => p.priceMinor, money: true, direction: 'lower' },
   { label: 'Brand', get: (p) => brandName(p.brand), direction: null },
   { label: 'Rating', get: (p) => p.rating, unit: ' / 5', direction: 'higher' },
   {

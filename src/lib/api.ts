@@ -131,6 +131,52 @@ export async function health(): Promise<HealthResponse | null> {
   }
 }
 
+/* --------------------------------------------------------------- catalogue */
+
+/**
+ * The wire shape of `GET /api/products`, mirroring `CatalogueProduct` from
+ * `worker/src/catalogue.ts`.
+ *
+ * Not the frontend's `Product` type: it carries `merchantId`, which a
+ * shopper's view has no use for, and it has no `inStock` — that is derived
+ * from `stockCount`, the same way the build-time generator derives it, so
+ * there is exactly one place that decides what counts as in stock.
+ */
+export interface CatalogueProduct {
+  id: string
+  merchantId: string
+  sku: string
+  title: string
+  brand: string
+  category: string
+  priceMinor: number
+  currency: string
+  stockCount: number
+  badge: string | null
+  rating: number
+  reviewCount: number
+  specs: { label: string; value: string }[]
+  specsSummary: string[]
+  colorways: { name: string; hex: string }[]
+  media: {
+    heroImage: string
+    hoverImage?: string
+    thumb: string
+    gallery: string[]
+  }
+}
+
+/** Null on any failure; the caller keeps whatever it already had. */
+export async function fetchCatalogue(): Promise<CatalogueProduct[] | null> {
+  try {
+    const res = await fetch(`${BASE}/api/products`, { signal: AbortSignal.timeout(10_000) })
+    if (!res.ok) return null
+    return ((await res.json()) as { products: CatalogueProduct[] }).products
+  } catch {
+    return null
+  }
+}
+
 /* ------------------------------------------------------------------ orders */
 
 /** The delivery address as it travels over the wire, country included. */
@@ -150,8 +196,12 @@ export interface OrderRequest {
   id: string
   address: ShipAddress & { email: string }
   method: string
-  /** Skus, quantities and finish. Prices are the server's business, not the browser's. */
-  lines: { sku: string; qty: number; finish?: string }[]
+  /**
+   * Catalogue ids, quantities and finish. Prices are the server's business,
+   * not the browser's — and an id is the only thing that names one product,
+   * since two merchants may list the same sku.
+   */
+  lines: { productId: string; qty: number; finish?: string }[]
   paymentCode: string
   currency: string
 }

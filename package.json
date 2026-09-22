@@ -11,11 +11,12 @@
     "typecheck": "vue-tsc --noEmit && tsc --noEmit -p worker/tsconfig.json",
     "assets": "node scripts/fetch-assets.mjs",
     "build:embeddings": "node scripts/build-embeddings.mjs",
+    "build:catalog": "node scripts/build-catalog.mjs",
     "build:graph": "node scripts/build-graph.mjs",
     "build:vectorize": "node scripts/build-vectorize.mjs",
     "eval:search": "node scripts/eval-search.mjs",
     "deploy": "npm run build && npx --prefix worker wrangler deploy",
-    "build:staging": "vite build --mode staging",
+    "build:staging": "node scripts/build-catalog.mjs nexus-orders-staging && vite build --mode staging",
     "deploy:staging": "npm run build:staging && npx --prefix worker wrangler deploy --env staging"
   },
   "dependencies": {

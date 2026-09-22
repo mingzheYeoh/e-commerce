@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { taxCents, totalCents, taxLabel, TAX_RATES, TAX_POLICY } from './money'
 import { COUNTRIES } from './regions'
+import { products } from '@/data/products'
 
 describe('taxCents', () => {
   it('applies the destination rate, not a flat one', () => {
@@ -128,6 +129,16 @@ describe('tax outside the United States', () => {
     // form with no policy here would be charged 0% and nobody would notice.
     for (const country of COUNTRIES) {
       expect(TAX_POLICY[country.code], `${country.code} has no tax policy`).toBeDefined()
+    }
+  })
+})
+
+describe('catalogue prices', () => {
+  it('every catalogue price is a whole number of minor units', () => {
+    // A float here is how 899.95 * 3 becomes 2699.8500000000004. The catalogue
+    // was the last place one survived.
+    for (const p of products) {
+      expect(Number.isSafeInteger(p.priceMinor)).toBe(true)
     }
   })
 })

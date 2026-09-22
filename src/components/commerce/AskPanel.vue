@@ -15,7 +15,7 @@ import { toSegments } from '@/lib/citations'
 import { products } from '@/data/products'
 import { useCurrency } from '@/composables/useCurrency'
 
-const { formatPrice } = useCurrency()
+const { format } = useCurrency()
 
 const question = ref('')
 const answer = ref<AskResponse | null>(null)
@@ -179,7 +179,7 @@ onMounted(async () => {
             <img :src="p.media.thumb" :alt="p.title" width="44" height="44" class="h-11 w-11 shrink-0 rounded object-cover" />
             <span class="min-w-0">
               <span class="block truncate text-sm font-medium">{{ p.title }}</span>
-              <span class="nums block text-xs text-text-secondary">{{ formatPrice(p.price) }}</span>
+              <span class="nums block text-xs text-text-secondary">{{ format(p.priceMinor) }}</span>
             </span>
           </RouterLink>
         </div>
