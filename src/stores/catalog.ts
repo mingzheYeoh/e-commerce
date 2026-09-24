@@ -88,11 +88,27 @@ let refreshing: Promise<boolean> | null = null
  */
 export function refreshCatalogue(): Promise<boolean> {
   refreshing = (async () => {
-    const list = await fetchCatalogue()
-    const live = Boolean(list?.length)
-    if (live) catalogue.value = list!.map(toProduct)
-    catalogueStatus.value = live ? 'live' : 'failed'
-    return live
+    try {
+      const list = await fetchCatalogue()
+      // A row the storefront cannot render (no photo, a malformed field) is
+      // dropped on its own. Letting it throw would leave the status 'pending'
+      // for good, and checkout, which waits on this, stuck for every shopper.
+      const products = (list ?? []).flatMap((cp) => {
+        try {
+          const p = toProduct(cp)
+          return p.media.thumb ? [p] : []
+        } catch {
+          return []
+        }
+      })
+      const live = products.length > 0
+      if (live) catalogue.value = products
+      catalogueStatus.value = live ? 'live' : 'failed'
+      return live
+    } catch {
+      catalogueStatus.value = 'failed'
+      return false
+    }
   })()
   return refreshing
 }

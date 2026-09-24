@@ -161,7 +161,7 @@ const progress = computed(() =>
                   No longer available. Remove it to check out.
                 </p>
                 <p v-else-if="line.limited" class="mt-1.5 text-xs text-accent-amber">
-                  Only {{ line.stockCount }} left, so your quantity was lowered.
+                  Only {{ line.stockCount }} in stock right now, so {{ line.qty }} will be ordered.
                 </p>
                 <p v-else-if="line.qty >= line.stockCount" class="mt-1.5 text-xs text-accent-amber">
                   Maximum available quantity

@@ -191,6 +191,44 @@ describe('checkout while the live fetch is in flight', () => {
   })
 })
 
+describe('checkout when the live list moves a price during the wait', () => {
+  it('refuses, so the shopper reviews the new total instead of paying one they never saw', async () => {
+    const product = products.find((p) => p.inStock)!
+    const cart = useCartStore()
+    cart.add(product)
+    let answer: (v: unknown) => void = () => {}
+    vi.stubGlobal('fetch', vi.fn().mockReturnValue(new Promise((r) => (answer = r))))
+    void refreshCatalogue()
+
+    const checkout = readyCheckout()
+    const placing = checkout.place()
+    answer({ ok: true, json: async () => ({ products: [wire(product, { priceMinor: product.priceMinor + 5000 })] }) })
+    expect(await placing).toEqual({ ok: false })
+    expect(checkout.error).toMatch(/Prices were updated/)
+    expect(checkout.placing).toBe(false)
+
+    // Pressing Pay again, now looking at the new total, goes through.
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) }))
+    expect((await checkout.place()).ok).toBe(true)
+  })
+})
+
+describe('a live list with a row the storefront cannot render', () => {
+  it('drops that row alone, and never leaves checkout waiting on a refresh that threw', async () => {
+    const [good] = products
+    serve([wire(good), { ...wire(products[1]), media: null } as unknown as CatalogueProduct])
+    expect(await refreshCatalogue()).toBe(true)
+    expect(catalogueStatus.value).toBe('live')
+    expect(catalogue.value.map((p) => p.id)).toEqual([good.id])
+  })
+
+  it("settles as failed, not pending forever, when nothing in the list is usable", async () => {
+    serve([{ ...wire(products[0]), media: null } as unknown as CatalogueProduct])
+    expect(await refreshCatalogue()).toBe(false)
+    expect(catalogueStatus.value).toBe('failed')
+  })
+})
+
 describe('a failed fetch', () => {
   it('drops nothing it cannot vouch for: cart lines stay orderable, compare ids stay', async () => {
     localStorage.clear()

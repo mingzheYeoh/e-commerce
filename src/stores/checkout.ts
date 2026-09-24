@@ -189,9 +189,16 @@ export const useCheckoutStore = defineStore('checkout', {
       // Price and availability are checked against the live list, not a
       // snapshot it is about to replace. `placing` covers the wait so the pay
       // button cannot fire a second order while the fetch is in flight.
+      // The total the shopper is looking at when they press Pay. If the live
+      // list lands during the wait and moves a price, they review the new
+      // figure rather than being charged one they never saw.
+      const shown = this.totals.total
       this.placing = true
-      await catalogueReady()
-      this.placing = false
+      try {
+        await catalogueReady()
+      } finally {
+        this.placing = false
+      }
 
       if (!cart.items.length) {
         this.error = 'Your cart is empty.'
@@ -203,6 +210,10 @@ export const useCheckoutStore = defineStore('checkout', {
       }
       if (cart.hasUnavailable) {
         this.error = 'Some items are no longer available. Remove them to continue.'
+        return { ok: false }
+      }
+      if (this.totals.total !== shown) {
+        this.error = 'Prices were updated. Please review your order before paying.'
         return { ok: false }
       }
 

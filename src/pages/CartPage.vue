@@ -65,7 +65,7 @@ const toFreeShipping = computed(() => {
                 </p>
                 <p v-else class="nums mt-1 text-sm text-text-secondary">{{ format(line.unitPriceCents) }} each</p>
                 <p v-if="line.available && line.limited" class="mt-1 text-xs text-accent-amber">
-                  Only {{ line.stockCount }} left, so your quantity was lowered.
+                  Only {{ line.stockCount }} in stock right now, so {{ line.qty }} will be ordered.
                 </p>
               </div>
 
