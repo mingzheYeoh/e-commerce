@@ -15,7 +15,8 @@ import { lineKey, type CartLine } from '@/stores/cart'
 import type { OrderTotals } from '@/lib/money'
 
 const props = defineProps<{
-  lines: CartLine[]
+  /** A live cart line may carry `available: false`; a stored order's never does. */
+  lines: (CartLine & { available?: boolean })[]
   totals: OrderTotals
   method: ShipMethod
   country?: string
@@ -92,7 +93,8 @@ const taxNote = computed(() => {
             Qty {{ line.qty }}<template v-if="line.finish"> · {{ line.finish }}</template>
           </span>
         </span>
-        <span class="nums shrink-0 text-sm">{{ format(line.unitPriceCents * line.qty) }}</span>
+        <span v-if="line.available === false" class="shrink-0 text-xs text-accent-amber">Unavailable</span>
+        <span v-else class="nums shrink-0 text-sm">{{ format(line.unitPriceCents * line.qty) }}</span>
       </li>
     </ul>
 

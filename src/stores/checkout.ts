@@ -5,7 +5,7 @@ import { totalCents, type OrderTotals, type ShipMethod } from '@/lib/money'
 import { findCountry, validSubdivision, validPostal, validPhone } from '@/lib/regions'
 import { methodAvailable, defaultMethodFor } from '@/lib/shipping'
 import { saveOrder, fetchOrder } from '@/lib/api'
-import { products } from '@/data/products'
+import { catalogue } from './catalog'
 import { useUiStore } from './ui'
 
 /**
@@ -195,6 +195,10 @@ export const useCheckoutStore = defineStore('checkout', {
         this.error = 'Delivery details are incomplete.'
         return { ok: false }
       }
+      if (cart.hasUnavailable) {
+        this.error = 'Some items are no longer available. Remove them to continue.'
+        return { ok: false }
+      }
 
       this.placing = true
       // A real gateway takes a moment; pretending it is instant makes the
@@ -216,7 +220,8 @@ export const useCheckoutStore = defineStore('checkout', {
         placedAt: new Date().toISOString(),
         address: { ...this.address },
         method: this.method,
-        lines: cart.items.map((line) => ({ ...line })),
+        // The live-priced lines, so the receipt shows what the server charges.
+        lines: cart.lines.map(({ available: _, ...line }) => line),
         totals: this.totals,
         paymentCode: result.code,
       }
@@ -269,7 +274,7 @@ export const useCheckoutStore = defineStore('checkout', {
       // It came back from the server, so it is by definition the durable copy.
       this.synced[id] = true
 
-      const bySku = new Map(products.map((p) => [p.sku, p]))
+      const bySku = new Map(catalogue.value.map((p) => [p.sku, p]))
       return {
         id: remote.id,
         placedAt: remote.placedAt,

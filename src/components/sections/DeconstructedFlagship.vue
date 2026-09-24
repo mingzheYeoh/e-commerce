@@ -7,10 +7,10 @@ import { flagship } from '@/data/flagship'
 import { useCartStore } from '@/stores/cart'
 import { useCurrency } from '@/composables/useCurrency'
 import { prefersReducedMotion } from '@/composables/useReducedMotion'
-import type { Product } from '@/types'
+import { catalogue } from '@/stores/catalog'
 
 const cart = useCartStore()
-const { formatPrice } = useCurrency()
+const { format, formatPrice } = useCurrency()
 
 const section = ref<HTMLElement | null>(null)
 const progress = ref(0)
@@ -56,36 +56,19 @@ const stage = computed(() => {
   return 'Exploded view'
 })
 
+/**
+ * The teardown's product, as the live catalogue has it. The section itself is
+ * configured in flagship.ts, but what it costs and what goes in the bag are
+ * catalogue facts: this used to build a Product of its own with id 'flagship'
+ * and flagship.ts's price, which the order endpoint refuses as an unknown
+ * product and which showed a second price for the page it sits on.
+ */
+const product = computed(() => catalogue.value.find((p) => p.sku === flagship.sku))
+
 function preorder() {
-  // The flagship is not in the catalog fixtures — it is configured here, so the
-  // cart line is built from the chosen variant.
-  /*
-   * The sku is the real one. It used to carry the variant as a suffix —
-   * `SEN-HD900-113-CARBON` — which reads fine in a basket and is refused by the
-   * order endpoint as an unknown sku. Storing an order is deliberately
-   * fire-and-forget, so every preorder simply never reached the database and
-   * nothing anywhere said so. The finish is a field now, not a spelling.
-   */
-  const asProduct: Product = {
-    id: 'flagship',
-    sku: flagship.sku,
-    brand: flagship.brand,
-    title: flagship.title,
-    category: 'audio',
-    // flagship.price is Flagship's own dollar field, not the catalogue's —
-    // this is the one place a Flagship becomes a Product for the cart.
-    priceMinor: Math.round(flagship.price * 100),
-    currency: 'USD',
-    inStock: true,
-    stockCount: 25,
-    rating: 5,
-    reviewCount: 0,
-    specsSummary: flagship.parts.map((p) => p.spec),
-    specs: flagship.parts.map((p) => ({ label: p.label, value: p.spec })),
-    media: { heroImage: flagship.image, thumb: flagship.image, gallery: [flagship.image] },
-    colorways: flagship.variants,
-  }
-  cart.add(asProduct, 1, variant.value.name)
+  if (!product.value) return
+  // A finish the product does not list is dropped by cart.add, same as anywhere.
+  cart.add(product.value, 1, variant.value.name)
   added.value = true
   window.setTimeout(() => (added.value = false), 1200)
 }
@@ -162,11 +145,12 @@ function preorder() {
 
         <div class="shrink-0 md:text-right">
           <p class="nums text-2xl font-bold">
-            {{ formatPrice(flagship.price) }}
+            {{ product ? format(product.priceMinor) : formatPrice(flagship.price) }}
           </p>
           <button
             type="button"
-            class="mt-2 w-full rounded px-4 py-2.5 text-sm font-semibold transition-colors"
+            :disabled="!product?.inStock"
+            class="mt-2 w-full rounded px-4 py-2.5 text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-40"
             :class="added ? 'bg-accent-green/15 text-accent-green' : 'bg-accent text-white hover:bg-accent-hover'"
             @click="preorder"
           >

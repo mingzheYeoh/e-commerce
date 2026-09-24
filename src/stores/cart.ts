@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import type { Product } from '@/types'
-import { products } from '@/data/products'
+import { catalogue, catalogueSettled, findProduct } from './catalog'
 
 export interface CartLine {
   /**
@@ -14,7 +14,12 @@ export interface CartLine {
   title: string
   brand: string
   thumb: string
-  /** Frozen at add time so a later price change never rewrites a bag. */
+  /**
+   * The price when it was added. Kept for storage only: what the bag shows and
+   * charges is the live catalogue price, via the `lines` getter, because the
+   * order endpoint re-prices from the live catalogue anyway - a frozen price
+   * here would only be a second price for one product.
+   */
   unitPriceCents: number
   qty: number
   stockCount: number
@@ -34,6 +39,16 @@ export interface CartLine {
  * What identifies a line. Two finishes of one product are two lines, so the
  * product alone cannot address them — and a sku does not name a product.
  */
+/**
+ * A stored line joined to the live catalogue. `available` is false once the
+ * product is no longer published (unpublished, archived, merchant suspended) or
+ * is sold out: the line stays in the bag so the shopper can see what happened,
+ * but it cannot be checked out - the order endpoint would refuse it anyway.
+ */
+export interface CartView extends CartLine {
+  available: boolean
+}
+
 export const lineKey = (line: Pick<CartLine, 'productId' | 'finish'>) =>
   line.finish ? `${line.productId}|${line.finish}` : line.productId
 
@@ -60,10 +75,10 @@ const stored = {
       // productId at runtime even though the type says it must.
       //
       // Repair it the way `checkout.ts`'s `loadOrder()` repairs a delisted
-      // product: look the sku up in the bundled catalogue, which every
+      // product: look the sku up in the catalogue, which every
       // stored line has always carried. A sku that no longer resolves is
       // dropped, same as this app already treats a delisted product.
-      const bySku = new Map(products.map((p) => [p.sku, p]))
+      const bySku = new Map(catalogue.value.map((p) => [p.sku, p]))
       const lines = JSON.parse(raw) as CartLine[]
       return lines.flatMap((line) => {
         if (line.productId) return [line]
@@ -97,11 +112,44 @@ export const useCartStore = defineStore('cart', {
     count: (state) => state.items.reduce((total, line) => total + line.qty, 0),
 
     /**
-     * Cents, not dollars. Every total in the UI derives from this, so float
-     * cents can never accumulate across lines.
+     * What the bag renders and what checkout orders: each line with the live
+     * price, stock, title and image of its product.
+     *
+     * A product missing from the list before the live fetch has settled may
+     * just be newer than the build-time snapshot, so its stored line stands in
+     * until the catalogue has answered.
      */
-    subtotalCents: (state) =>
-      state.items.reduce((total, line) => total + line.unitPriceCents * line.qty, 0),
+    lines: (state): CartView[] =>
+      state.items.map((line) => {
+        const p = findProduct(line.productId)
+        if (!p) return { ...line, available: !catalogueSettled.value }
+        return {
+          ...line,
+          title: p.title,
+          brand: p.brand,
+          thumb: p.media.thumb,
+          unitPriceCents: p.priceMinor,
+          stockCount: p.stockCount,
+          available: p.inStock && p.stockCount > 0,
+        }
+      }),
+
+    /** Any line that cannot be ordered. Checkout refuses while this is true. */
+    hasUnavailable(): boolean {
+      return this.lines.some((line) => !line.available)
+    },
+
+    /**
+     * Cents, not dollars. Every total in the UI derives from this, so float
+     * cents can never accumulate across lines. Unavailable lines are not in it:
+     * they cannot be bought, so they cannot be owed.
+     */
+    subtotalCents(): number {
+      return this.lines.reduce(
+        (total, line) => (line.available ? total + line.unitPriceCents * line.qty : total),
+        0,
+      )
+    },
   },
 
   actions: {
@@ -135,7 +183,8 @@ export const useCartStore = defineStore('cart', {
       const index = this.items.findIndex((line) => lineKey(line) === key)
       if (index === -1) return
 
-      const next = clamp(qty, this.items[index].stockCount)
+      const line = this.items[index]
+      const next = clamp(qty, findProduct(line.productId)?.stockCount ?? line.stockCount)
       if (next === 0) this.items.splice(index, 1)
       else this.items[index].qty = next
     },

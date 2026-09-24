@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { products } from '@/data/products'
+import { catalogueSettled, findProduct } from './catalog'
 import type { CategoryId, Product } from '@/types'
 
 /**
@@ -42,9 +42,6 @@ const stored = {
   },
 }
 
-export const findProduct = (id: string): Product | undefined =>
-  products.find((p) => p.id === id)
-
 /**
  * The subset of `ids` that can actually form a comparison.
  *
@@ -60,9 +57,16 @@ export function validIds(ids: unknown[]): string[] {
 
   for (const raw of ids) {
     if (typeof raw !== 'string') continue
-    const product = findProduct(raw)
-    if (!product) continue
     if (out.includes(raw)) continue
+    const product = findProduct(raw)
+    if (!product) {
+      // Before the live catalogue answers, an unknown id may be a product newer
+      // than the build-time snapshot. Hold it; main.ts re-validates once the
+      // catalogue settles, and `items` shows only what resolves meanwhile.
+      if (!catalogueSettled.value) out.push(raw)
+      if (out.length === MAX_COMPARE) break
+      continue
+    }
     if (category === null) category = product.category
     else if (product.category !== category) continue
     out.push(raw)

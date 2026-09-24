@@ -48,14 +48,22 @@ const toFreeShipping = computed(() => {
           </p>
 
           <ul class="divide-y divide-border-hairline rounded-card border border-border-hairline bg-surface-1">
-            <li v-for="line in cart.items" :key="lineKey(line)" class="flex items-center gap-4 p-4">
+            <li
+              v-for="line in cart.lines"
+              :key="lineKey(line)"
+              class="flex items-center gap-4 p-4"
+              :class="!line.available && 'opacity-60'"
+            >
               <img :src="line.thumb" :alt="line.title" width="72" height="72" class="h-18 w-18 shrink-0 rounded object-cover" />
 
               <div class="min-w-0 flex-1">
                 <p class="truncate font-medium">{{ line.title }}</p>
                 <p class="code mt-0.5 text-xs text-text-muted">{{ line.sku }}</p>
                 <p v-if="line.finish" class="mt-0.5 text-xs text-text-secondary">{{ line.finish }}</p>
-                <p class="nums mt-1 text-sm text-text-secondary">{{ format(line.unitPriceCents) }} each</p>
+                <p v-if="!line.available" class="mt-1 text-sm text-accent-amber">
+                  No longer available. Remove it to check out.
+                </p>
+                <p v-else class="nums mt-1 text-sm text-text-secondary">{{ format(line.unitPriceCents) }} each</p>
               </div>
 
               <div class="flex shrink-0 items-center gap-1 rounded border border-border-hairline">
@@ -105,7 +113,12 @@ const toFreeShipping = computed(() => {
               Shipping and tax depend on the destination, and are calculated at checkout.
             </p>
 
-            <button type="button" class="btn-primary mt-5 w-full" @click="router.push('/checkout')">
+            <button
+              type="button"
+              class="btn-primary mt-5 w-full disabled:cursor-not-allowed disabled:opacity-40"
+              :disabled="cart.hasUnavailable"
+              @click="router.push('/checkout')"
+            >
               Checkout
             </button>
             <RouterLink

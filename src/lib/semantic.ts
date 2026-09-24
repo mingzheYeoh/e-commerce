@@ -36,7 +36,7 @@
  * here because this path answers in ~11 ms on-device against ~330 ms over the
  * network, and a search box that stutters is a worse search box.
  */
-import { products } from '@/data/products'
+import { catalogue, findProduct } from '@/stores/catalog'
 import { recommend } from './recommend'
 import { dot, fuseRanks } from './retrieval'
 import type { Product } from '@/types'
@@ -119,8 +119,6 @@ export function ensureReady(): Promise<boolean> {
   return loading
 }
 
-const byId = new Map(products.map((p) => [p.id, p]))
-
 /** Ranked product ids, most similar first. Empty if the model is not ready. */
 export async function semanticRank(query: string): Promise<string[]> {
   if (!(await ensureReady()) || !index || !vectors || !embedder) return []
@@ -145,13 +143,22 @@ export interface HybridResult {
  * now and better results a moment later, rather than a spinner.
  */
 export async function hybridSearch(query: string, limit = 6): Promise<HybridResult> {
-  const keyword = recommend(query, products.length).items.map((r) => r.product.id)
+  const keyword = recommend(query, catalogue.value.length).items.map((r) => r.product.id)
 
-  const semantic = state === 'ready' ? await semanticRank(query) : []
+  // The vectors were built for the build-time snapshot. A product published
+  // since has no vector and is found by the keyword list alone, which fusion
+  // still ranks; one unpublished since still has a vector and is dropped here,
+  // so a stale index can never surface a product the shop no longer sells.
+  const semantic = (state === 'ready' ? await semanticRank(query) : []).filter((id) =>
+    findProduct(id),
+  )
   if (!semantic.length) {
-    return { products: keyword.slice(0, limit).map((id) => byId.get(id)!), semantic: false }
+    return { products: keyword.slice(0, limit).map((id) => findProduct(id)!), semantic: false }
   }
 
-  const fused = fuseRanks([keyword, semantic]).slice(0, limit)
-  return { products: fused.map((id) => byId.get(id)!).filter(Boolean), semantic: true }
+  const fused = fuseRanks([keyword, semantic])
+    .map((id) => findProduct(id))
+    .filter((p): p is Product => p !== undefined)
+    .slice(0, limit)
+  return { products: fused, semantic: true }
 }

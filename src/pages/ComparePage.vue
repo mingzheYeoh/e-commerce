@@ -15,7 +15,7 @@ import { useCartStore } from '@/stores/cart'
 import { useCurrency } from '@/composables/useCurrency'
 import { buildRows } from '@/lib/compare-rows'
 import { categories } from '@/data/categories'
-import { products } from '@/data/products'
+import { catalogue } from '@/stores/catalog'
 
 const route = useRoute()
 const router = useRouter()
@@ -93,8 +93,8 @@ const categoryLabel = computed(
 function optionsFor(index: number) {
   const taken = new Set(compare.ids.filter((_, i) => i !== index))
   const pool = compare.category
-    ? products.filter((p) => p.category === compare.category)
-    : products
+    ? catalogue.value.filter((p) => p.category === compare.category)
+    : catalogue.value
 
   return categories
     .map((c) => ({

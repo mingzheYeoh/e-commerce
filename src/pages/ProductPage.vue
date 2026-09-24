@@ -5,7 +5,7 @@ import BuyBox from '@/components/commerce/BuyBox.vue'
 import ProductCard from '@/components/commerce/ProductCard.vue'
 import DeconstructedFlagship from '@/components/sections/DeconstructedFlagship.vue'
 import NotFoundPage from './NotFoundPage.vue'
-import { products } from '@/data/products'
+import { catalogue, catalogueSettled, findProduct } from '@/stores/catalog'
 import { categories } from '@/data/categories'
 import { flagship } from '@/data/flagship'
 import credits from '@/data/credits.json'
@@ -13,7 +13,13 @@ import type { Credit } from '@/types'
 
 const props = defineProps<{ id: string }>()
 
-const product = computed(() => products.find((p) => p.id === props.id))
+const product = computed(() => findProduct(props.id))
+
+/**
+ * An id the snapshot does not know may be a product published since the build.
+ * Until the live catalogue has answered, that is "loading", not "not found".
+ */
+const waiting = computed(() => !product.value && !catalogueSettled.value)
 
 /**
  * Commons rarely has four photographs of one model, so the pipeline writes as
@@ -24,7 +30,9 @@ const product = computed(() => products.find((p) => p.id === props.id))
 const gallery = ref<string[]>([])
 
 watch(
-  () => product.value?.id,
+  // The paths, not the id: the live catalogue can hand back the same product
+  // with different photos, and the same photos must not re-probe.
+  () => product.value?.media.gallery.join(' '),
   async () => {
     gallery.value = []
     if (!product.value) return
@@ -68,14 +76,18 @@ const categoryLabel = computed(
 const hasTeardown = computed(() => product.value?.sku === flagship.sku)
 
 const related = computed(() =>
-  products
+  catalogue.value
     .filter((p) => p.category === product.value?.category && p.id !== product.value?.id)
     .slice(0, 4),
 )
 </script>
 
 <template>
-  <NotFoundPage v-if="!product" />
+  <div v-if="waiting" class="flex min-h-[70vh] items-center justify-center pt-16" role="status">
+    <p class="text-text-secondary">Loading product…</p>
+  </div>
+
+  <NotFoundPage v-else-if="!product" />
 
   <div v-else class="pt-16">
     <div class="mx-auto max-w-[1600px] px-4 py-8 md:px-8 md:py-12">
@@ -97,7 +109,7 @@ const related = computed(() =>
         <div>
           <div class="overflow-hidden rounded-card border border-border-hairline bg-surface-2">
             <img
-              :src="gallery[active]"
+              :src="gallery[active] ?? product.media.heroImage"
               :alt="product.title"
               width="900"
               height="675"
