@@ -403,7 +403,7 @@ describe('signing in', () => {
     }
     expect(row.failed_attempts).toBe(5)
     expect(row.locked_until).not.toBeNull()
-  })
+  }, 20_000) // A dozen full-cost sign-ins: close to the 5s default alone, over it under a parallel run.
 
   it('pays the same KDF for an unknown email, a wrong password and a pending account', async () => {
     // A path that skipped the derivation would answer measurably faster, and
@@ -434,12 +434,22 @@ describe('signing in', () => {
     const { db, raw } = await activeMerchant()
     const res = await signIn(env(db), { email: good.email, password: good.password }, req())
     const cookie = String(res.headers?.['Set-Cookie'])
-    expect(cookie).toMatch(/^nexus_staff=[^;]+/)
+    expect(cookie).toMatch(/^__Host-nexus_staff=[^;]+/)
     for (const attr of ['HttpOnly', 'Secure', 'SameSite=Strict', 'Path=/']) {
       expect(cookie).toContain(attr)
     }
     const token = cookie.split(';')[0].split('=').slice(1).join('=')
     expect(JSON.stringify(raw.prepare(`SELECT * FROM staff_sessions`).all())).not.toContain(token)
+  })
+
+  it('hands back the same secret until it is confirmed, so a reload cannot orphan a scanned entry', async () => {
+    const { db } = await activeMerchant()
+    const first = await signIn(env(db), { email: good.email, password: good.password }, req())
+    const enrolling = (await staffSession(env(db), withCookie(first)))!
+    const a = (await beginTotpEnrolment(env(db), enrolling)).body as { secret: string }
+    const b = (await beginTotpEnrolment(env(db), enrolling)).body as { secret: string }
+    expect(b.secret).toBe(a.secret)
+    expect((await confirmTotpEnrolment(env(db), enrolling, { code: await totpCode(a.secret) })).status).toBe(200)
   })
 
   it('will not issue a new secret once one is confirmed', async () => {

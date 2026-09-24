@@ -98,6 +98,14 @@ const whole = (v: unknown): number | null =>
 
 const STATUSES = new Set(['draft', 'published', 'archived'])
 
+/**
+ * The storefront filters by these exact ids (`src/data/categories.ts`), so a
+ * product filed under anything else is published into a category no shopper
+ * can reach. The console's select offers only these; this is the check that
+ * does not depend on the request coming from the console.
+ */
+const CATEGORIES = new Set(['phones', 'audio', 'peripherals', 'imaging', 'computing'])
+
 const fields = (body: unknown): Record<string, unknown> =>
   typeof body === 'object' && body !== null ? (body as Record<string, unknown>) : {}
 
@@ -115,6 +123,7 @@ function newProduct(body: unknown): NewProduct | string {
   const priceMinor = whole(p.priceMinor)
   if (!sku || !title || !brand || !category) return 'A product needs a SKU, title, brand and category.'
   if (priceMinor === null) return 'priceMinor is a whole number of minor units, zero or more.'
+  if (!CATEGORIES.has(category)) return 'category is one of the storefront categories.'
   return { sku, title, brand, category, priceMinor }
 }
 
@@ -142,7 +151,30 @@ function productPatch(body: unknown): ProductPatch | string {
     }
     patch.status = p.status
   }
+  if (Object.keys(patch).length === 0) return 'Nothing to change.'
   return patch
+}
+
+/**
+ * Why this row cannot go on sale yet, or null if it can.
+ *
+ * The storefront renders `media.thumb` and `media.gallery` unconditionally,
+ * and the console has no way to upload photos yet — so a product the console
+ * created would reach the shop grid as a broken card. Refused here, at the
+ * write, rather than tolerated at the render.
+ */
+function unpublishable(row: ProductRow, priceMinor: number): string | null {
+  let media: { thumb?: unknown; gallery?: unknown }
+  try {
+    media = JSON.parse(row.media) ?? {}
+  } catch {
+    media = {}
+  }
+  if (!media.thumb || !Array.isArray(media.gallery) || media.gallery.length === 0) {
+    return 'A product needs photos before it can be published, and photo upload is not in the console yet.'
+  }
+  if (priceMinor === 0) return 'A product needs a price before it can be published.'
+  return null
 }
 
 const product = (r: ProductRow) => ({
@@ -234,6 +266,17 @@ async function route(request: Request, env: ConsoleEnv, url: URL): Promise<Respo
     if (repo instanceof Response) return repo
     const patch = productPatch(await readBody(request))
     if (typeof patch === 'string') return json({ error: patch }, 400)
+    // Checked on the row as it will be, so dropping the price of something
+    // already on sale to zero is refused too.
+    if (patch.status === 'published' || patch.priceMinor === 0) {
+      const existing = await repo.products.get(productId)
+      if (!existing) return json({ error: 'not found' }, 404)
+      const why =
+        (patch.status ?? existing.status) === 'published'
+          ? unpublishable(existing, patch.priceMinor ?? existing.price_minor)
+          : null
+      if (why) return json({ error: why }, 409)
+    }
     // Someone else's product is a 404, not a 403: the repository cannot see
     // it, and "exists but not yours" would confirm the id to a stranger.
     const row = await repo.products.update(productId, patch)

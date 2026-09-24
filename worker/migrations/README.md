@@ -98,6 +98,15 @@ staging by the whole accounts phase, not broken by it.
    errors — the table is there, it is just empty. Print
    `SELECT COUNT(*) FROM products` before deploying: 45 is right, 0 means stop.
 
+## Known drift
+
+**Staging's `staff_sessions.totp_pending` still has `DEFAULT 0`.** `0011`
+dropped the default after staging had run it, so a production database that
+runs `0011` fresh gets no default and an INSERT that forgets the column fails.
+It changes no behaviour today: the only INSERT, in `staff-auth.ts`, names the
+column and writes `1`. This is the same wrong-way-round drift as the two
+rebuilds below. It is recorded here rather than rebuilt because nothing reaches it.
+
 ## Done, kept for the record
 
 **Staging's `0006` was re-applied on 2026-09-21.** Staging had received the

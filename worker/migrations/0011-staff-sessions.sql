@@ -15,8 +15,9 @@ CREATE TABLE IF NOT EXISTS staff_sessions (
   -- 1 while the holder has proved a password but not yet a second factor. Such
   -- a session may do exactly one thing: enrol TOTP. SQLite has no boolean, so
   -- the CHECK is what stops 'yes' and 2 from being storable in the column that
-  -- decides whether a session may act at all.
-  totp_pending INTEGER NOT NULL DEFAULT 0 CHECK (totp_pending IN (0, 1))
+  -- decides whether a session may act at all. No DEFAULT: an INSERT that
+  -- forgets the column fails, rather than quietly issuing a session that can act.
+  totp_pending INTEGER NOT NULL CHECK (totp_pending IN (0, 1))
 );
 
 CREATE INDEX IF NOT EXISTS staff_sessions_staff_idx ON staff_sessions(staff_id);

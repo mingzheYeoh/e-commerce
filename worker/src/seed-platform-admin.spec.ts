@@ -95,7 +95,7 @@ describe('buildInsertSql + signIn: the seeded row verifies exactly like a regist
     const res = await signIn(env(db), { email, password }, new Request('https://console.test/'))
     expect(res.status).toBe(200)
     expect(res.body).toMatchObject({ totpRequired: true, enrolled: false })
-    expect(res.headers?.['Set-Cookie']).toMatch(/nexus_staff=/)
+    expect(res.headers?.['Set-Cookie']).toMatch(/__Host-nexus_staff=/)
   })
 
   it('a duplicate email fails loudly rather than silently succeeding', async () => {

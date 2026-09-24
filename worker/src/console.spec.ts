@@ -102,6 +102,13 @@ function seedProduct(raw: MemoryD1['raw'], merchantId: string, productId: string
     .run(productId, merchantId, `sku-${productId}`, productId)
 }
 
+/** What the storefront needs before it can render a card. The console cannot set it yet. */
+function withPhotos(raw: MemoryD1['raw'], productId: string) {
+  raw
+    .prepare(`UPDATE products SET media = ? WHERE id = ?`)
+    .run(JSON.stringify({ heroImage: '/h.jpg', thumb: '/t.jpg', gallery: ['/g.jpg'] }), productId)
+}
+
 /** A second, pending application, which is what the approve route exists for. */
 async function pendingApplication(mem: MemoryD1): Promise<string> {
   await registerMerchant(env(mem.db), { ...good, email: 'applicant@example.com', name: 'Pending Co' })
@@ -183,7 +190,7 @@ describe('the console worker: who may reach what', () => {
     const res = await call(db, 'POST', '/api/merchant/products', {
       cookie,
       headers: { Origin: 'https://nexus-tech-collective.example' },
-      body: { sku: 'S1', title: 'T', brand: 'B', category: 'C', priceMinor: 1000 },
+      body: { sku: 'S1', title: 'T', brand: 'B', category: 'phones', priceMinor: 1000 },
     })
     expect(res.status).toBe(403)
   })
@@ -195,7 +202,7 @@ describe('the console worker: who may reach what', () => {
     const res = await call(db, 'POST', '/api/merchant/products', {
       cookie,
       noOrigin: true,
-      body: { sku: 'S1', title: 'T', brand: 'B', category: 'C', priceMinor: 1000 },
+      body: { sku: 'S1', title: 'T', brand: 'B', category: 'phones', priceMinor: 1000 },
     })
     expect(res.status).toBe(403)
   })
@@ -207,7 +214,7 @@ describe('the console worker: who may reach what', () => {
     const res = await call(db, 'POST', '/api/merchant/products', {
       cookie,
       headers: { Origin: 'https://console.test' },
-      body: { sku: 'S1', title: 'T', brand: 'B', category: 'C', priceMinor: 1000 },
+      body: { sku: 'S1', title: 'T', brand: 'B', category: 'phones', priceMinor: 1000 },
     })
     expect(res.status).toBe(201)
   })
@@ -230,7 +237,7 @@ describe('the console worker: merchant products', () => {
     const res = await call(db, 'POST', '/api/merchant/products', {
       cookie,
       // merchantId in the body is ignored because the type has no such field.
-      body: { merchantId: 'mch_other', sku: 'S1', title: 'T', brand: 'B', category: 'C', priceMinor: 1000 },
+      body: { merchantId: 'mch_other', sku: 'S1', title: 'T', brand: 'B', category: 'phones', priceMinor: 1000 },
     })
     expect(res.status).toBe(201)
     const row = (await res.json()) as { merchantId: string }
@@ -240,9 +247,9 @@ describe('the console worker: merchant products', () => {
   it('refuses a malformed product with 400 rather than a database error', async () => {
     const { db, cookie } = await activeSession()
     for (const body of [
-      { sku: 'S1', title: 'T', brand: 'B', category: 'C', priceMinor: 10.5 },
-      { sku: 'S1', title: 'T', brand: 'B', category: 'C', priceMinor: -1 },
-      { title: 'T', brand: 'B', category: 'C', priceMinor: 1 },
+      { sku: 'S1', title: 'T', brand: 'B', category: 'phones', priceMinor: 10.5 },
+      { sku: 'S1', title: 'T', brand: 'B', category: 'phones', priceMinor: -1 },
+      { title: 'T', brand: 'B', category: 'phones', priceMinor: 1 },
     ]) {
       const res = await call(db, 'POST', '/api/merchant/products', { cookie, body })
       expect(res.status, JSON.stringify(body)).toBe(400)
@@ -265,6 +272,7 @@ describe('the console worker: merchant products', () => {
   it('patches its own product, and cannot write rating or review_count', async () => {
     const { db, raw, cookie, merchantId } = await activeSession()
     seedProduct(raw, merchantId, 'mine')
+    withPhotos(raw, 'mine')
     const res = await call(db, 'PATCH', '/api/merchant/products/mine', {
       cookie,
       body: { priceMinor: 2500, status: 'published', rating: 5, review_count: 999, reviewCount: 999 },
@@ -274,6 +282,50 @@ describe('the console worker: merchant products', () => {
     expect(
       raw.prepare(`SELECT price_minor, status, rating, review_count FROM products WHERE id = 'mine'`).get(),
     ).toEqual({ price_minor: 2500, status: 'published', rating: 0, review_count: 0 })
+  })
+})
+
+describe('the console worker: what may go on sale', () => {
+  it('refuses to publish a product with no photos, which the storefront cannot render', async () => {
+    const { db, raw, cookie, merchantId } = await activeSession()
+    seedProduct(raw, merchantId, 'bare')
+    const res = await call(db, 'PATCH', '/api/merchant/products/bare', { cookie, body: { status: 'published' } })
+    expect(res.status).toBe(409)
+    expect(raw.prepare(`SELECT status FROM products WHERE id = 'bare'`).get()).toEqual({ status: 'draft' })
+  })
+
+  it('refuses a free product on sale, whether publishing it or repricing it once live', async () => {
+    const { db, raw, cookie, merchantId } = await activeSession()
+    seedProduct(raw, merchantId, 'mine')
+    withPhotos(raw, 'mine')
+    const publishFree = await call(db, 'PATCH', '/api/merchant/products/mine', {
+      cookie,
+      body: { status: 'published', priceMinor: 0 },
+    })
+    expect(publishFree.status).toBe(409)
+
+    raw.prepare(`UPDATE products SET status = 'published' WHERE id = 'mine'`).run()
+    const dropToZero = await call(db, 'PATCH', '/api/merchant/products/mine', { cookie, body: { priceMinor: 0 } })
+    expect(dropToZero.status).toBe(409)
+    expect(raw.prepare(`SELECT price_minor FROM products WHERE id = 'mine'`).get()).toEqual({ price_minor: 1000 })
+  })
+
+  it('refuses a category the storefront does not have', async () => {
+    const { db, cookie } = await activeSession()
+    const res = await call(db, 'POST', '/api/merchant/products', {
+      cookie,
+      body: { sku: 'S1', title: 'T', brand: 'B', category: 'Phones', priceMinor: 100 },
+    })
+    expect(res.status).toBe(400)
+  })
+
+  it('refuses an empty patch rather than auditing a write that changed nothing', async () => {
+    const { db, raw, cookie, merchantId } = await activeSession()
+    seedProduct(raw, merchantId, 'mine')
+    const before = raw.prepare(`SELECT COUNT(*) AS n FROM audit_log`).get()
+    const res = await call(db, 'PATCH', '/api/merchant/products/mine', { cookie, body: {} })
+    expect(res.status).toBe(400)
+    expect(raw.prepare(`SELECT COUNT(*) AS n FROM audit_log`).get()).toEqual(before)
   })
 })
 

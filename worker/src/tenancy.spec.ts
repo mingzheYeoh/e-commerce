@@ -206,8 +206,8 @@ describe('the schema refuses states that must not exist', () => {
   it('will not store a staff session for a staff member who does not exist', () => {
     const { raw } = memoryD1()
     expect(() =>
-      raw.prepare(`INSERT INTO staff_sessions (token_hash, staff_id, expires_at)
-                   VALUES ('hash','stf_ghost','2099-01-01T00:00:00Z')`).run(),
+      raw.prepare(`INSERT INTO staff_sessions (token_hash, staff_id, expires_at, totp_pending)
+                   VALUES ('hash','stf_ghost','2099-01-01T00:00:00Z', 1)`).run(),
     ).toThrow(/FOREIGN KEY/)
   })
 

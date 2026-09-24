@@ -904,15 +904,21 @@ export async function resetPassword(env: AuthEnv, body: unknown): Promise<AuthRe
  * inside its own lifetime, "already used" is a more useful answer than
  * "never existed", and they cost nothing for an hour.
  */
-export async function purgeExpired(env: AuthEnv): Promise<{ sessions: number; tokens: number }> {
+export async function purgeExpired(
+  env: AuthEnv,
+): Promise<{ sessions: number; tokens: number; staffSessions: number }> {
   const now = nowIso()
-  const [sessions, tokens] = await env.ORDERS.batch([
+  // Staff sessions live in the same database; the console worker has no cron
+  // of its own, so this is the one sweep for both.
+  const [sessions, tokens, staff] = await env.ORDERS.batch([
     env.ORDERS.prepare(`DELETE FROM sessions WHERE expires_at < ?1`).bind(now),
     env.ORDERS.prepare(`DELETE FROM email_tokens WHERE expires_at < ?1`).bind(now),
+    env.ORDERS.prepare(`DELETE FROM staff_sessions WHERE expires_at < ?1`).bind(now),
   ])
   return {
     sessions: sessions.meta?.changes ?? 0,
     tokens: tokens.meta?.changes ?? 0,
+    staffSessions: staff.meta?.changes ?? 0,
   }
 }
 

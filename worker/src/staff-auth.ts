@@ -294,7 +294,14 @@ export async function approveMerchant(
 
 /* ------------------------------------------------------------------ sign-in */
 
-export const STAFF_COOKIE = 'nexus_staff'
+/**
+ * `__Host-` makes the browser refuse this cookie if it carries a Domain
+ * attribute. Every *.workers.dev worker on this account is the same site, so
+ * without it any sibling — an XSS on the storefront — could plant its own
+ * session cookie here and sign the victim's console into the attacker's
+ * account.
+ */
+export const STAFF_COOKIE = '__Host-nexus_staff'
 
 /**
  * A working day, where a shopper's session lasts a month.
@@ -562,9 +569,9 @@ export async function signOut(env: StaffEnv, request: Request): Promise<StaffRes
 export async function beginTotpEnrolment(env: StaffEnv, session: StaffSession): Promise<StaffResult> {
   if (!sessionRows.has(session)) return SIGN_IN_AGAIN
 
-  const row = await env.ORDERS.prepare(`SELECT email, totp_confirmed_at FROM staff WHERE id = ?1`)
+  const row = await env.ORDERS.prepare(`SELECT email, totp_secret, totp_confirmed_at FROM staff WHERE id = ?1`)
     .bind(session.staffId)
-    .first<{ email: string; totp_confirmed_at: string | null }>()
+    .first<{ email: string; totp_secret: string | null; totp_confirmed_at: string | null }>()
   if (!row) return SIGN_IN_AGAIN
 
   const ALREADY = {
@@ -572,6 +579,14 @@ export async function beginTotpEnrolment(env: StaffEnv, session: StaffSession): 
     body: { error: 'An authenticator is already set up. Enter the code it shows.' },
   }
   if (row.totp_confirmed_at) return ALREADY
+
+  // A reload after scanning must not orphan the entry already in the app —
+  // every code it shows would then be wrong, and five of those lock the
+  // account. Handing the same secret back is no weaker: until a code
+  // confirms, the password is the only factor this account has either way.
+  if (row.totp_secret) {
+    return { status: 200, body: { secret: row.totp_secret, uri: otpauthUri(row.email, row.totp_secret) } }
+  }
 
   // Conditional on still being unconfirmed, so a confirmation that lands
   // between the read above and this write cannot be overwritten.
