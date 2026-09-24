@@ -66,6 +66,8 @@ export function redirectFor(session: StaffMe, to: string): string | null {
   if (session.scope === 'merchant') {
     return ['/overview', '/products', '/orders'].some((base) => within(to, base)) ? null : '/overview'
   }
+  // Applications moved under /platform; an old bookmark still lands on it.
+  if (to === '/applications') return '/platform/applications'
   return within(to, '/platform') ? null : '/platform'
 }
 

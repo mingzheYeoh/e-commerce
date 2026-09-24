@@ -44,8 +44,18 @@ describe('redirectFor', () => {
     for (const allowed of ['/platform', '/platform/merchants', '/platform/applications', '/platform/audit']) {
       expect(redirectFor(session, allowed), allowed).toBeNull()
     }
-    for (const elsewhere of ['/', '/applications', '/overview', '/products', '/orders/x', '/verify', '/platformx']) {
+    for (const elsewhere of ['/', '/overview', '/products', '/orders/x', '/verify', '/platformx']) {
       expect(redirectFor(session, elsewhere), elsewhere).toBe('/platform')
     }
+  })
+
+  it('sends an old /applications bookmark to where the page lives now', () => {
+    const platform: StaffMe = { kind: 'active', scope: 'platform' }
+    expect(redirectFor(platform, '/applications')).toBe('/platform/applications')
+    // Nobody else gets there by the old address either.
+    expect(redirectFor({ kind: null }, '/applications')).toBe('/signin')
+    expect(
+      redirectFor({ kind: 'active', scope: 'merchant', merchant: { name: 'A', slug: 'a', status: 'active' } }, '/applications'),
+    ).toBe('/overview')
   })
 })

@@ -5,6 +5,8 @@ import { formatAmounts } from '../money'
 import { METHOD, STATUS, placed } from '../orders'
 
 const orders = ref<OrderSummary[]>([])
+// The worker stops at 1000 orders and says so; a partial list must not pass for the whole range.
+const truncated = ref(false)
 const from = ref('')
 const to = ref('')
 const error = ref<string | null>(null)
@@ -17,6 +19,7 @@ async function load() {
   if (isError(body)) error.value = body.error
   else if ('orders' in body) {
     orders.value = body.orders
+    truncated.value = body.truncated
     // The worker's defaults (the last 30 days) shown back in the inputs.
     from.value = body.from
     to.value = body.to
@@ -42,6 +45,9 @@ onMounted(load)
     <button class="btn-primary" type="submit" :disabled="loading">Show</button>
   </form>
 
+  <p v-if="!error && !loading && truncated" class="mb-4 text-sm text-accent-amber" role="status">
+    Showing the newest {{ orders.length }} orders only. Narrow the dates to see the rest.
+  </p>
   <p v-if="error" class="text-sm text-accent-amber">{{ error }}</p>
   <p v-else-if="loading" class="text-text-secondary">Loading…</p>
   <p v-else-if="orders.length === 0" class="card p-6 text-text-secondary">No paid orders in this range.</p>

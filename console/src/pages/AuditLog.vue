@@ -1,37 +1,48 @@
 <script setup lang="ts">
-// Reading this page is itself audited by the worker, filtered reads against
-// the merchant filtered to — so the newest row is often this view's own.
+// Reading this page is itself audited by the worker — one row per page read,
+// against the merchant filtered to — so the newest row is often this view's own.
+// The filter's merchant names come with the page for the same reason: fetching
+// the merchant list would write a row per merchant into the log being read.
 import { onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { auditLog, allMerchants, isError, type AuditEntry, type MerchantSummary } from '../api'
+import { auditLog, isError, type AuditEntry } from '../api'
 
 const route = useRoute()
 const router = useRouter()
 
 const entries = ref<AuditEntry[]>([])
-const merchants = ref<MerchantSummary[]>([])
-const hasMore = ref(false)
+const merchants = ref<{ id: string; name: string }[]>([])
+const next = ref<number | null>(null)
 const error = ref<string | null>(null)
 const loading = ref(true)
 
 const merchant = () => (typeof route.query.merchant === 'string' && route.query.merchant) || null
-const page = () => Math.max(0, Number(route.query.page) || 0)
+/** The cursor: only entries older than this. Absent means the newest page. */
+const before = () => {
+  const n = Number(route.query.before)
+  return Number.isSafeInteger(n) && n > 0 ? n : null
+}
 
 async function load() {
   loading.value = true
   error.value = null
-  const { body } = await auditLog(merchant(), page())
-  if (isError(body)) error.value = body.error
+  const { status, body } = await auditLog(merchant(), before())
+  if (status === 404) error.value = 'No merchant with that id.'
+  else if (isError(body)) error.value = body.error
   else if ('entries' in body) {
     entries.value = body.entries
-    hasMore.value = body.hasMore
+    merchants.value = body.merchants
+    next.value = body.next
   } else error.value = 'Something went wrong. Reload and try again.'
   loading.value = false
 }
 
-// The filter and page live in the URL, so a link from the merchants page lands filtered.
-const go = (merchantId: string | null, p: number) =>
-  router.push({ query: { ...(merchantId ? { merchant: merchantId } : {}), ...(p ? { page: String(p) } : {}) } })
+// Filter and cursor live in the URL, so a link from the merchants page lands
+// filtered, and the browser's Back button is "Newer".
+const go = (merchantId: string | null, cursor: number | null) =>
+  router.push({
+    query: { ...(merchantId ? { merchant: merchantId } : {}), ...(cursor !== null ? { before: String(cursor) } : {}) },
+  })
 
 // Only while still on this page: leaving it changes the route too, and a
 // stray reload there would be one more audited read nobody looked at.
@@ -39,11 +50,7 @@ watch(
   () => route.fullPath,
   () => route.path === '/platform/audit' && load(),
 )
-onMounted(async () => {
-  await load()
-  const { body } = await allMerchants()
-  if (!isError(body) && 'merchants' in body) merchants.value = body.merchants
-})
+onMounted(load)
 </script>
 
 <template>
@@ -57,7 +64,7 @@ onMounted(async () => {
       :key="merchants.length"
       class="input"
       :value="merchant() ?? ''"
-      @change="go(($event.target as HTMLSelectElement).value || null, 0)"
+      @change="go(($event.target as HTMLSelectElement).value || null, null)"
     >
       <option value="">All merchants</option>
       <option v-for="m in merchants" :key="m.id" :value="m.id">{{ m.name }}</option>
@@ -82,8 +89,7 @@ onMounted(async () => {
   </ul>
 
   <nav class="mt-4 flex items-center justify-between" aria-label="Pages">
-    <button class="btn-ghost" :disabled="page() === 0 || loading" @click="go(merchant(), page() - 1)">Newer</button>
-    <span class="nums text-xs text-text-muted">Page {{ page() + 1 }}</span>
-    <button class="btn-ghost" :disabled="!hasMore || loading" @click="go(merchant(), page() + 1)">Older</button>
+    <button class="btn-ghost" :disabled="before() === null || loading" @click="go(merchant(), null)">Newest</button>
+    <button class="btn-ghost" :disabled="next === null || loading" @click="go(merchant(), next)">Older</button>
   </nav>
 </template>

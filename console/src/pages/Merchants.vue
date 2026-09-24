@@ -19,9 +19,16 @@ onMounted(async () => {
 
 async function toggle(m: MerchantSummary) {
   const action = m.status === 'active' ? 'suspend' : 'restore'
+  // Staff stay signed in; every console page they open is refused with "this
+  // merchant is not active" until the merchant is restored.
   if (
     action === 'suspend' &&
-    !window.confirm(`Suspend ${m.name}? Their products leave the storefront and their staff are signed out of the console.`)
+    !window.confirm(
+      `Suspend ${m.name}?\n\n` +
+        'Their products leave the storefront and can no longer be ordered. ' +
+        "Their staff keep their sign-in but can't open anything in the console until you restore them - " +
+        "including the delivery addresses of orders they have already been paid for.",
+    )
   ) {
     return
   }

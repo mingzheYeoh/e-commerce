@@ -177,6 +177,8 @@ export type MerchantSummary = {
 }
 
 export type AuditEntry = {
+  /** Insertion order; the last entry's is the page's `next` cursor. */
+  seq: number
   id: string
   at: string
   actorId: string
@@ -192,13 +194,18 @@ export const merchantOverview = () => call<Overview | ErrorBody>('/api/merchant/
 
 export const listOrders = (range: { from?: string; to?: string }) => {
   const q = new URLSearchParams(Object.entries(range).filter(([, v]) => v) as [string, string][])
-  return call<{ from: string; to: string; orders: OrderSummary[] } | ErrorBody>(`/api/merchant/orders?${q}`)
+  return call<{ from: string; to: string; truncated: boolean; orders: OrderSummary[] } | ErrorBody>(
+    `/api/merchant/orders?${q}`,
+  )
 }
 
 export const getOrder = (id: string) => call<OrderDetail | ErrorBody>(`/api/merchant/orders/${encodeURIComponent(id)}`)
 
+/** The platform overview carries no top products or low stock: its page shows neither. */
+export type PlatformOverview = Omit<Overview, 'top' | 'lowStock'>
+
 export const platformOverview = () =>
-  call<{ overview: Overview; merchants: MerchantSummary[] } | ErrorBody>('/api/platform/overview')
+  call<{ overview: PlatformOverview; merchants: MerchantSummary[] } | ErrorBody>('/api/platform/overview')
 
 export const allMerchants = () => call<{ merchants: MerchantSummary[] } | ErrorBody>('/api/platform/merchants/all')
 
@@ -207,12 +214,19 @@ export const setMerchantStatus = (id: string, action: 'suspend' | 'restore') =>
     method: 'POST',
   })
 
-export const auditLog = (merchantId: string | null, page: number) => {
-  const q = new URLSearchParams({ page: String(page) })
+/**
+ * One page of the log, newest first. `before` is the previous page's `next`.
+ * The page also carries every merchant's id and name for the filter, so the
+ * viewer never reads the (audited per merchant) merchant list to fill it.
+ */
+export const auditLog = (merchantId: string | null, before: number | null) => {
+  const q = new URLSearchParams()
   if (merchantId) q.set('merchant', merchantId)
-  return call<{ merchantId: string | null; page: number; hasMore: boolean; entries: AuditEntry[] } | ErrorBody>(
-    `/api/platform/audit?${q}`,
-  )
+  if (before !== null) q.set('before', String(before))
+  return call<
+    | { merchantId: string | null; next: number | null; merchants: { id: string; name: string }[]; entries: AuditEntry[] }
+    | ErrorBody
+  >(`/api/platform/audit?${q}`)
 }
 
 export const approveMerchant = (id: string, slug: string) =>

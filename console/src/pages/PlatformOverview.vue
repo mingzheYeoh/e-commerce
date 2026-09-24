@@ -2,10 +2,10 @@
 import { computed, onMounted, ref } from 'vue'
 import StatCard from '../components/StatCard.vue'
 import SalesChart from '../components/SalesChart.vue'
-import { platformOverview, isError, type MerchantSummary, type Overview } from '../api'
+import { platformOverview, isError, type MerchantSummary, type PlatformOverview } from '../api'
 import { formatAmounts, formatMinor, groupByCurrency, seriesByCurrency } from '../money'
 
-const overview = ref<Overview | null>(null)
+const overview = ref<PlatformOverview | null>(null)
 const merchants = ref<MerchantSummary[]>([])
 const error = ref<string | null>(null)
 
