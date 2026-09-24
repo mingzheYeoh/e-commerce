@@ -59,7 +59,7 @@ Deploy: `npm run deploy:console:staging` already exists (`npx --prefix worker wr
 
 ---
 
-### Task A: The shell, the auth flow, and serving it
+### Task 1: The shell, the auth flow, and serving it
 
 **Deliverable:** on staging, a visitor can apply, a seeded admin can sign in and is forced through TOTP enrolment, and nothing else is reachable until they do.
 
@@ -75,7 +75,7 @@ Deploy: `npm run deploy:console:staging` already exists (`npx --prefix worker wr
 - Tests: the guard's routing table for each `me` shape. Keep it small; the worker's tests carry the security.
 - Add `deploy:console:staging` if Task 6 did not.
 
-### Task B: The merchant and platform pages
+### Task 2: The merchant and platform pages
 
 **Deliverable:** a signed-in merchant lists, creates and edits their own products; a signed-in platform admin approves a pending application with a slug.
 
@@ -84,7 +84,7 @@ Deploy: `npm run deploy:console:staging` already exists (`npx --prefix worker wr
 - `/applications`: pending merchants with name and email; a slug field and an Approve button per row; show the worker's 409 message when a slug is taken.
 - A header with the merchant's name (from `/me`) and Sign out.
 
-### Task C: Seed the first admin, deploy, document
+### Task 3: Seed the first admin, deploy, document
 
 **Deliverable:** two working URLs in the README.
 
