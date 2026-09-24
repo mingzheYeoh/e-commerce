@@ -1,6 +1,16 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { memoryD1, type MemoryD1 } from '../test/d1-memory'
-import { registerMerchant, approveMerchant } from './staff-auth'
+import {
+  registerMerchant,
+  approveMerchant,
+  signIn,
+  staffSession,
+  beginTotpEnrolment,
+  confirmTotpEnrolment,
+  type StaffResult,
+} from './staff-auth'
+import { totpCode } from './totp'
+import { KDF_ROUNDS } from './credentials'
 
 /*
  * `tooCommon` reaches Have I Been Pwned for real. Left alone these tests
@@ -275,5 +285,252 @@ describe('approveMerchant', () => {
     const res = await approveMerchant(env(db), 'stf_platform', id, 'acme')
     quiet.mockRestore()
     expect(res.status).toBe(503)
+  })
+})
+
+describe('signing in', () => {
+  const req = () => new Request('https://console.test/api/staff/signin', { method: 'POST' })
+
+  /** Registers, approves, and hands back a database with an active merchant. */
+  async function activeMerchant() {
+    const mem = memoryD1()
+    await registerMerchant(env(mem.db), good)
+    const id = (mem.raw.prepare(`SELECT id FROM merchants`).get() as { id: string }).id
+    const approved = await approveMerchant(env(mem.db), 'stf_platform', id, 'acme')
+    if (approved.status !== 200) throw new Error(`fixture approval failed: ${approved.status}`)
+    return mem
+  }
+
+  /** A request carrying the cookie a StaffResult set. */
+  function withCookie(res: StaffResult): Request {
+    const cookie = String(res.headers?.['Set-Cookie'] ?? '').split(';')[0]
+    return new Request('https://console.test/', { headers: { Cookie: cookie } })
+  }
+
+  it('returns an enrolling session when TOTP has never been confirmed', async () => {
+    const { db } = await activeMerchant()
+    const res = await signIn(env(db), { email: good.email, password: good.password }, req())
+    expect(res.status).toBe(200)
+    expect(res.body).toMatchObject({ totpRequired: true })
+
+    const session = await staffSession(env(db), withCookie(res))
+    expect(session).toEqual({ kind: 'enrolling', staffId: expect.any(String) })
+  })
+
+  it('an enrolling session carries no merchant id, so it cannot be scoped', async () => {
+    // The point of the union: scopedTo cannot be called with this, because
+    // there is no argument to pass - not because a check refuses it.
+    const { db } = await activeMerchant()
+    const res = await signIn(env(db), { email: good.email, password: good.password }, req())
+    const session = await staffSession(env(db), withCookie(res))
+    expect(session).not.toHaveProperty('merchantId')
+  })
+
+  it('promotes the session to active once a code verifies', async () => {
+    const { db } = await activeMerchant()
+    const signedIn = await signIn(env(db), { email: good.email, password: good.password }, req())
+    const enrolling = (await staffSession(env(db), withCookie(signedIn)))!
+
+    const begun = await beginTotpEnrolment(env(db), enrolling)
+    const secret = (begun.body as { secret: string }).secret
+    await confirmTotpEnrolment(env(db), enrolling, { code: await totpCode(secret) })
+
+    const after = await staffSession(env(db), withCookie(signedIn))
+    expect(after).toMatchObject({ kind: 'active', merchantId: expect.any(String), scope: 'merchant' })
+  })
+
+  it('a wrong code neither promotes the session nor consumes it', async () => {
+    const { db } = await activeMerchant()
+    const signedIn = await signIn(env(db), { email: good.email, password: good.password }, req())
+    const enrolling = (await staffSession(env(db), withCookie(signedIn)))!
+    await beginTotpEnrolment(env(db), enrolling)
+
+    const res = await confirmTotpEnrolment(env(db), enrolling, { code: '000000' })
+    expect(res.status).toBe(400)
+    expect(await staffSession(env(db), withCookie(signedIn))).toMatchObject({ kind: 'enrolling' })
+  })
+
+  it('refuses a wrong password without saying which half was wrong', async () => {
+    const { db } = await activeMerchant()
+    const res = await signIn(env(db), { email: good.email, password: 'wrong-but-long-enough' }, req())
+    expect(res.status).toBe(401)
+    expect(JSON.stringify(res.body)).not.toMatch(/password|email|unknown user/i)
+  })
+
+  it('locks the account after repeated failures', async () => {
+    const { db } = await activeMerchant()
+    for (let i = 0; i < 5; i++) {
+      await signIn(env(db), { email: good.email, password: 'wrong-but-long-enough' }, req())
+    }
+    const res = await signIn(env(db), { email: good.email, password: good.password }, req())
+    expect(res.status).toBe(423)
+  })
+
+  it('requires the second factor on every later sign-in', async () => {
+    const { db } = await activeMerchant()
+    // enrol once
+    const first = await signIn(env(db), { email: good.email, password: good.password }, req())
+    const enrolling = (await staffSession(env(db), withCookie(first)))!
+    const begun = await beginTotpEnrolment(env(db), enrolling)
+    const secret = (begun.body as { secret: string }).secret
+    await confirmTotpEnrolment(env(db), enrolling, { code: await totpCode(secret) })
+
+    // sign in again: password alone must not produce an active session
+    const second = await signIn(env(db), { email: good.email, password: good.password }, req())
+    expect(second.body).toMatchObject({ totpRequired: true })
+    expect(await staffSession(env(db), withCookie(second))).toMatchObject({ kind: 'enrolling' })
+  })
+
+  /*
+   * The register-then-sign-in probe. Registration lets the applicant choose
+   * the password, so an attacker registers a victim's address with one of
+   * their own and signs in with it. If that answer differed from a wrong
+   * password's, it would say whether the probe had just created the account
+   * (the password is the attacker's, so it matches) or the address already
+   * had one (it is someone else's, so it does not).
+   */
+  it('answers the correct password of an attacker-created pending account as a wrong one', async () => {
+    const attacker = memoryD1()
+    await registerMerchant(env(attacker.db), good)
+    const probe = await signIn(env(attacker.db), { email: good.email, password: good.password }, req())
+
+    const { db } = await activeMerchant()
+    const wrong = await signIn(env(db), { email: good.email, password: 'wrong-but-long-enough' }, req())
+    const unknown = await signIn(env(db), { email: 'nobody@example.com', password: good.password }, req())
+
+    expect(probe.status).toBe(401)
+    expect(probe).toEqual(wrong)
+    expect(unknown).toEqual(wrong)
+    expect(probe.headers).toBeUndefined()
+  })
+
+  it('backs off an attacker-created pending account just as it backs off an existing one', async () => {
+    /*
+     * Without this, the status is equal and six attempts still read the
+     * difference: a pre-existing account locks and answers 423, an
+     * attacker-created one never would.
+     */
+    const attacker = memoryD1()
+    await registerMerchant(env(attacker.db), good)
+    for (let i = 0; i < 5; i++) {
+      await signIn(env(attacker.db), { email: good.email, password: good.password }, req())
+    }
+    const probe = await signIn(env(attacker.db), { email: good.email, password: good.password }, req())
+
+    const existing = await activeMerchant()
+    for (let i = 0; i < 5; i++) {
+      await signIn(env(existing.db), { email: good.email, password: 'wrong-but-long-enough' }, req())
+    }
+    const locked = await signIn(env(existing.db), { email: good.email, password: good.password }, req())
+
+    expect(probe.status).toBe(423)
+    expect(probe).toEqual(locked)
+    const row = attacker.raw.prepare(`SELECT failed_attempts, locked_until FROM staff`).get() as {
+      failed_attempts: number
+      locked_until: string | null
+    }
+    expect(row.failed_attempts).toBe(5)
+    expect(row.locked_until).not.toBeNull()
+  })
+
+  it('pays the same KDF for an unknown email, a wrong password and a pending account', async () => {
+    // A path that skipped the derivation would answer measurably faster, and
+    // the speed would say what the status was careful not to.
+    const attacker = memoryD1()
+    await registerMerchant(env(attacker.db), good)
+    const { db } = await activeMerchant()
+
+    const spy = vi.spyOn(crypto.subtle, 'deriveBits')
+    try {
+      const passes = async (run: () => Promise<unknown>) => {
+        spy.mockClear()
+        await run()
+        return spy.mock.calls.length
+      }
+      const counts = [
+        await passes(() => signIn(env(db), { email: 'nobody@example.com', password: good.password }, req())),
+        await passes(() => signIn(env(db), { email: good.email, password: 'wrong-but-long-enough' }, req())),
+        await passes(() => signIn(env(attacker.db), { email: good.email, password: good.password }, req())),
+      ]
+      expect(counts).toEqual([KDF_ROUNDS, KDF_ROUNDS, KDF_ROUNDS])
+    } finally {
+      spy.mockRestore()
+    }
+  })
+
+  it('sets a strict, script-proof cookie and stores only its hash', async () => {
+    const { db, raw } = await activeMerchant()
+    const res = await signIn(env(db), { email: good.email, password: good.password }, req())
+    const cookie = String(res.headers?.['Set-Cookie'])
+    expect(cookie).toMatch(/^nexus_staff=[^;]+/)
+    for (const attr of ['HttpOnly', 'Secure', 'SameSite=Strict', 'Path=/']) {
+      expect(cookie).toContain(attr)
+    }
+    const token = cookie.split(';')[0].split('=').slice(1).join('=')
+    expect(JSON.stringify(raw.prepare(`SELECT * FROM staff_sessions`).all())).not.toContain(token)
+  })
+
+  it('will not issue a new secret once one is confirmed', async () => {
+    /*
+     * Every sign-in is an enrolling session, including the hundredth. If
+     * beginning enrolment again minted a fresh secret, a password alone would
+     * be enough to replace the second factor and confirm the replacement.
+     */
+    const { db, raw } = await activeMerchant()
+    const first = await signIn(env(db), { email: good.email, password: good.password }, req())
+    const enrolling = (await staffSession(env(db), withCookie(first)))!
+    const secret = ((await beginTotpEnrolment(env(db), enrolling)).body as { secret: string }).secret
+    await confirmTotpEnrolment(env(db), enrolling, { code: await totpCode(secret) })
+
+    const second = await signIn(env(db), { email: good.email, password: good.password }, req())
+    const again = (await staffSession(env(db), withCookie(second)))!
+    const res = await beginTotpEnrolment(env(db), again)
+    expect(res.status).toBe(409)
+    expect(res.body).not.toHaveProperty('secret')
+    expect(raw.prepare(`SELECT totp_secret FROM staff`).get()).toEqual({ totp_secret: secret })
+
+    // The existing authenticator is what gets this session the rest of the way.
+    await confirmTotpEnrolment(env(db), again, { code: await totpCode(secret) })
+    expect(await staffSession(env(db), withCookie(second))).toMatchObject({ kind: 'active' })
+  })
+
+  it('promotes only the session that verified the code', async () => {
+    // Promoting every pending session for the staff member would promote a
+    // thief's password-only session along with the owner's.
+    const { db } = await activeMerchant()
+    const mine = await signIn(env(db), { email: good.email, password: good.password }, req())
+    const theirs = await signIn(env(db), { email: good.email, password: good.password }, req())
+    const enrolling = (await staffSession(env(db), withCookie(mine)))!
+    const secret = ((await beginTotpEnrolment(env(db), enrolling)).body as { secret: string }).secret
+    await confirmTotpEnrolment(env(db), enrolling, { code: await totpCode(secret) })
+
+    expect(await staffSession(env(db), withCookie(mine))).toMatchObject({ kind: 'active' })
+    expect(await staffSession(env(db), withCookie(theirs))).toMatchObject({ kind: 'enrolling' })
+  })
+
+  it('backs off wrong codes, and a correct password does not wipe the count', async () => {
+    /*
+     * Six digits is a million codes and three are valid at any moment. With a
+     * password in hand and no limit on codes, that is an afternoon's work.
+     * The count is only cleared by a code that verifies: if the password
+     * cleared it, signing in again between guesses would reset the backoff
+     * forever.
+     */
+    const { db } = await activeMerchant()
+    const first = await signIn(env(db), { email: good.email, password: good.password }, req())
+    const enrolling = (await staffSession(env(db), withCookie(first)))!
+    const secret = ((await beginTotpEnrolment(env(db), enrolling)).body as { secret: string }).secret
+    for (let i = 0; i < 4; i++) await confirmTotpEnrolment(env(db), enrolling, { code: '000000' })
+
+    const second = await signIn(env(db), { email: good.email, password: good.password }, req())
+    expect(second.status).toBe(200)
+    const again = (await staffSession(env(db), withCookie(second)))!
+    await confirmTotpEnrolment(env(db), again, { code: '000000' })
+
+    const res = await confirmTotpEnrolment(env(db), again, { code: await totpCode(secret) })
+    expect(res.status).toBe(423)
+    expect(await staffSession(env(db), withCookie(second))).toMatchObject({ kind: 'enrolling' })
+    const blocked = await signIn(env(db), { email: good.email, password: good.password }, req())
+    expect(blocked.status).toBe(423)
   })
 })

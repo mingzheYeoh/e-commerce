@@ -28,29 +28,48 @@
  *    second `registerMerchant` call can collide with, that tells the two
  *    apart.
  *
- *    Two things still leak, and neither is this function's to close. First,
- *    a register-then-sign-in probe: the applicant still chooses the
- *    password, so an attacker who registers a victim's address with a
- *    password of their own picking can sign in with it afterward and read
- *    the account's existence off the sign-in answer. Removing the slug took
- *    away one applicant-chosen value; the password is another, and it is
- *    read at sign-in, not here. Closing that channel is `signIn`'s job — a
- *    correct password for a staff member of a non-`active` merchant must
- *    answer exactly as a wrong one does, including the failed-attempt count
- *    and backoff. Second, timing: a fresh application performs a batched
- *    write that a duplicate skips, so a duplicate answers faster by roughly
- *    one write. Both residuals are known and deferred, not closed.
+ *    The applicant still chooses the password, so an attacker can register
+ *    a victim's address with a password of their own and try it at sign-in.
+ *    That channel is read at sign-in, so `signIn` is where it is closed: a
+ *    correct password for staff of a non-`active` merchant answers exactly
+ *    as a wrong one does — status, body, KDF cost, failed-attempt count and
+ *    backoff — so the answer is the same whether the probe created the
+ *    account or the address already had one.
+ *
+ *    One residual is known and deferred, not closed: timing. A fresh
+ *    application performs a batched write that a duplicate skips, so a
+ *    duplicate answers faster by roughly one write. (Sign-in has a separate,
+ *    documented residual of its own — see `signIn` on 423.)
  *
  * 3. The merchant row and its owner are written in one batch. A merchant with
  *    no owner is an application nobody can ever claim.
  */
-import { PBKDF2_ITERATIONS, KDF_ROUNDS, derive, randomToken, toB64 } from './credentials'
+import {
+  PBKDF2_ITERATIONS,
+  KDF_ROUNDS,
+  backoffSeconds,
+  derive,
+  fromB64,
+  inSeconds,
+  isPast,
+  nowIso,
+  randomToken,
+  sameBytes,
+  sha256,
+  toB64,
+} from './credentials'
+import { readCookie } from './auth'
 import { tooCommon } from './pwned'
 import { id, type TenancyEnv } from './tenancy'
+import { newTotpSecret, otpauthUri, verifyTotp } from './totp'
 
 export interface StaffEnv extends TenancyEnv {}
 
-export type StaffResult = { status: number; body: Record<string, unknown> }
+export type StaffResult = {
+  status: number
+  body: Record<string, unknown>
+  headers?: Record<string, string>
+}
 
 const str = (v: unknown, max: number): string | null =>
   typeof v === 'string' && v.trim() && v.trim().length <= max ? v.trim() : null
@@ -271,4 +290,326 @@ export async function approveMerchant(
   }
 
   return { status: 200, body: { id: merchantId, status: 'active', slug: address } }
+}
+
+/* ------------------------------------------------------------------ sign-in */
+
+export const STAFF_COOKIE = 'nexus_staff'
+
+/**
+ * A working day, where a shopper's session lasts a month.
+ *
+ * Every sign-in costs a TOTP code as well as a password, so a short session
+ * is cheap for the person holding the phone and expensive for anyone holding
+ * a stolen cookie.
+ */
+const SESSION_SECONDS = 12 * 3600
+
+/**
+ * What a cookie is allowed to do.
+ *
+ * Only `active` carries a merchant id, so an enrolling session cannot be
+ * handed to `scopedTo`: there is no argument to pass. That is the staff
+ * table's paired CHECK again, applied to a type — the dangerous state is not
+ * refused, it is unrepresentable.
+ */
+export type StaffSession =
+  | { kind: 'enrolling'; staffId: string }
+  | { kind: 'active'; staffId: string; merchantId: string | null; scope: 'merchant' | 'platform' }
+
+/*
+ * Which session row a StaffSession was read from.
+ *
+ * Confirming a code promotes one row, and the object is the only thing the
+ * caller hands back. Keyed by identity rather than carried as a field, so a
+ * session a caller built for itself — rather than one `staffSession` read
+ * from a cookie — has no row to promote, and nothing about the token hash
+ * can end up serialised into a response.
+ */
+const sessionRows = new WeakMap<StaffSession, string>()
+
+/** Strict, not Lax: the console is same-origin with its own SPA and nothing links into it. */
+const staffCookie = (token: string, maxAgeSeconds: number): string =>
+  [
+    `${STAFF_COOKIE}=${token}`,
+    'Path=/',
+    'HttpOnly',
+    'Secure',
+    'SameSite=Strict',
+    `Max-Age=${maxAgeSeconds}`,
+  ].join('; ')
+
+/*
+ * Every refusal `signIn` can give a stranger, frozen and shared by reference
+ * for the same reason APPLICATION_RECEIVED is: one object is what keeps the
+ * outcomes byte-identical.
+ */
+const NO_MATCH: StaffResult = Object.freeze({
+  status: 401,
+  body: Object.freeze({ error: 'Those details do not match an account that can sign in.' }),
+})
+
+/*
+ * 423 is readable by anyone who guesses six times, and an address with no
+ * account never reaches it. See `signIn` for why that is accepted.
+ */
+const LOCKED: StaffResult = Object.freeze({
+  status: 423,
+  body: Object.freeze({ error: 'Too many attempts. Wait a few minutes and try again.' }),
+})
+
+const SIGN_IN_AGAIN: StaffResult = Object.freeze({
+  status: 401,
+  body: Object.freeze({ error: 'Sign in again.' }),
+})
+
+const lockedNow = (lockedUntil: string | null) => Boolean(lockedUntil) && !isPast(lockedUntil)
+
+/**
+ * One more wrong guess against this account, password or code alike.
+ *
+ * The increment happens in SQL and the count is read back inside the same
+ * batch, because a read-then-write in JS lets a burst of parallel guesses all
+ * read the same count and all write count + 1 — a hundred guesses that cost
+ * one. `backoffSeconds` stays the one definition of how long the wait is.
+ */
+async function recordFailure(env: StaffEnv, staffId: string): Promise<void> {
+  const [, read] = await env.ORDERS.batch<{ failed_attempts: number }>([
+    env.ORDERS.prepare(`UPDATE staff SET failed_attempts = failed_attempts + 1 WHERE id = ?1`).bind(
+      staffId,
+    ),
+    env.ORDERS.prepare(`SELECT failed_attempts FROM staff WHERE id = ?1`).bind(staffId),
+  ])
+  const wait = backoffSeconds(read.results[0]?.failed_attempts ?? 0)
+  if (wait) {
+    await env.ORDERS.prepare(`UPDATE staff SET locked_until = ?2 WHERE id = ?1`)
+      .bind(staffId, inSeconds(wait))
+      .run()
+  }
+}
+
+/**
+ * Checks a password and, if it is right, issues a session that can do one
+ * thing: prove a second factor.
+ *
+ * Every session starts `totp_pending = 1`, including the hundredth sign-in of
+ * someone enrolled long ago. A password alone never produces a session that
+ * acts.
+ *
+ * What a stranger can read here, and what they cannot:
+ *
+ * - An unknown address, a wrong password, and the right password for staff of
+ *   a merchant that is not `active` all get NO_MATCH, after the same KDF.
+ *   The third is the one that matters: registration lets the applicant pick
+ *   the password, so an attacker can register a victim's address and sign in
+ *   with their own choice. A pending account's correct password therefore
+ *   counts as a failure too — it increments `failed_attempts` and engages
+ *   backoff — or six attempts would tell a probe-created account (never
+ *   locks) from a pre-existing one (locks, and says 423).
+ *
+ * - A locked account answers 423. An address with no account never locks, so
+ *   six wrong guesses say whether a staff account exists. The customer side
+ *   answers a locked account with its ordinary 401 to avoid exactly this;
+ *   staff get the distinct status because the plan chose it, and the cost is
+ *   the address's existence, not anything about the account. Closing it means
+ *   counting failures for addresses that have no row, which needs a table.
+ *
+ * @param _request is where a per-IP throttle will read the client address.
+ * The per-account backoff here cannot see a burst spread across accounts.
+ */
+export async function signIn(env: StaffEnv, body: unknown, _request: Request): Promise<StaffResult> {
+  const p = typeof body === 'object' && body !== null ? (body as { email?: unknown; password?: unknown }) : {}
+  const email = str(p.email, 200)?.toLowerCase() ?? ''
+  // An over-long password is derived as the empty string, which no account
+  // has: the same cost as any other attempt, and a certain failure.
+  const password =
+    typeof p.password === 'string' && p.password.length <= MAX_PASSWORD ? p.password : ''
+
+  const row = await env.ORDERS.prepare(
+    `SELECT s.id, s.scope, s.password_hash, s.password_salt, s.kdf_rounds, s.locked_until,
+            s.totp_confirmed_at, m.status AS merchant_status
+       FROM staff s LEFT JOIN merchants m ON m.id = s.merchant_id
+      WHERE s.email = ?1`,
+  )
+    .bind(email)
+    .first<{
+      id: string
+      scope: 'merchant' | 'platform'
+      password_hash: string
+      password_salt: string
+      kdf_rounds: number
+      locked_until: string | null
+      totp_confirmed_at: string | null
+      merchant_status: string | null
+    }>()
+
+  // Derived before anything is decided, so no branch below is a faster way
+  // to learn the answer. An unknown address pays the current cost.
+  const attempt = await derive(
+    password,
+    row ? fromB64(row.password_salt) : new Uint8Array(16),
+    row?.kdf_rounds ?? KDF_ROUNDS,
+  )
+
+  if (!row) {
+    // The same two statements a real failure costs, matching no row, so an
+    // unknown address is not the answer that skipped a database round trip.
+    await recordFailure(env, '')
+    return NO_MATCH
+  }
+  // Guesses made while locked are not counted: the wait is what slows them.
+  if (lockedNow(row.locked_until)) return LOCKED
+
+  const mayTrade = row.scope === 'platform' || row.merchant_status === 'active'
+  if (!sameBytes(attempt, fromB64(row.password_hash)) || !mayTrade) {
+    await recordFailure(env, row.id)
+    return NO_MATCH
+  }
+
+  /*
+   * The failure count is left alone. It is cleared when a code verifies,
+   * because a password that cleared it would let someone who has only the
+   * password sign in again between code guesses and never meet the backoff.
+   */
+  const token = randomToken()
+  await env.ORDERS.prepare(
+    `INSERT INTO staff_sessions (token_hash, staff_id, expires_at, totp_pending) VALUES (?1,?2,?3,1)`,
+  )
+    .bind(await sha256(token), row.id, inSeconds(SESSION_SECONDS))
+    .run()
+
+  // Whether an authenticator is already set up is safe to say: only the
+  // right password for a trading account reaches this line.
+  return {
+    status: 200,
+    body: { totpRequired: true, enrolled: Boolean(row.totp_confirmed_at) },
+    headers: { 'Set-Cookie': staffCookie(token, SESSION_SECONDS) },
+  }
+}
+
+/**
+ * Who is behind this cookie, and what they may do.
+ *
+ * Null for no cookie, an unknown token and an expired one alike: the caller's
+ * answer to all three is the same.
+ */
+export async function staffSession(env: StaffEnv, request: Request): Promise<StaffSession | null> {
+  const token = readCookie(request, STAFF_COOKIE)
+  if (!token) return null
+
+  const tokenHash = await sha256(token)
+  const row = await env.ORDERS.prepare(
+    `SELECT s.id, s.scope, s.merchant_id, ss.expires_at, ss.totp_pending
+       FROM staff_sessions ss JOIN staff s ON s.id = ss.staff_id
+      WHERE ss.token_hash = ?1`,
+  )
+    .bind(tokenHash)
+    .first<{
+      id: string
+      scope: 'merchant' | 'platform'
+      merchant_id: string | null
+      expires_at: string
+      totp_pending: number
+    }>()
+  if (!row || isPast(row.expires_at)) return null
+
+  // Anything other than an explicit 0 is pending: this is the one column
+  // that decides whether a session may act, so it fails closed.
+  const session: StaffSession =
+    row.totp_pending === 0
+      ? { kind: 'active', staffId: row.id, merchantId: row.merchant_id, scope: row.scope }
+      : { kind: 'enrolling', staffId: row.id }
+  sessionRows.set(session, tokenHash)
+  return session
+}
+
+/**
+ * A new TOTP secret, for someone who has never confirmed one.
+ *
+ * Refused once one is confirmed. Every sign-in is an enrolling session, so a
+ * secret minted on request would let a password alone replace the second
+ * factor and then confirm the replacement.
+ */
+export async function beginTotpEnrolment(env: StaffEnv, session: StaffSession): Promise<StaffResult> {
+  if (!sessionRows.has(session)) return SIGN_IN_AGAIN
+
+  const row = await env.ORDERS.prepare(`SELECT email, totp_confirmed_at FROM staff WHERE id = ?1`)
+    .bind(session.staffId)
+    .first<{ email: string; totp_confirmed_at: string | null }>()
+  if (!row) return SIGN_IN_AGAIN
+
+  const ALREADY = {
+    status: 409,
+    body: { error: 'An authenticator is already set up. Enter the code it shows.' },
+  }
+  if (row.totp_confirmed_at) return ALREADY
+
+  // Conditional on still being unconfirmed, so a confirmation that lands
+  // between the read above and this write cannot be overwritten.
+  const secret = newTotpSecret()
+  const { meta } = await env.ORDERS.prepare(
+    `UPDATE staff SET totp_secret = ?2 WHERE id = ?1 AND totp_confirmed_at IS NULL`,
+  )
+    .bind(session.staffId, secret)
+    .run()
+  if (meta.changes !== 1) return ALREADY
+
+  return { status: 200, body: { secret, uri: otpauthUri(row.email, secret) } }
+}
+
+/**
+ * Checks a code and, if it is right, lets this session act.
+ *
+ * The same call serves first enrolment and every later sign-in: either way it
+ * is a code checked against the stored secret. Only the session that
+ * presented the code is promoted; another session for the same person — which
+ * may be someone else holding only the password — stays pending.
+ */
+export async function confirmTotpEnrolment(
+  env: StaffEnv,
+  session: StaffSession,
+  body: unknown,
+): Promise<StaffResult> {
+  const tokenHash = sessionRows.get(session)
+  if (!tokenHash) return SIGN_IN_AGAIN
+
+  const code =
+    typeof body === 'object' && body !== null ? str((body as { code?: unknown }).code, 40) : null
+  if (!code) return refuse('Enter the six-digit code.')
+
+  const row = await env.ORDERS.prepare(
+    `SELECT totp_secret, locked_until FROM staff WHERE id = ?1`,
+  )
+    .bind(session.staffId)
+    .first<{ totp_secret: string | null; locked_until: string | null }>()
+  if (!row?.totp_secret) return refuse('Start again — there is no authenticator being set up.')
+  if (lockedNow(row.locked_until)) return LOCKED
+
+  if (!(await verifyTotp(row.totp_secret, code))) {
+    await recordFailure(env, session.staffId)
+    return refuse('That code is not right. Check your phone’s clock and try the next one.')
+  }
+
+  /*
+   * The staff UPDATE matches only the secret the code was checked against,
+   * and the session is promoted only if it did: an unconfirmed secret
+   * replaced by another session between the check and this write must not be
+   * the one that gets confirmed. `changes()` reads the staff UPDATE because a
+   * batch runs its statements in order on one connection, as approval relies
+   * on too.
+   */
+  const [, promoted] = await env.ORDERS.batch([
+    env.ORDERS.prepare(
+      `UPDATE staff SET totp_confirmed_at = COALESCE(totp_confirmed_at, ?2),
+                        failed_attempts = 0, locked_until = NULL
+        WHERE id = ?1 AND totp_secret = ?3`,
+    ).bind(session.staffId, nowIso(), row.totp_secret),
+    env.ORDERS.prepare(
+      `UPDATE staff_sessions SET totp_pending = 0
+        WHERE token_hash = ?1 AND staff_id = ?2 AND expires_at > ?3 AND changes() = 1`,
+    ).bind(tokenHash, session.staffId, nowIso()),
+  ])
+  if (promoted.meta.changes !== 1) return SIGN_IN_AGAIN
+
+  return { status: 200, body: { ok: true } }
 }
