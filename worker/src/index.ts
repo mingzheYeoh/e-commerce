@@ -183,7 +183,14 @@ export default {
       /* The catalogue. Public by definition, so no session and no tenancy
          predicate — see the note at the top of catalogue.ts. */
       if (url.pathname === '/api/products' && request.method === 'GET') {
-        return json({ products: await publishedProducts(env) }, { headers })
+        // Every storefront page load asks once. Thirty seconds lets the
+        // browser absorb quick reloads while a newly published product still
+        // shows up within half a minute. Only the browser honours it: a
+        // workers.dev response is not stored at the edge.
+        return json(
+          { products: await publishedProducts(env) },
+          { headers: { ...headers, 'cache-control': 'public, max-age=30' } },
+        )
       }
 
       /*

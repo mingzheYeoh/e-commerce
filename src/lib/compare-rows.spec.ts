@@ -25,6 +25,14 @@ describe('buildRows', () => {
     expect(winners(buildRows(items), 'Rating')).toEqual([ratings.indexOf(Math.max(...ratings))])
   })
 
+  it('shows an unreviewed product as no rating, not a losing 0 / 5', () => {
+    // Anything new from the merchant console has rating 0 and no reviews.
+    const unreviewed = { ...phones[1], id: 'new-phone', rating: 0, reviewCount: 0 }
+    const rating = row(buildRows([phones[0], unreviewed]), 'Rating')!
+    expect(rating.cells[1].value).toBeNull()
+    expect(rating.cells[1].best).toBe(false)
+  })
+
   it('declares no winner on screen size', () => {
     // The rule this feature exists to get right. A bigger screen is a different
     // phone, not a better one, and a green tick would be a fabricated verdict.

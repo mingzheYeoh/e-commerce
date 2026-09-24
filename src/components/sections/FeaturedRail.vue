@@ -3,15 +3,15 @@ import { computed } from 'vue'
 import { RouterLink } from 'vue-router'
 import { ArrowRight } from 'lucide-vue-next'
 import ProductCard from '@/components/commerce/ProductCard.vue'
-import { products } from '@/data/products'
+import { catalogue } from '@/stores/catalog'
 
 /**
  * A curated eight, not the catalogue. Badged products lead — that is what "new
  * arrivals" means to a shopper — then the best rated fill the rest.
  */
 const featured = computed(() => {
-  const badged = products.filter((p) => p.badge && p.inStock)
-  const rest = products
+  const badged = catalogue.value.filter((p) => p.badge && p.inStock)
+  const rest = catalogue.value
     .filter((p) => !p.badge && p.inStock)
     .sort((a, b) => b.rating - a.rating)
   return [...badged, ...rest].slice(0, 8)
@@ -32,7 +32,7 @@ const featured = computed(() => {
           to="/shop"
           class="hidden shrink-0 items-center gap-1.5 text-sm font-medium text-accent transition-colors hover:text-accent-hover md:flex"
         >
-          View all {{ products.length }} products
+          View all {{ catalogue.length }} products
           <ArrowRight class="h-4 w-4" aria-hidden="true" />
         </RouterLink>
       </div>
@@ -42,7 +42,7 @@ const featured = computed(() => {
       </div>
 
       <RouterLink to="/shop" class="btn-secondary mt-6 block text-center md:hidden">
-        View all {{ products.length }} products
+        View all {{ catalogue.length }} products
       </RouterLink>
     </div>
   </section>

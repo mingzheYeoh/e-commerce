@@ -1,13 +1,14 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import { RouterLink } from 'vue-router'
 import { ArrowRight } from 'lucide-vue-next'
 import { flagship } from '@/data/flagship'
-import { products } from '@/data/products'
+import { catalogue } from '@/stores/catalog'
 import { brandName } from '@/data/brands'
 import { useCurrency } from '@/composables/useCurrency'
 
-const { formatPrice } = useCurrency()
-const target = products.find((p) => p.sku === flagship.sku)
+const { format } = useCurrency()
+const target = computed(() => catalogue.value.find((p) => p.sku === flagship.sku))
 </script>
 
 <template>
@@ -37,7 +38,7 @@ const target = products.find((p) => p.sku === flagship.sku)
             An open-back reference headphone, built from a machined aluminium yoke and a 38mm
             dynamic transducer. Take it apart component by component on the product page.
           </p>
-          <p class="nums text-xl font-semibold">{{ formatPrice(flagship.price) }}</p>
+          <p class="nums text-xl font-semibold">{{ format(target.priceMinor) }}</p>
           <span class="flex items-center gap-1.5 text-sm font-medium text-accent">
             Explore the teardown
             <ArrowRight class="h-4 w-4 transition-transform group-hover:translate-x-1" aria-hidden="true" />

@@ -36,11 +36,12 @@ A walk through the whole seller-side loop, in order:
 3. **Sign in as the merchant.** TOTP enrolment is mandatory here too — an
    authenticator app is required, there is no way to skip it.
 4. **Manage a catalogue.** Add a product, then set its price and stock.
-   Publishing is refused for now, on purpose: the console cannot upload photos
-   yet, and the storefront cannot render a product without them. The
-   storefront is also a build-time snapshot of the catalogue, so a published
-   product would show up only after the next storefront build, not the moment
-   you publish it.
+   Publishing needs a price, three highlights and at least one photo, because
+   the storefront cannot render a product without them. The storefront paints
+   from a build-time snapshot of the catalogue and then reads the live one once
+   per page load (`GET /api/products`, which the browser may cache for 30
+   seconds), so a published product shows up on a refresh within about 30
+   seconds, not at the next build.
 
 Payments are simulated with Stripe's published test card numbers, not a real
 gateway — see [`src/lib/payment.ts`](src/lib/payment.ts) — and nothing here
