@@ -17,7 +17,8 @@
     "eval:search": "node scripts/eval-search.mjs",
     "deploy": "npm run build && npx --prefix worker wrangler deploy",
     "build:staging": "node scripts/build-catalog.mjs nexus-orders-staging && vite build --mode staging",
-    "deploy:staging": "npm run build:staging && npx --prefix worker wrangler deploy --env staging"
+    "deploy:staging": "npm run build:staging && npx --prefix worker wrangler deploy --env staging",
+    "deploy:console:staging": "npx --prefix worker wrangler deploy -c worker/wrangler.console.toml --env staging"
   },
   "dependencies": {
     "@huggingface/transformers": "^4.3.0",
