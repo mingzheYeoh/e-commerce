@@ -147,6 +147,9 @@ async function withinLimit(limiter: RateLimiterBinding | undefined, key: string)
   }
 }
 
+/** The bindings `guard` reads, so a worker without mail or origins can call it. */
+export type IpDefences = Pick<AuthEnv, 'LOGIN_LIMITER' | 'SIGNUP_LIMITER' | 'IP_THROTTLE'>
+
 /**
  * Both throttles, cheap one first.
  *
@@ -155,9 +158,14 @@ async function withinLimit(limiter: RateLimiterBinding | undefined, key: string)
  * therefore the one whose count can be trusted — measured, not assumed:
  * twenty-five parallel requests against a 5-per-minute platform limit produced
  * one refusal, because each isolate was keeping its own tally.
+ *
+ * Exported for the console worker, whose staff sign-in has the same exposure:
+ * per-account backoff cannot see guesses spread across many accounts. Each
+ * worker binds its own limiters and Durable Object namespace, so staff and
+ * shoppers never share a budget even though the keys look alike.
  */
-async function guard(
-  env: AuthEnv,
+export async function guard(
+  env: IpDefences,
   request: Request,
   kind: 'login' | 'signup',
 ): Promise<{ status: 429; body: { error: string }; retryAfter: number } | null> {

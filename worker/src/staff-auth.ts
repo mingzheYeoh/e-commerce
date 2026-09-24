@@ -423,8 +423,9 @@ async function recordFailure(env: StaffEnv, staffId: string): Promise<void> {
  * Every refusal also pays the same KDF and the same three statements, the
  * unknown and locked ones running `recordFailure` against no row.
  *
- * @param _request is where a per-IP throttle will read the client address.
- * The per-account backoff here cannot see a burst spread across accounts.
+ * @param _request is unused: the console route runs the per-IP throttle before
+ * calling this, because the per-account backoff here cannot see a burst spread
+ * across accounts.
  */
 export async function signIn(env: StaffEnv, body: unknown, _request: Request): Promise<StaffResult> {
   const p = typeof body === 'object' && body !== null ? (body as { email?: unknown; password?: unknown }) : {}
@@ -532,6 +533,23 @@ export async function staffSession(env: StaffEnv, request: Request): Promise<Sta
       : { kind: 'enrolling', staffId: row.id }
   sessionRows.set(session, tokenHash)
   return session
+}
+
+/**
+ * Ends this session server-side as well as in the browser.
+ *
+ * Clearing the cookie alone would leave a token that still works if it was
+ * captured, which is the case that matters. Any session, enrolling or active:
+ * someone who stops halfway through enrolment should be able to walk away.
+ */
+export async function signOut(env: StaffEnv, request: Request): Promise<StaffResult> {
+  const token = readCookie(request, STAFF_COOKIE)
+  if (token) {
+    await env.ORDERS.prepare(`DELETE FROM staff_sessions WHERE token_hash = ?1`)
+      .bind(await sha256(token))
+      .run()
+  }
+  return { status: 200, body: { ok: true }, headers: { 'Set-Cookie': staffCookie('', 0) } }
 }
 
 /**

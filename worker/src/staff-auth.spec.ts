@@ -7,47 +7,13 @@ import {
   staffSession,
   beginTotpEnrolment,
   confirmTotpEnrolment,
-  type StaffResult,
 } from './staff-auth'
 import { totpCode } from './totp'
 import { KDF_ROUNDS } from './credentials'
+import { stubPwned, env, good, activeMerchant, withCookie } from '../test/staff-fixtures'
 
-/*
- * `tooCommon` reaches Have I Been Pwned for real. Left alone these tests
- * would be slow and network-dependent, and — offline, where the check fails
- * open by design — the breached-password case would go green because nobody
- * answered rather than because the password was refused. The stub answers the
- * way the range endpoint does, for the one password a test plants. Same shape
- * and the same reason as auth.spec.ts.
- */
-const BREACHED = ['password123']
-
-async function sha1Suffix(password: string): Promise<string> {
-  const digest = await crypto.subtle.digest('SHA-1', new TextEncoder().encode(password))
-  return [...new Uint8Array(digest)]
-    .map((b) => b.toString(16).padStart(2, '0'))
-    .join('')
-    .toUpperCase()
-    .slice(5)
-}
-
-beforeEach(() => {
-  vi.stubGlobal(
-    'fetch',
-    vi.fn(async (url: string) => {
-      // Nothing else in this module talks to the network. A request to
-      // anywhere else is a mistake worth failing on rather than answering.
-      if (!String(url).includes('pwnedpasswords.com')) throw new Error(`unexpected fetch: ${url}`)
-      const seen = await Promise.all(BREACHED.map(async (p) => `${await sha1Suffix(p)}:50000`))
-      return new Response(seen.join('\r\n'), { status: 200 })
-    }),
-  )
-})
-
+beforeEach(stubPwned)
 afterEach(() => vi.unstubAllGlobals())
-
-const env = (db: D1Database) => ({ ORDERS: db })
-const good = { email: 'owner@example.com', name: 'Acme', password: 'Xq7!vurnLp2$wedge' }
 
 const merchantIds = (raw: MemoryD1['raw']) =>
   (raw.prepare(`SELECT id FROM merchants ORDER BY rowid`).all() as { id: string }[]).map(
@@ -290,22 +256,6 @@ describe('approveMerchant', () => {
 
 describe('signing in', () => {
   const req = () => new Request('https://console.test/api/staff/signin', { method: 'POST' })
-
-  /** Registers, approves, and hands back a database with an active merchant. */
-  async function activeMerchant() {
-    const mem = memoryD1()
-    await registerMerchant(env(mem.db), good)
-    const id = (mem.raw.prepare(`SELECT id FROM merchants`).get() as { id: string }).id
-    const approved = await approveMerchant(env(mem.db), 'stf_platform', id, 'acme')
-    if (approved.status !== 200) throw new Error(`fixture approval failed: ${approved.status}`)
-    return mem
-  }
-
-  /** A request carrying the cookie a StaffResult set. */
-  function withCookie(res: StaffResult): Request {
-    const cookie = String(res.headers?.['Set-Cookie'] ?? '').split(';')[0]
-    return new Request('https://console.test/', { headers: { Cookie: cookie } })
-  }
 
   it('returns an enrolling session when TOTP has never been confirmed', async () => {
     const { db } = await activeMerchant()
