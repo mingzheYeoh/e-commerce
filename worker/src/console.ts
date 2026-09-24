@@ -290,10 +290,16 @@ export default {
      * The console is same-origin with its own SPA, so a state-changing request
      * from any other origin is refused. SameSite=Strict does not cover this:
      * the storefront is a sibling subdomain under the same registrable domain,
-     * which makes it the same site. A request with no Origin is not a browser.
+     * which makes it the same site. Some older browsers send no Origin on a
+     * cross-origin form POST, so a missing header is refused rather than
+     * trusted — the same fail-closed rule this codebase applies at its other
+     * boundaries. This is not a defence against a stolen cookie: only a
+     * browser is stopped from forging Origin, and nothing here checks who
+     * holds the cookie. That is HttpOnly, short expiry and hashing the token
+     * at rest.
      */
     const origin = request.headers.get('origin')
-    if (request.method !== 'GET' && origin && origin !== url.origin) {
+    if (request.method !== 'GET' && origin !== url.origin) {
       return json({ error: 'cross-origin request refused' }, 403)
     }
 

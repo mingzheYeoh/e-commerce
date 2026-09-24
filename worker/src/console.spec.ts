@@ -16,11 +16,20 @@ function call(
   db: D1Database,
   method: string,
   path: string,
-  opts: { cookie?: string; body?: unknown; headers?: Record<string, string>; extra?: Extra } = {},
+  opts: {
+    cookie?: string
+    body?: unknown
+    headers?: Record<string, string>
+    extra?: Extra
+    noOrigin?: boolean
+  } = {},
 ) {
   const headers: Record<string, string> = { ...opts.headers }
   if (opts.cookie) headers.Cookie = opts.cookie
   if (opts.body !== undefined) headers['Content-Type'] = 'application/json'
+  // Every other test wants the console's own writes to work; a request that
+  // means to test the origin check itself opts out with noOrigin.
+  if (method !== 'GET' && !opts.noOrigin && !headers.Origin) headers.Origin = 'https://console.test'
   return worker.fetch(
     new Request(`https://console.test${path}`, {
       method,
@@ -177,6 +186,30 @@ describe('the console worker: who may reach what', () => {
       body: { sku: 'S1', title: 'T', brand: 'B', category: 'C', priceMinor: 1000 },
     })
     expect(res.status).toBe(403)
+  })
+
+  it('refuses a state-changing request with no Origin header', async () => {
+    // Some older browsers send no Origin on a cross-origin form POST; a
+    // request whose origin cannot be verified is refused, not trusted.
+    const { db, cookie } = await activeSession()
+    const res = await call(db, 'POST', '/api/merchant/products', {
+      cookie,
+      noOrigin: true,
+      body: { sku: 'S1', title: 'T', brand: 'B', category: 'C', priceMinor: 1000 },
+    })
+    expect(res.status).toBe(403)
+  })
+
+  it('accepts a state-changing request whose Origin matches the console', async () => {
+    // A same-origin fetch from a modern browser sends Origin equal to the
+    // page's own origin.
+    const { db, cookie } = await activeSession()
+    const res = await call(db, 'POST', '/api/merchant/products', {
+      cookie,
+      headers: { Origin: 'https://console.test' },
+      body: { sku: 'S1', title: 'T', brand: 'B', category: 'C', priceMinor: 1000 },
+    })
+    expect(res.status).toBe(201)
   })
 })
 
