@@ -5,6 +5,8 @@ import SignIn from './pages/SignIn.vue'
 import Enrol from './pages/Enrol.vue'
 import Verify from './pages/Verify.vue'
 import Products from './pages/Products.vue'
+import ProductNew from './pages/ProductNew.vue'
+import ProductEdit from './pages/ProductEdit.vue'
 import Applications from './pages/Applications.vue'
 
 export const routes = [
@@ -13,6 +15,8 @@ export const routes = [
   { path: '/enrol', name: 'enrol', component: Enrol },
   { path: '/verify', name: 'verify', component: Verify },
   { path: '/products', name: 'products', component: Products },
+  { path: '/products/new', name: 'product-new', component: ProductNew },
+  { path: '/products/:id', name: 'product-edit', component: ProductEdit, props: true },
   { path: '/applications', name: 'applications', component: Applications },
   // Neither is a real destination: the guard below redirects away from both
   // for every `me` shape, so the component here is never actually shown.
@@ -32,8 +36,10 @@ export const routes = [
 export function redirectFor(session: StaffMe, to: string): string | null {
   if (session.kind === null) return to === '/apply' || to === '/signin' ? null : '/signin'
   if (session.kind === 'enrolling') return to === '/enrol' || to === '/verify' ? null : '/enrol'
-  const home = session.scope === 'merchant' ? '/products' : '/applications'
-  return to === home ? null : home
+  // A merchant's home is the whole /products subtree (the list, /new, and
+  // /:id) — not just the list page itself.
+  if (session.scope === 'merchant') return to === '/products' || to.startsWith('/products/') ? null : '/products'
+  return to === '/applications' ? null : '/applications'
 }
 
 export const router = createRouter({

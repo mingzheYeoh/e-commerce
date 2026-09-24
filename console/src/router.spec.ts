@@ -32,6 +32,8 @@ describe('redirectFor', () => {
       merchant: { name: 'Acme', slug: 'acme', status: 'active' },
     }
     expect(redirectFor(session, '/products')).toBeNull()
+    expect(redirectFor(session, '/products/new')).toBeNull()
+    expect(redirectFor(session, '/products/abc123')).toBeNull()
     expect(redirectFor(session, '/applications')).toBe('/products')
     expect(redirectFor(session, '/signin')).toBe('/products')
     expect(redirectFor(session, '/enrol')).toBe('/products')
@@ -41,6 +43,7 @@ describe('redirectFor', () => {
     const session: StaffMe = { kind: 'active', scope: 'platform' }
     expect(redirectFor(session, '/applications')).toBeNull()
     expect(redirectFor(session, '/products')).toBe('/applications')
+    expect(redirectFor(session, '/products/new')).toBe('/applications')
     expect(redirectFor(session, '/verify')).toBe('/applications')
   })
 })
