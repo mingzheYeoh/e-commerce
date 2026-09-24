@@ -113,6 +113,38 @@ describe('registerMerchant', () => {
     expect(slug).not.toBe('acme')
     expect(slug).toMatch(/^pending_[a-z0-9]{32,}$/)
   })
+
+  it('rolls the merchant back when the owner row is the statement that fails', async () => {
+    /*
+     * The failure the batch exists for: two registrations race for one
+     * address, both pass the email SELECT, and the loser's merchant INSERT
+     * succeeds before its staff INSERT fails on staff.email UNIQUE. Unbatched,
+     * that leaves a pending merchant nobody owns.
+     *
+     * The rival's row is planted as the batch starts — after the pre-check has
+     * looked and found nothing, which is the gap a concurrent request lands
+     * in. A collision planted before the pre-check would never reach the
+     * batch; one on the first statement would pass with the batch split,
+     * since nothing would have been written to roll back.
+     */
+    const { db, raw } = memoryD1()
+    const batch = db.batch.bind(db)
+    db.batch = async <T,>(statements: D1PreparedStatement[]) => {
+      raw
+        .prepare(
+          `INSERT INTO staff (id, email, scope, merchant_id, role, password_hash, password_salt,
+                              iterations, kdf_rounds)
+           VALUES ('stf_rival', ?, 'platform', NULL, 'admin', 'h', 's', 1, 1)`,
+        )
+        .run(good.email)
+      return batch<T>(statements)
+    }
+
+    const res = await registerMerchant(env(db), good)
+    expect(raw.prepare(`SELECT COUNT(*) AS n FROM merchants`).get()).toEqual({ n: 0 })
+    // And the loser hears what any taken address hears.
+    expect(res.status).toBe(202)
+  })
 })
 
 describe('approveMerchant', () => {
