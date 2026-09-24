@@ -1,6 +1,7 @@
 # NEXUS
 
 **Live: https://nexus-tech-collective.mingzhe030228.workers.dev**
+**Merchant console: https://nexus-console.mingzhe030228.workers.dev**
 
 A multi-brand consumer-electronics storefront built as an AI-engineering
 showcase: 18 brands, 45 products across five categories, real manufacturer
