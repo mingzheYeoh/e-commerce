@@ -57,7 +57,11 @@ const nodes = {
   Product: products.map((p) => ({
     id: p.id,
     title: p.title,
-    price: p.price,
+    // The graph's `price` property stays dollar-denominated. Cypher consumers
+    // render it straight into text the user reads (`$${r.price}` in tools.ts
+    // and rag.ts), so writing minor units here would quote a phone at $89,999.
+    // The catalogue is integer cents; this is the boundary where it stops being.
+    price: p.priceMinor / 100,
     rating: p.rating,
     inStock: p.inStock,
     ...Object.fromEntries(
@@ -92,7 +96,8 @@ for (const p of products) {
 for (const a of products) {
   for (const b of products) {
     if (a.id >= b.id || a.category !== b.category) continue
-    const ratio = Math.min(a.price, b.price) / Math.max(a.price, b.price)
+    // A ratio of cents equals a ratio of dollars, so this one needs no conversion.
+    const ratio = Math.min(a.priceMinor, b.priceMinor) / Math.max(a.priceMinor, b.priceMinor)
     if (ratio >= 0.6) add(a.id, 'COMPETES_WITH', b.id, { priceRatio: Number(ratio.toFixed(3)) })
   }
 }

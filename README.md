@@ -15,6 +15,37 @@ Cloudflare Workers AI, where the binding *is* the credential.
 > Demo project. NEXUS is not a real retailer, the payment gateway is simulated
 > with Stripe's published test card numbers, and nothing takes money or ships.
 
+## Try it
+
+Two staging deployments, kept separate from the URLs above so poking at them
+never touches production:
+
+- **Storefront:** https://nexus-tech-collective-staging.mingzhe030228.workers.dev
+- **Merchant console:** https://nexus-console-staging.mingzhe030228.workers.dev
+
+A walk through the whole seller-side loop, in order:
+
+1. **Apply.** Open the console's `/apply` and register a business. The
+   response is deliberately the same whether the email was free or already
+   taken — there is no email sent, by design, so you find out you are
+   approved by trying to sign in.
+2. **Approve.** Sign in to the console as the seeded platform admin (there is
+   no self-registration for platform staff — see `scripts/seed-platform-admin.mjs`),
+   enrol TOTP if this is its first sign-in, then approve the application on
+   `/applications` with a storefront address (a slug).
+3. **Sign in as the merchant.** TOTP enrolment is mandatory here too — an
+   authenticator app is required, there is no way to skip it.
+4. **Manage a catalogue.** Add a product, then set its price and stock.
+   Publishing is refused for now, on purpose: the console cannot upload photos
+   yet, and the storefront cannot render a product without them. The
+   storefront is also a build-time snapshot of the catalogue, so a published
+   product would show up only after the next storefront build, not the moment
+   you publish it.
+
+Payments are simulated with Stripe's published test card numbers, not a real
+gateway — see [`src/lib/payment.ts`](src/lib/payment.ts) — and nothing here
+sends email except the customer-facing flows that have a Resend key bound.
+
 ## Run it
 
 ```bash
@@ -226,6 +257,28 @@ stage. That matters: CSS percentage margins and translates resolve against width
 (or the element's own box), so on a wide, short stage a vertical offset means
 something different from the same horizontal offset, and the diagram shears.
 
+### The merchant console
+
+`console/` is a second, small Vue 3 SPA, built by its own Vite config
+(`vite.console.config.ts`, output to `console/dist`) and served by its own
+worker (`nexus-console`, `worker/wrangler.console.toml`) — a separate origin
+from the storefront and its API, not a route bolted onto either.
+
+That separation is what makes the staff cookie safe to trust: the console's
+worker is the only thing that ever reads it, so `staffSession()` reading a
+request's cookie is the *only* source of which tenant is asking — never a
+route parameter, a header, or anything else the SPA could pass. `console/src`
+holds no security logic at all; a route guard there exists purely so the UI
+does not flash a page a following request would refuse anyway (see
+`redirectFor` in `console/src/router.ts`).
+
+TOTP is not an `if (needsTotp)` scattered through the routes it gates. Every
+sign-in produces a session that can only prove a second factor —
+`StaffSession` is a union of `{ kind: 'enrolling' }` and `{ kind: 'active',
+scope, merchantId }` — so a handler that wants to touch merchant or platform
+data has no argument to call with until the type says the session is active.
+The dangerous state is not rejected, it is unrepresentable.
+
 ## Asset pipeline
 
 `scripts/fetch-assets.mjs` downloads real, licensed photography into
@@ -290,6 +343,25 @@ gallery is worse than a shorter gallery.
 
 ## What is not here
 
-No backend and no checkout. The catalogue is 35 typed fixtures in `src/data/`,
-not an API, and the checkout button is visibly disabled rather than pretending
-to work.
+There is a backend now — a Cloudflare Worker over D1 — and checkout runs end
+to end: cart to a persisted order, priced server-side from the catalogue row
+rather than trusted from the request. What is genuinely still missing:
+
+- **A real payment gateway.** Cards are Stripe's published test numbers,
+  checked against a fixed table in `src/lib/payment.ts`; no PaymentIntent is
+  ever created and nothing is charged.
+- **Email for the merchant side.** Applying, being approved, and every staff
+  sign-in happen with no inbox in the loop, by design — see the console's
+  ["Try it"](#try-it) section. Customer-facing email (verification, password
+  reset) is real, but only where a Resend key is bound.
+- **Password reset for staff.** A merchant or platform admin who forgets
+  their password has no self-serve way back in; a customer does.
+- **Merchant staff beyond the owner.** One login per merchant; no inviting a
+  teammate.
+- **Orders in the console.** A merchant manages products there; order history
+  is not yet surfaced on that side.
+- **A route-layer isolation sweep and both timing residuals** noted in the
+  registration code's own comments — known, deferred, not silently ignored.
+
+None of this blocks the demo above; it is the honest list of what a real
+deployment would still need.

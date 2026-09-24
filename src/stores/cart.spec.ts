@@ -4,7 +4,9 @@ import { useCartStore, lineKey } from './cart'
 import { products } from '@/data/products'
 
 const anyProduct = products[0]
-const fractionalPriced = products.find((p) => !Number.isInteger(p.price))!
+// A price that wasn't a round dollar amount (e.g. 899.99) — kept to exercise
+// a non-trivial cents value, even though priceMinor is always an integer now.
+const fractionalPriced = products.find((p) => p.priceMinor % 100 !== 0)!
 const soldOut = products.find((p) => !p.inStock)!
 const lowStock = products.find((p) => p.inStock && p.stockCount < 10)!
 
@@ -42,7 +44,7 @@ describe('cart store', () => {
   it('drops the line when quantity is set to zero', () => {
     const cart = useCartStore()
     cart.add(anyProduct)
-    cart.setQty(anyProduct.sku, 0)
+    cart.setQty(anyProduct.id, 0)
     expect(cart.items).toHaveLength(0)
   })
 
@@ -50,8 +52,9 @@ describe('cart store', () => {
     const cart = useCartStore()
     cart.add(fractionalPriced, 3)
 
-    // 899.95 * 3 is 2699.8500000000004 in float arithmetic.
-    expect(cart.subtotalCents).toBe(Math.round(fractionalPriced.price * 100) * 3)
+    // 899.95 * 3 would be 2699.8500000000004 in float dollar arithmetic; the
+    // cart never does that multiplication in dollars, only in minor units.
+    expect(cart.subtotalCents).toBe(fractionalPriced.priceMinor * 3)
     expect(Number.isInteger(cart.subtotalCents)).toBe(true)
   })
 
@@ -59,9 +62,7 @@ describe('cart store', () => {
     const cart = useCartStore()
     cart.add(fractionalPriced, 2)
     cart.add(anyProduct, 1)
-    expect(cart.subtotalCents).toBe(
-      Math.round(fractionalPriced.price * 100) * 2 + Math.round(anyProduct.price * 100),
-    )
+    expect(cart.subtotalCents).toBe(fractionalPriced.priceMinor * 2 + anyProduct.priceMinor)
   })
 
   it('leaves the drawer closed when an item is added', () => {
@@ -73,12 +74,66 @@ describe('cart store', () => {
     expect(cart.isOpen).toBe(false)
   })
 
-  it('removes a line by sku', () => {
+  it('removes a line by its key', () => {
     const cart = useCartStore()
     cart.add(anyProduct)
-    cart.remove(anyProduct.sku)
+    cart.remove(anyProduct.id)
     expect(cart.items).toHaveLength(0)
     expect(cart.subtotalCents).toBe(0)
+  })
+})
+
+describe('reading a cart saved before productId existed', () => {
+  // `nexus:cart` is written by whichever deploy was live when a shopper last
+  // touched their basket, and read by whichever deploy is live now, with no
+  // migration in between. A line saved before `CartLine.productId` existed
+  // still has only a sku on disk.
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    localStorage.clear()
+  })
+
+  it('repairs a stale line by looking its sku up in the catalogue', () => {
+    localStorage.setItem(
+      'nexus:cart',
+      JSON.stringify([
+        {
+          sku: anyProduct.sku,
+          title: anyProduct.title,
+          brand: anyProduct.brand,
+          thumb: anyProduct.media.thumb,
+          unitPriceCents: anyProduct.priceMinor,
+          qty: 1,
+          stockCount: anyProduct.stockCount,
+        },
+      ]),
+    )
+
+    const cart = useCartStore()
+
+    expect(cart.items).toHaveLength(1)
+    expect(cart.items[0].productId).toBe(anyProduct.id)
+  })
+
+  it('drops a stale line whose sku no longer resolves', () => {
+    localStorage.setItem(
+      'nexus:cart',
+      JSON.stringify([
+        {
+          sku: 'DISCONTINUED-SKU',
+          title: 'Retired Product',
+          brand: anyProduct.brand,
+          thumb: anyProduct.media.thumb,
+          unitPriceCents: anyProduct.priceMinor,
+          qty: 1,
+          stockCount: anyProduct.stockCount,
+        },
+      ]),
+    )
+
+    const cart = useCartStore()
+
+    expect(cart.items).toHaveLength(0)
   })
 })
 
@@ -124,7 +179,7 @@ describe('finishes', () => {
     cart.add(p, 1, p.colorways[0].name)
     cart.add(p, 5, p.colorways[1].name)
 
-    cart.remove(lineKey({ sku: p.sku, finish: p.colorways[0].name }))
+    cart.remove(lineKey({ productId: p.id, finish: p.colorways[0].name }))
     expect(cart.items).toHaveLength(1)
     expect(cart.items[0].finish).toBe(p.colorways[1].name)
 

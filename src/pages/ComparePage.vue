@@ -9,18 +9,19 @@
  */
 import { computed, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
-import { X, Check, Plus } from 'lucide-vue-next'
+import { X, Check } from 'lucide-vue-next'
 import { useCompareStore, MAX_COMPARE } from '@/stores/compare'
 import { useCartStore } from '@/stores/cart'
 import { useCurrency } from '@/composables/useCurrency'
 import { buildRows } from '@/lib/compare-rows'
 import { categories } from '@/data/categories'
+import { products } from '@/data/products'
 
 const route = useRoute()
 const router = useRouter()
 const compare = useCompareStore()
 const cart = useCartStore()
-const { formatPrice } = useCurrency()
+const { format } = useCurrency()
 
 const differencesOnly = ref(false)
 
@@ -79,11 +80,62 @@ const categoryLabel = computed(
   () => categories.find((c) => c.id === compare.category)?.label ?? 'products',
 )
 
+/* --------------------------------------------------------------- pickers */
+
+/**
+ * What one slot may be changed to.
+ *
+ * Everything already chosen in another slot is out, so the list cannot produce
+ * a duplicate column. Once a category is locked only that category is offered —
+ * the store would refuse a cross-category swap anyway, and a dropdown whose
+ * options silently do nothing is worse than one that does not offer them.
+ */
+function optionsFor(index: number) {
+  const taken = new Set(compare.ids.filter((_, i) => i !== index))
+  const pool = compare.category
+    ? products.filter((p) => p.category === compare.category)
+    : products
+
+  return categories
+    .map((c) => ({
+      label: c.label,
+      items: pool
+        .filter((p) => p.category === c.id && !taken.has(p.id))
+        .sort((a, b) => a.title.localeCompare(b.title)),
+    }))
+    .filter((g) => g.items.length > 0)
+}
+
+/**
+ * The slots, in order: every chosen product, then one open slot, then nothing.
+ *
+ * Only one open slot is offered at a time. Four dropdowns reading "Add a
+ * product" is a form; one is an invitation, and the others appear as they are
+ * earned.
+ */
+const slots = computed(() =>
+  Array.from({ length: MAX_COMPARE }, (_, i) => ({
+    index: i,
+    id: compare.ids[i] ?? '',
+    open: i === compare.ids.length,
+  })).filter((s) => s.id || s.open),
+)
+
+function choose(index: number, event: Event) {
+  const select = event.target as HTMLSelectElement
+  const id = select.value
+  if (!id) return
+  // Refused swaps leave the store alone, so the select is put back to what the
+  // store actually holds rather than showing a choice that did not take.
+  if (!compare.setAt(index, id)) select.value = compare.ids[index] ?? ''
+}
+
 const cell = (value: number | string | null, money: boolean, unit?: string) => {
   // An unpublished figure is a dash. Rendering it as 0 would report a claim the
   // manufacturer never made.
   if (value === null) return '—'
-  if (money && typeof value === 'number') return formatPrice(value)
+  // The one money row (Price) is priceMinor, already in minor units.
+  if (money && typeof value === 'number') return format(value)
   return `${value}${unit ?? ''}`
 }
 </script>
@@ -92,23 +144,72 @@ const cell = (value: number | string | null, money: boolean, unit?: string) => {
   <div class="pt-16">
     <div class="mx-auto max-w-[1600px] px-4 py-10 md:px-8 md:py-14">
       <h1 class="text-2xl font-bold md:text-3xl">Compare</h1>
+      <p class="mt-2 max-w-2xl text-sm text-text-secondary">
+        Up to {{ MAX_COMPARE }} products from one category. Pick them here, or tick
+        <span class="whitespace-nowrap">“Compare”</span> on any product while you browse.
+      </p>
+
+      <!--
+        The pickers, above the table rather than inside it.
+
+        Choosing what to compare used to be possible only somewhere else — you
+        arrived here with a selection already made, and changing your mind meant
+        going back to the grid. A column is a dropdown now, so a comparison can
+        be built and rebuilt without leaving the answer.
+      -->
+      <div class="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div
+          v-for="slot in slots"
+          :key="slot.index"
+          class="rounded-card border bg-surface-1 p-2"
+          :class="slot.open ? 'border-dashed border-border-hairline' : 'border-border-hairline'"
+        >
+          <div class="flex items-center gap-1.5">
+            <label class="sr-only" :for="`slot-${slot.index}`">
+              {{ slot.open ? 'Add a product' : `Product ${slot.index + 1}` }}
+            </label>
+            <select
+              :id="`slot-${slot.index}`"
+              :value="slot.id"
+              class="input min-w-0 flex-1 truncate"
+              @change="choose(slot.index, $event)"
+            >
+              <option v-if="slot.open" value="">Add a product…</option>
+              <optgroup
+                v-for="group in optionsFor(slot.index)"
+                :key="group.label"
+                :label="group.label"
+              >
+                <option v-for="p in group.items" :key="p.id" :value="p.id">{{ p.title }}</option>
+              </optgroup>
+            </select>
+            <button
+              v-if="!slot.open"
+              type="button"
+              class="shrink-0 rounded p-2 text-text-muted transition-colors hover:text-text-primary"
+              :aria-label="`Remove product ${slot.index + 1} from comparison`"
+              @click="compare.remove(slot.id)"
+            >
+              <X class="h-3.5 w-3.5" aria-hidden="true" />
+            </button>
+          </div>
+        </div>
+      </div>
 
       <!-- Fewer than two columns is not a comparison; say so plainly. -->
       <div v-if="!compare.ready" class="mt-6 max-w-lg">
         <p class="text-text-secondary">
           {{
             compare.ids.length === 1
-              ? 'Pick one more product to put side by side.'
+              ? 'Pick one more product to put it side by side.'
               : 'Nothing selected yet.'
           }}
-          Tick <span class="whitespace-nowrap">“Compare”</span> on any product to start — up to
-          {{ MAX_COMPARE }} at a time, from one category.
         </p>
-        <RouterLink to="/shop" class="btn-primary mt-6 inline-flex">Browse products</RouterLink>
+        <RouterLink to="/shop" class="btn-ghost mt-4 inline-flex">Browse the grid instead</RouterLink>
       </div>
 
       <template v-else>
-        <div class="mt-2 flex flex-wrap items-center gap-4">
+        <div class="mt-8 flex flex-wrap items-center gap-4">
           <p class="text-sm text-text-secondary">
             {{ compare.items.length }} {{ categoryLabel.toLowerCase() }}, on their published figures
           </p>
@@ -259,12 +360,13 @@ const cell = (value: number | string | null, money: boolean, unit?: string) => {
           same part differently get two rows rather than a guess that they meant the same thing.
         </p>
 
+        <!-- Adding a column is the dropdown row at the top now, so this is not
+             repeated here; what is left is the way out of the category lock. -->
         <div class="mt-6 flex flex-wrap gap-3">
-          <RouterLink to="/shop" class="btn-ghost inline-flex items-center gap-1.5">
-            <Plus class="h-3.5 w-3.5" aria-hidden="true" />
-            Add another {{ categoryLabel.toLowerCase().replace(/s$/, '') }}
-          </RouterLink>
-          <button type="button" class="btn-ghost" @click="compare.clear()">Clear all</button>
+          <button type="button" class="btn-ghost" @click="compare.clear()">
+            Clear all · start a different category
+          </button>
+          <RouterLink to="/shop" class="btn-ghost">Back to the grid</RouterLink>
         </div>
       </template>
     </div>

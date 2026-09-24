@@ -6,32 +6,81 @@
  * order exist somewhere other than the device that placed it, which is what
  * lets /order/NX-4K2P9 open on a phone the shopper did not check out on.
  *
- * Prices and totals are NOT taken from the request. The catalogue and the
- * arithmetic are imported from the same modules the storefront uses, so the
- * server reaches its own number and stores that. A request that posts a $1
- * MacBook gets an order for the real price, not an argument.
+ * Prices and totals are NOT taken from the request. Each line is priced from
+ * the catalogue row it names and the arithmetic is the storefront's own module,
+ * so the server reaches its own number and stores that. A request that posts a
+ * $1 MacBook gets an order for the real price, not an argument.
  */
-import { products } from '../../src/data/products'
-import { SHIPPING, totalCents, type ShipMethod } from '../../src/lib/money'
+import { totalCents, type ShipMethod } from '../../src/lib/money'
+import { methodAvailable } from '../../src/lib/shipping'
+import {
+  findCountry,
+  validSubdivision,
+  validPostal,
+  validPhone,
+} from '../../src/lib/regions'
 
 export interface OrdersEnv {
   ORDERS: D1Database
 }
 
-/** sku -> price in cents, built once per isolate rather than per request. */
-const PRICE_BY_SKU = new Map(products.map((p) => [p.sku, Math.round(p.price * 100)]))
-const TITLE_BY_SKU = new Map(products.map((p) => [p.sku, p.title]))
-/** sku -> the finishes that product is actually sold in. */
-const FINISHES_BY_SKU = new Map(products.map((p) => [p.sku, new Set(p.colorways.map((c) => c.name))]))
+interface ProductRow {
+  id: string
+  merchant_id: string
+  sku: string
+  title: string
+  price_minor: number
+  colorways: string
+}
+
+/**
+ * Resolve every line's product in one statement.
+ *
+ * This used to be three Maps built once per isolate from a bundled copy of the
+ * frontend catalogue. That was fast and wrong twice over: the price went stale
+ * until the next deploy, and once two merchants could share a sku the lookup
+ * was a guess rather than a lookup.
+ */
+async function resolve(env: OrdersEnv, ids: string[]) {
+  if (!ids.length) return new Map<string, ProductRow>()
+  const marks = ids.map(() => '?').join(',')
+  const { results } = await env.ORDERS.prepare(
+    `SELECT id, merchant_id, sku, title, price_minor, colorways
+       FROM products WHERE status = 'published' AND id IN (${marks})`,
+  )
+    .bind(...ids)
+    .all<ProductRow>()
+  return new Map((results ?? []).map((r) => [r.id, r]))
+}
+
+/** The finishes a product is actually sold in. Malformed JSON offers none. */
+function finishes(row: ProductRow): Set<string> {
+  try {
+    const parsed = JSON.parse(row.colorways) as { name?: string }[]
+    return new Set(parsed.map((c) => c?.name).filter((n): n is string => typeof n === 'string'))
+  } catch {
+    return new Set()
+  }
+}
 
 const PAYMENT_CODES = ['succeeded', 'card_declined', 'insufficient_funds', 'expired_card'] as const
 type PaymentCode = (typeof PAYMENT_CODES)[number]
 
 export interface OrderPayload {
   id: string
-  address: { name: string; email: string; line1: string; city: string; state: string; postal: string }
+  address: {
+    name: string
+    email: string
+    phone?: string
+    country: string
+    line1: string
+    line2?: string
+    city: string
+    state: string
+    postal: string
+  }
   method: string
-  lines: { sku: string; qty: number; finish?: string }[]
+  lines: { productId: string; qty: number; finish?: string }[]
   paymentCode: string
   currency?: string
 }
@@ -49,7 +98,16 @@ const str = (v: unknown, max = 200): string | null =>
  * Every field is checked rather than trusted: this is a public endpoint, and
  * the only thing standing between it and the table is this function.
  */
-export async function placeOrder(env: OrdersEnv, body: unknown): Promise<PlaceResult> {
+export async function placeOrder(
+  env: OrdersEnv,
+  body: unknown,
+  /**
+   * The signed-in shopper, when there is one. Taken from the session cookie by
+   * the caller and never from the payload: a request that could name its own
+   * owner could file its order into someone else's account.
+   */
+  userId: string | null = null,
+): Promise<PlaceResult> {
   if (typeof body !== 'object' || body === null) return { status: 400, body: { error: 'bad request' } }
   const p = body as Partial<OrderPayload>
 
@@ -58,8 +116,10 @@ export async function placeOrder(env: OrdersEnv, body: unknown): Promise<PlaceRe
   // choose one that looks like someone else's.
   if (!id || !/^NX-[A-HJ-NP-Z2-9]{5}$/.test(id)) return { status: 400, body: { error: 'bad order id' } }
 
+  // Whether this method exists at all. Whether it runs to *this* address is
+  // checked below, once the country is known.
   const method = str(p.method, 20)
-  if (!method || !(method in SHIPPING)) return { status: 400, body: { error: 'bad shipping method' } }
+  if (!method) return { status: 400, body: { error: 'bad shipping method' } }
 
   const paymentCode = str(p.paymentCode, 40)
   if (!paymentCode || !PAYMENT_CODES.includes(paymentCode as PaymentCode)) {
@@ -73,8 +133,6 @@ export async function placeOrder(env: OrdersEnv, body: unknown): Promise<PlaceRe
     email: str(a.email, 200),
     line1: str(a.line1, 200),
     city: str(a.city, 120),
-    state: str(a.state, 2),
-    postal: str(a.postal, 10),
   }
   if (Object.values(address).some((v) => v === null)) {
     return { status: 400, body: { error: 'address is incomplete' } }
@@ -83,18 +141,82 @@ export async function placeOrder(env: OrdersEnv, body: unknown): Promise<PlaceRe
     return { status: 400, body: { error: 'bad email' } }
   }
 
+  /*
+   * The country decides what the rest of the address may say, so it is
+   * resolved first and refused outright if it is not one we ship to. The
+   * subdivision and postcode are then checked against that country's own
+   * rules, imported from the same module the checkout form reads — when the
+   * two disagreed, the form collected a valid Malaysian postcode and this
+   * endpoint rejected it as a bad ZIP, which reads as a broken checkout.
+   */
+  const country = findCountry(str(a.country, 2) ?? '')
+  if (!country) return { status: 400, body: { error: 'we do not ship there' } }
+
+  /*
+   * And the method has to be one a carrier runs to that country. Checked here
+   * rather than against a flat list of three: Overnight is a domestic service,
+   * and accepting it for Kuala Lumpur would take $29.95 for a delivery nobody
+   * has agreed to make.
+   */
+  if (!methodAvailable(method, country.code)) {
+    return { status: 400, body: { error: `${method} is not available to ${country.name}` } }
+  }
+
+  // Empty is the right answer for a country with no subdivisions, so this is
+  // not `str`, which treats an empty string as missing.
+  const state = typeof a.state === 'string' ? a.state.trim().toUpperCase() : ''
+  if (!validSubdivision(country.code, state)) {
+    return {
+      status: 400,
+      body: {
+        // Two different faults wearing one status code. "bad region" for a
+        // country that has no regions tells the caller to fix a field that
+        // should not have been sent at all.
+        error: country.subdivisions
+          ? `bad ${country.subdivisionLabel!.toLowerCase()}`
+          : `${country.name} addresses carry no state`,
+      },
+    }
+  }
+
+  const postal = str(a.postal, 12)
+  if (!postal || !validPostal(country.code, postal)) {
+    return { status: 400, body: { error: `bad ${country.postalLabel.toLowerCase()}` } }
+  }
+
+  // Both optional. A missing apartment line or phone number is an address
+  // without them, not a bad request.
+  const line2 = a.line2 === undefined || a.line2 === null ? '' : (str(a.line2, 200) ?? '')
+  const phone = a.phone === undefined || a.phone === null ? '' : (str(a.phone, 32) ?? '')
+  if (phone && !validPhone(phone)) return { status: 400, body: { error: 'bad phone' } }
+
   if (!Array.isArray(p.lines) || p.lines.length === 0 || p.lines.length > 50) {
     return { status: 400, body: { error: 'lines are required' } }
   }
 
-  // Resolve each line against the catalogue. An unknown sku is refused rather
-  // than stored at whatever price the caller suggested.
+  /*
+   * Resolve every line against the catalogue in one query, before any of them
+   * is priced. An id the catalogue does not publish is refused rather than
+   * stored at whatever price the caller suggested.
+   */
+  const ids = p.lines.map((raw) => str(raw?.productId, 64))
+  if (ids.some((id) => id === null)) return { status: 400, body: { error: 'unknown product' } }
+  const catalogue = await resolve(env, ids as string[])
+
   const seen = new Set<string>()
-  const lines: { sku: string; title: string; qty: number; unit: number; finish: string }[] = []
-  for (const raw of p.lines) {
-    const sku = str(raw?.sku, 40)
-    const unit = sku ? PRICE_BY_SKU.get(sku) : undefined
-    if (!sku || unit === undefined) return { status: 400, body: { error: 'unknown sku' } }
+  const lines: {
+    productId: string
+    merchantId: string
+    sku: string
+    title: string
+    qty: number
+    unit: number
+    finish: string
+  }[] = []
+  for (const [i, raw] of p.lines.entries()) {
+    const productId = ids[i]!
+    const product = catalogue.get(productId)
+    if (!product) return { status: 400, body: { error: 'unknown product' } }
 
     /*
      * Checked against that product's own colourways, not accepted as written.
@@ -104,12 +226,12 @@ export async function placeOrder(env: OrdersEnv, body: unknown): Promise<PlaceRe
      */
     const finish = raw?.finish === undefined || raw?.finish === null ? '' : str(raw.finish, 60)
     if (finish === null) return { status: 400, body: { error: 'bad finish' } }
-    if (finish && !FINISHES_BY_SKU.get(sku)?.has(finish)) {
+    if (finish && !finishes(product).has(finish)) {
       return { status: 400, body: { error: 'unknown finish' } }
     }
 
     // Two finishes of one product are two lines; the same one twice is not.
-    const key = `${sku}|${finish}`
+    const key = `${productId}|${finish}`
     if (seen.has(key)) return { status: 400, body: { error: 'duplicate line' } }
     seen.add(key)
 
@@ -117,11 +239,24 @@ export async function placeOrder(env: OrdersEnv, body: unknown): Promise<PlaceRe
     if (!Number.isInteger(qty) || (qty as number) < 1 || (qty as number) > 99) {
       return { status: 400, body: { error: 'bad quantity' } }
     }
-    lines.push({ sku, title: TITLE_BY_SKU.get(sku)!, qty: qty as number, unit, finish })
+    lines.push({
+      productId,
+      merchantId: product.merchant_id,
+      sku: product.sku,
+      title: product.title,
+      qty: qty as number,
+      unit: product.price_minor,
+      finish,
+    })
   }
 
   const subtotal = lines.reduce((sum, l) => sum + l.unit * l.qty, 0)
-  const totals = totalCents({ subtotal, method: method as ShipMethod, state: address.state! })
+  const totals = totalCents({
+    subtotal,
+    method: method as ShipMethod,
+    country: country.code,
+    state,
+  })
 
   // Currency is a display choice; the ledger is in USD cents either way.
   const currency = str(p.currency, 3) ?? 'USD'
@@ -129,18 +264,22 @@ export async function placeOrder(env: OrdersEnv, body: unknown): Promise<PlaceRe
   try {
     await env.ORDERS.batch([
       env.ORDERS.prepare(
-        `INSERT INTO orders (id, email, ship_name, ship_line1, ship_city, ship_state, ship_postal,
+        `INSERT INTO orders (id, email, ship_name, ship_phone, ship_country, ship_line1, ship_line2,
+                             ship_city, ship_state, ship_postal,
                              method, currency, subtotal_cents, shipping_cents, tax_cents, total_cents,
-                             payment_status)
-         VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14)`,
+                             payment_status, user_id)
+         VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18)`,
       ).bind(
         id,
         address.email,
         address.name,
+        phone,
+        country.code,
         address.line1,
+        line2,
         address.city,
-        address.state!.toUpperCase(),
-        address.postal,
+        state,
+        postal,
         method,
         currency.toUpperCase(),
         totals.subtotal,
@@ -148,12 +287,14 @@ export async function placeOrder(env: OrdersEnv, body: unknown): Promise<PlaceRe
         totals.tax,
         totals.total,
         paymentCode,
+        userId,
       ),
       ...lines.map((l) =>
         env.ORDERS.prepare(
-          `INSERT INTO order_lines (order_id, sku, title, qty, unit_price_cents, variant)
-           VALUES (?1,?2,?3,?4,?5,?6)`,
-        ).bind(id, l.sku, l.title, l.qty, l.unit, l.finish),
+          `INSERT INTO order_lines (order_id, product_id, merchant_id, sku, title, qty,
+                                    unit_price_cents, variant)
+           VALUES (?1,?2,?3,?4,?5,?6,?7,?8)`,
+        ).bind(id, l.productId, l.merchantId, l.sku, l.title, l.qty, l.unit, l.finish),
       ),
     ])
   } catch (err) {
@@ -172,7 +313,16 @@ export interface StoredOrder {
   id: string
   placedAt: string
   email: string
-  address: { name: string; line1: string; city: string; state: string; postal: string }
+  address: {
+    name: string
+    phone: string
+    country: string
+    line1: string
+    line2: string
+    city: string
+    state: string
+    postal: string
+  }
   method: string
   currency: string
   totals: { subtotal: number; shipping: number; tax: number; total: number }
@@ -195,7 +345,10 @@ export async function getOrder(env: OrdersEnv, id: string): Promise<StoredOrder 
     created_at: string
     email: string
     ship_name: string
+    ship_phone: string
+    ship_country: string
     ship_line1: string
+    ship_line2: string
     ship_city: string
     ship_state: string
     ship_postal: string
@@ -221,7 +374,10 @@ export async function getOrder(env: OrdersEnv, id: string): Promise<StoredOrder 
     email: maskEmail(row.email),
     address: {
       name: row.ship_name,
+      phone: row.ship_phone ?? '',
+      country: row.ship_country ?? 'US',
       line1: row.ship_line1,
+      line2: row.ship_line2 ?? '',
       city: row.ship_city,
       state: row.ship_state,
       postal: row.ship_postal,

@@ -4,12 +4,23 @@ import CartDrawer from '@/components/layout/CartDrawer.vue'
 import SearchPalette from '@/components/layout/SearchPalette.vue'
 import CompareTray from '@/components/commerce/CompareTray.vue'
 import SiteFooter from '@/components/layout/SiteFooter.vue'
+import { onMounted } from 'vue'
 import { useCompareStore } from '@/stores/compare'
+import { useAuthStore } from '@/stores/auth'
 import { useLenis } from '@/composables/useLenis'
 import { useReducedMotion } from '@/composables/useReducedMotion'
 
 useReducedMotion()
 useLenis()
+
+/*
+ * Asked once, after the first paint. The session is an HttpOnly cookie, so
+ * whether anyone is signed in is a question only the server can answer — and
+ * not one worth delaying the storefront for, since the header has already
+ * drawn itself from the local hint.
+ */
+const auth = useAuthStore()
+onMounted(() => void auth.hydrate())
 
 // The comparison tray is fixed, so it cannot push anything out of its way. The
 // footer has to be told to get out of the way instead.

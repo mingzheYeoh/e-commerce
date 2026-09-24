@@ -43,7 +43,7 @@ export function passageFor(p: Product): string {
     .filter(([, v]) => typeof v === 'number')
     .map(([k, v]) => `${k} ${v}`)
   return [
-    `${p.title} by ${p.brand.toLowerCase().replace(/_/g, ' ')}, ${p.category}, $${p.price}.`,
+    `${p.title} by ${p.brand.toLowerCase().replace(/_/g, ' ')}, ${p.category}, $${p.priceMinor / 100}.`,
     p.specsSummary.join('. ') + '.',
     p.specs.map((s) => `${s.label}: ${s.value}`).join('. ') + '.',
     f.features.length ? `Features: ${f.features.join(', ')}.` : '',

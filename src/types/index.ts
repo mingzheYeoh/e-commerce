@@ -28,11 +28,13 @@ export interface Colorway {
 export interface Product {
   id: string
   sku: string
-  brand: BrandId
+  /** One of the curated brands, or whatever a marketplace seller typed. The
+   *  `string & {}` keeps editor completion for the known ids. */
+  brand: BrandId | (string & {})
   title: string
   category: CategoryId
-  /** Base price in USD. Converted for display only — never used for arithmetic. */
-  price: number
+  /** Minor units of `currency`. Divided only by the display formatter. */
+  priceMinor: number
   currency: string
   inStock: boolean
   stockCount: number

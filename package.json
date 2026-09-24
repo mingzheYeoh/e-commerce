@@ -6,24 +6,29 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "build:console": "vite build --config vite.console.config.ts",
     "preview": "vite preview",
     "test": "vitest run",
-    "typecheck": "vue-tsc --noEmit",
+    "typecheck": "vue-tsc --noEmit && vue-tsc --noEmit -p console/tsconfig.json && tsc --noEmit -p worker/tsconfig.json",
     "assets": "node scripts/fetch-assets.mjs",
     "build:embeddings": "node scripts/build-embeddings.mjs",
+    "build:catalog": "node scripts/build-catalog.mjs",
     "build:graph": "node scripts/build-graph.mjs",
     "build:vectorize": "node scripts/build-vectorize.mjs",
     "eval:search": "node scripts/eval-search.mjs",
     "deploy": "npm run build && npx --prefix worker wrangler deploy",
-    "build:staging": "vite build --mode staging",
-    "deploy:staging": "npm run build:staging && npx --prefix worker wrangler deploy --env staging"
+    "build:staging": "node scripts/build-catalog.mjs nexus-orders-staging && vite build --mode staging",
+    "deploy:staging": "npm run build:staging && npx --prefix worker wrangler deploy --env staging",
+    "deploy:console:staging": "npm run build:console && npx --prefix worker wrangler deploy -c worker/wrangler.console.toml --env staging"
   },
   "dependencies": {
     "@huggingface/transformers": "^4.3.0",
+    "@types/qrcode": "^1.5.6",
     "gsap": "^3.12.5",
     "lenis": "^1.1.18",
     "lucide-vue-next": "^0.460.0",
     "pinia": "^2.2.6",
+    "qrcode": "^1.5.4",
     "vue": "^3.5.13",
     "vue-router": "^4.6.4"
   },

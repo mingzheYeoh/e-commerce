@@ -137,14 +137,14 @@ function addToCart() {
         </p>
       </div>
 
-      <div class="flex items-center gap-1.5 text-xs text-text-secondary">
+      <div v-if="product.reviewCount > 0" class="flex items-center gap-1.5 text-xs text-text-secondary">
         <Star class="h-3.5 w-3.5 fill-accent-amber text-accent-amber" aria-hidden="true" />
         <span class="nums font-medium text-text-primary">{{ product.rating.toFixed(1) }}</span>
         <span class="nums">({{ product.reviewCount.toLocaleString('en-US') }})</span>
       </div>
 
       <div class="flex items-center justify-between gap-3 border-t border-border-hairline pt-3">
-        <PriceTag :cents="Math.round(product.price * 100)" />
+        <PriceTag :cents="product.priceMinor" />
 
         <button
           type="button"

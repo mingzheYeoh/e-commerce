@@ -1,0 +1,520 @@
+/**
+ * The merchant console: staff authentication and the routes that can write.
+ *
+ * A separate worker from nexus-api, on its own origin — see
+ * wrangler.console.toml for why. It shares `worker/src` so the tenancy core
+ * and the credential primitives are ordinary imports.
+ *
+ * Every merchant route takes its tenant from the session row and from nowhere
+ * else: no request body type here has a `merchantId` field, so a request
+ * cannot name a tenant even dishonestly. `scopedTo` is called fresh on every
+ * request — its active-merchant check runs once, when the repository is
+ * vended, so a repository held across requests would keep working for a
+ * merchant suspended in between. That per-request SELECT is the
+ * authorisation, not overhead.
+ */
+import {
+  registerMerchant,
+  approveMerchant,
+  signIn,
+  signOut,
+  staffSession,
+  beginTotpEnrolment,
+  confirmTotpEnrolment,
+  type StaffEnv,
+  type StaffResult,
+  type StaffSession,
+} from './staff-auth'
+import { id, scopedTo, type NewProduct, type ProductPatch, type ProductRow, type Repository } from './tenancy'
+import { guard, type IpDefences } from './auth'
+import {
+  MAX_LARGE_BYTES,
+  MAX_PHOTOS,
+  MAX_THUMB_BYTES,
+  isPhotoKey,
+  isPhotoName,
+  isWebp,
+  keyFor,
+  mediaFor,
+  namesIn,
+  newPhotoName,
+  type Media,
+} from './photos'
+
+/*
+ * Re-exported because Cloudflare resolves a Durable Object class by name from
+ * the worker's own module exports. This worker hosts its own IpThrottle
+ * namespace rather than binding nexus-api's, so each deploys without the other.
+ */
+export { IpThrottle } from './throttle'
+
+export interface ConsoleEnv extends StaffEnv, IpDefences {
+  /** Product photos. One bucket per environment, never shared. */
+  MEDIA: R2Bucket
+  /** Where nexus-api serves MEDIA from, ending in '/'. Photo URLs are this plus a key. */
+  MEDIA_BASE: string
+}
+
+const json = (body: unknown, status = 200, headers: Record<string, string> = {}) =>
+  new Response(JSON.stringify(body), {
+    status,
+    headers: { 'content-type': 'application/json', ...headers },
+  })
+
+const reply = (r: StaffResult) => json(r.body, r.status, r.headers)
+
+/** A malformed body is read as no body, which every handler refuses with 400. */
+const readBody = (request: Request): Promise<unknown> => request.json().catch(() => null)
+
+/** The per-IP throttle, applied before any KDF or statement runs. */
+async function throttled(env: ConsoleEnv, request: Request, kind: 'login' | 'signup') {
+  const limited = await guard(env, request, kind)
+  return limited && json(limited.body, 429, { 'retry-after': String(limited.retryAfter) })
+}
+
+type Active = Extract<StaffSession, { kind: 'active' }>
+
+/**
+ * Signed in and past the second factor, or the refusal to send.
+ *
+ * An enrolling session is a 403 everywhere this is used: a password alone
+ * reaches nothing but the TOTP routes, /me and /signout.
+ */
+async function actor(env: ConsoleEnv, request: Request): Promise<Active | Response> {
+  const session = await staffSession(env, request)
+  if (!session) return json({ error: 'not signed in' }, 401)
+  if (session.kind === 'enrolling') return json({ error: 'second factor required' }, 403)
+  return session
+}
+
+/** The signed-in merchant's repository, vended now, or the refusal to send. */
+async function merchantRepo(env: ConsoleEnv, request: Request): Promise<Repository | Response> {
+  const session = await actor(env, request)
+  if (session instanceof Response) return session
+  // merchantId is never null for merchant scope (the staff table's paired
+  // CHECK), but this is the line that decides tenancy, so it fails closed.
+  if (session.scope !== 'merchant' || !session.merchantId) {
+    return json({ error: 'not a merchant account' }, 403)
+  }
+  try {
+    return await scopedTo(env, session.merchantId, session.staffId)
+  } catch (err) {
+    // A suspended seller's own request is refused, not broken.
+    if (/is not active/.test(String(err))) return json({ error: 'this merchant is not active' }, 403)
+    throw err
+  }
+}
+
+/* ------------------------------------------------------------- products io */
+
+const text = (v: unknown, max: number): string | null =>
+  typeof v === 'string' && v.trim() && v.trim().length <= max ? v.trim() : null
+
+/** A whole, non-negative number: what price_minor and stock_count accept. */
+const whole = (v: unknown): number | null =>
+  typeof v === 'number' && Number.isSafeInteger(v) && v >= 0 ? v : null
+
+const STATUSES = new Set(['draft', 'published', 'archived'])
+
+/**
+ * The storefront filters by these exact ids (`src/data/categories.ts`), so a
+ * product filed under anything else is published into a category no shopper
+ * can reach. The console's select offers only these; this is the check that
+ * does not depend on the request coming from the console.
+ */
+const CATEGORIES = new Set(['phones', 'audio', 'peripherals', 'imaging', 'computing'])
+
+const fields = (body: unknown): Record<string, unknown> =>
+  typeof body === 'object' && body !== null ? (body as Record<string, unknown>) : {}
+
+/**
+ * Only the named fields are copied out of the body. Anything else — a
+ * merchantId, a rating, a review_count — never reaches the repository,
+ * because there is no line here that would carry it.
+ */
+function newProduct(body: unknown): NewProduct | string {
+  const p = fields(body)
+  const sku = text(p.sku, 64)
+  const title = text(p.title, 200)
+  const brand = text(p.brand, 80)
+  const category = text(p.category, 80)
+  const priceMinor = whole(p.priceMinor)
+  if (!sku || !title || !brand || !category) return 'A product needs a SKU, title, brand and category.'
+  if (priceMinor === null) return 'priceMinor is a whole number of minor units, zero or more.'
+  if (!CATEGORIES.has(category)) return 'category is one of the storefront categories.'
+  return { sku, title, brand, category, priceMinor }
+}
+
+function productPatch(body: unknown): ProductPatch | string {
+  const p = fields(body)
+  const patch: ProductPatch = {}
+  if (p.title !== undefined) {
+    const title = text(p.title, 200)
+    if (!title) return 'A title cannot be empty.'
+    patch.title = title
+  }
+  if (p.priceMinor !== undefined) {
+    const priceMinor = whole(p.priceMinor)
+    if (priceMinor === null) return 'priceMinor is a whole number of minor units, zero or more.'
+    patch.priceMinor = priceMinor
+  }
+  if (p.stockCount !== undefined) {
+    const stockCount = whole(p.stockCount)
+    if (stockCount === null) return 'stockCount is a whole number, zero or more.'
+    patch.stockCount = stockCount
+  }
+  if (p.status !== undefined) {
+    if (typeof p.status !== 'string' || !STATUSES.has(p.status)) {
+      return 'status is draft, published or archived.'
+    }
+    patch.status = p.status
+  }
+  if (p.category !== undefined) {
+    if (typeof p.category !== 'string' || !CATEGORIES.has(p.category)) {
+      return 'category is one of the storefront categories.'
+    }
+    patch.category = p.category
+  }
+  if (p.specsSummary !== undefined) {
+    // Blank boxes are dropped rather than refused: a draft may be half written.
+    // Publishing is what insists on all three.
+    if (!Array.isArray(p.specsSummary) || p.specsSummary.length > 3) return 'Up to three highlights.'
+    const lines: string[] = []
+    for (const v of p.specsSummary) {
+      if (typeof v !== 'string') return 'Highlights are text.'
+      if (v.trim().length > 60) return 'Each highlight is 60 characters or fewer.'
+      if (v.trim()) lines.push(v.trim())
+    }
+    patch.specsSummary = lines
+  }
+  if (p.specs !== undefined) {
+    if (!Array.isArray(p.specs) || p.specs.length > 20) return 'Up to twenty specification rows.'
+    const rows: { label: string; value: string }[] = []
+    for (const r of p.specs) {
+      const { label, value } = fields(r)
+      if (typeof label !== 'string' || typeof value !== 'string') return 'A specification row is a label and a value.'
+      const [l, v] = [label.trim(), value.trim()]
+      if (!l && !v) continue
+      if (!l || !v) return 'Every specification row needs both a name and a value.'
+      if (l.length > 40 || v.length > 120) return 'Specification names are 40 characters and values 120 at most.'
+      rows.push({ label: l, value: v })
+    }
+    patch.specs = rows
+  }
+  if (Object.keys(patch).length === 0) return 'Nothing to change.'
+  return patch
+}
+
+const parse = <T>(s: string, fallback: T): T => {
+  try {
+    return (JSON.parse(s) as T) ?? fallback
+  } catch {
+    return fallback
+  }
+}
+
+/**
+ * What this product still lacks before it can go on sale, as one sentence,
+ * or null if nothing.
+ *
+ * The storefront renders `media.thumb`, `media.gallery` and three highlights
+ * unconditionally, so a product without them reaches the shop grid as a
+ * broken card. Refused here, at the write, rather than tolerated at the
+ * render — and every gap is named at once, so a merchant fixes them in one
+ * pass instead of discovering them one refusal at a time.
+ */
+function unpublishable(priceMinor: number, specsSummary: string[], media: string): string | null {
+  const m = parse<{ thumb?: unknown; gallery?: unknown }>(media, {})
+  const missing: string[] = []
+  if (!m.thumb || !Array.isArray(m.gallery) || m.gallery.length === 0) missing.push('at least one photo')
+  if (priceMinor === 0) missing.push('a price')
+  if (specsSummary.length < 3) missing.push(`${3 - specsSummary.length} more highlight${specsSummary.length === 2 ? '' : 's'}`)
+  return missing.length ? `Before publishing, add ${missing.join(', ')}.` : null
+}
+
+const product = (r: ProductRow) => ({
+  id: r.id,
+  merchantId: r.merchant_id,
+  sku: r.sku,
+  title: r.title,
+  brand: r.brand,
+  category: r.category,
+  priceMinor: r.price_minor,
+  currency: r.currency,
+  status: r.status,
+  stockCount: r.stock_count,
+  specsSummary: parse<string[]>(r.specs_summary, []),
+  specs: parse<{ label: string; value: string }[]>(r.specs, []),
+  media: parse<Partial<Media>>(r.media, {}),
+})
+
+/* ------------------------------------------------------------------ routes */
+
+const PRODUCT = /^\/api\/merchant\/products\/([^/]+)$/
+const PHOTOS = /^\/api\/merchant\/products\/([^/]+)\/photos$/
+const PHOTO = /^\/api\/merchant\/products\/([^/]+)\/photos\/([^/]+)$/
+const PHOTO_MAIN = /^\/api\/merchant\/products\/([^/]+)\/photos\/([^/]+)\/main$/
+const APPROVE = /^\/api\/platform\/merchants\/([^/]+)\/approve$/
+
+async function route(request: Request, env: ConsoleEnv, url: URL): Promise<Response> {
+  const path = url.pathname
+  const method = request.method
+
+  /* ------------------------------------------------ staff authentication */
+
+  if (path === '/api/staff/register' && method === 'POST') {
+    return (
+      (await throttled(env, request, 'signup')) || reply(await registerMerchant(env, await readBody(request)))
+    )
+  }
+
+  if (path === '/api/staff/signin' && method === 'POST') {
+    return (
+      (await throttled(env, request, 'login')) || reply(await signIn(env, await readBody(request), request))
+    )
+  }
+
+  if (path === '/api/staff/signout' && method === 'POST') return reply(await signOut(env, request))
+
+  /* Where the console should send this browser. Not signed in is an answer,
+     not an error, and an enrolling session learns nothing about the merchant. */
+  if (path === '/api/staff/me' && method === 'GET') {
+    const session = await staffSession(env, request)
+    if (!session) return json({ kind: null })
+    if (session.kind === 'enrolling') return json({ kind: 'enrolling' })
+    if (session.scope === 'platform') return json({ kind: 'active', scope: 'platform' })
+    // Read directly rather than through scopedTo, which refuses a suspended
+    // merchant: this is the one place a suspended seller is told why.
+    const merchant = await env.ORDERS.prepare(`SELECT name, slug, status FROM merchants WHERE id = ?1`)
+      .bind(session.merchantId)
+      .first<{ name: string; slug: string; status: string }>()
+    return json({ kind: 'active', scope: 'merchant', merchant })
+  }
+
+  if ((path === '/api/staff/totp/begin' || path === '/api/staff/totp/confirm') && method === 'POST') {
+    const session = await staffSession(env, request)
+    if (!session) return json({ error: 'not signed in' }, 401)
+    if (session.kind !== 'enrolling') return json({ error: 'already signed in' }, 403)
+    return reply(
+      path.endsWith('/begin')
+        ? await beginTotpEnrolment(env, session)
+        : await confirmTotpEnrolment(env, session, await readBody(request)),
+    )
+  }
+
+  /* --------------------------------------------------- merchant products */
+
+  if (path === '/api/merchant/products' && (method === 'GET' || method === 'POST')) {
+    const repo = await merchantRepo(env, request)
+    if (repo instanceof Response) return repo
+    if (method === 'GET') return json({ products: (await repo.products.list()).map(product) })
+
+    const input = newProduct(await readBody(request))
+    if (typeof input === 'string') return json({ error: input }, 400)
+    try {
+      return json(product(await repo.products.create(input)), 201)
+    } catch (err) {
+      // (merchant_id, sku) is unique per merchant, so this names only the
+      // caller's own catalogue.
+      if (/UNIQUE/i.test(String(err))) return json({ error: 'You already have a product with that SKU.' }, 409)
+      throw err
+    }
+  }
+
+  const productId = path.match(PRODUCT)?.[1]
+  if (productId && method === 'PATCH') {
+    const repo = await merchantRepo(env, request)
+    if (repo instanceof Response) return repo
+    const patch = productPatch(await readBody(request))
+    if (typeof patch === 'string') return json({ error: patch }, 400)
+    // Someone else's product is a 404, not a 403: the repository cannot see
+    // it, and "exists but not yours" would confirm the id to a stranger.
+    const existing = await repo.products.get(productId)
+    if (!existing) return json({ error: 'not found' }, 404)
+    // Checked on the row as it will be, so emptying a highlight or zeroing the
+    // price of something already on sale is refused too, not only publishing.
+    if ((patch.status ?? existing.status) === 'published') {
+      const why = unpublishable(
+        patch.priceMinor ?? existing.price_minor,
+        patch.specsSummary ?? parse<string[]>(existing.specs_summary, []),
+        existing.media,
+      )
+      if (why) return json({ error: why }, 409)
+    }
+    const row = await repo.products.update(productId, patch)
+    return row ? json(product(row)) : json({ error: 'not found' }, 404)
+  }
+
+  /* ----------------------------------------------------- product photos */
+
+  const uploadTo = path.match(PHOTOS)?.[1]
+  if (uploadTo && method === 'POST') {
+    const repo = await merchantRepo(env, request)
+    if (repo instanceof Response) return repo
+    const existing = await repo.products.get(uploadTo)
+    if (!existing) return json({ error: 'not found' }, 404)
+    // merchant_id from the row the scoped repository returned, so it is the
+    // session's merchant: the storage key cannot name anyone else's folder.
+    const names = namesIn(existing.media, env.MEDIA_BASE, existing.merchant_id, existing.id)
+    if (!names) return json({ error: "This product's photos are not managed in the console." }, 409)
+    if (names.length >= MAX_PHOTOS) return json({ error: `A product has at most ${MAX_PHOTOS} photos.` }, 409)
+
+    // formData() buffers the whole body, and an isolate has 128MB against a
+    // 100MB request limit, so the cap has to be enforced before it runs.
+    // Browsers always send content-length for a FormData fetch.
+    const length = Number(request.headers.get('content-length'))
+    if (!length || length > MAX_LARGE_BYTES + MAX_THUMB_BYTES + 64_000) {
+      return json({ error: 'That photo is too large, even after resizing.' }, 413)
+    }
+    const form = await request.formData().catch(() => null)
+    const large = form?.get('large')
+    const thumb = form?.get('thumb')
+    if (!(large instanceof File) || !(thumb instanceof File)) {
+      return json({ error: 'Send the photo as two files, large and thumb.' }, 400)
+    }
+    if (large.size > MAX_LARGE_BYTES || thumb.size > MAX_THUMB_BYTES) {
+      return json({ error: 'That photo is too large, even after resizing.' }, 413)
+    }
+    const [largeBytes, thumbBytes] = await Promise.all([large.arrayBuffer(), thumb.arrayBuffer()])
+    // The bytes, not the file name or the declared type: both are the client's word.
+    if (!isWebp(new Uint8Array(largeBytes)) || !isWebp(new Uint8Array(thumbBytes))) {
+      return json({ error: 'Photos are uploaded as webp.' }, 415)
+    }
+
+    const name = newPhotoName()
+    const keys = [keyFor(existing.merchant_id, existing.id, name, 1600), keyFor(existing.merchant_id, existing.id, name, 400)]
+    // Only keys nexus-api will serve. A product id of another shape (the
+    // seeded catalogue's `iphone-18-pro`) would store a photo nobody can load.
+    if (!isPhotoKey(keys[0])) return json({ error: "This product's photos are not managed in the console." }, 409)
+    const meta = { httpMetadata: { contentType: 'image/webp' } }
+    const cleanUp = () =>
+      env.MEDIA.delete(keys).catch((err) => console.error('orphaned photo objects', { keys, err }))
+
+    let row: ProductRow | null
+    try {
+      await Promise.all([env.MEDIA.put(keys[0], largeBytes, meta), env.MEDIA.put(keys[1], thumbBytes, meta)])
+      const media = mediaFor(env.MEDIA_BASE, existing.merchant_id, existing.id, [...names, name])
+      row = await repo.products.setMedia(existing.id, media, existing.media)
+    } catch (err) {
+      // The objects go in first, so any failure after that takes them back out.
+      await cleanUp()
+      throw err
+    }
+    if (!row) {
+      // Lost a race with another change to this product's photos.
+      await cleanUp()
+      return json({ error: 'The photos changed while this one uploaded. Reload and try again.' }, 409)
+    }
+    return json(product(row), 201)
+  }
+
+  const photo = path.match(PHOTO_MAIN) ?? path.match(PHOTO)
+  const isMain = PHOTO_MAIN.test(path)
+  if (photo && ((isMain && method === 'POST') || (!isMain && method === 'DELETE'))) {
+    const [, productId2, name] = photo
+    const repo = await merchantRepo(env, request)
+    if (repo instanceof Response) return repo
+    const existing = await repo.products.get(productId2)
+    if (!existing) return json({ error: 'not found' }, 404)
+    const names = namesIn(existing.media, env.MEDIA_BASE, existing.merchant_id, existing.id)
+    if (!names) return json({ error: "This product's photos are not managed in the console." }, 409)
+    if (!isPhotoName(name) || !names.includes(name)) return json({ error: 'not found' }, 404)
+
+    const rest = names.filter((n) => n !== name)
+    if (!isMain && rest.length === 0 && existing.status === 'published') {
+      return json({ error: 'A published product keeps at least one photo. Unpublish it first.' }, 409)
+    }
+    const media = mediaFor(env.MEDIA_BASE, existing.merchant_id, existing.id, isMain ? [name, ...rest] : rest)
+    const row = await repo.products.setMedia(existing.id, media, existing.media)
+    if (!row) return json({ error: 'The photos changed in the meantime. Reload and try again.' }, 409)
+    if (!isMain) {
+      // After the row stops pointing at them, so a failure here leaves an
+      // unreferenced object rather than a broken image.
+      await env.MEDIA.delete([
+        keyFor(existing.merchant_id, existing.id, name, 1600),
+        keyFor(existing.merchant_id, existing.id, name, 400),
+      ]).catch((err) => console.error('photo objects not deleted', { name, err }))
+    }
+    return json(product(row))
+  }
+
+  /* ------------------------------------------------------------ platform */
+
+  const approveId = path.match(APPROVE)?.[1]
+  if ((path === '/api/platform/merchants' && method === 'GET') || (approveId && method === 'POST')) {
+    const session = await actor(env, request)
+    if (session instanceof Response) return session
+    // approveMerchant cannot verify its caller; this line is the only thing
+    // that stops merchant staff approving their own application.
+    if (session.scope !== 'platform') return json({ error: 'not a platform account' }, 403)
+
+    if (approveId) {
+      const { slug } = fields(await readBody(request))
+      return reply(await approveMerchant(env, session.staffId, approveId, slug))
+    }
+
+    // Every platform read of merchant data is audited, same as the write in
+    // approveMerchant. merchant_id is NULL because this spans every pending
+    // applicant, not one merchant.
+    await env.ORDERS.prepare(
+      `INSERT INTO audit_log (id, actor_id, actor_scope, merchant_id, action)
+       VALUES (?1, ?2, 'platform', NULL, 'merchants.pending.list')`,
+    )
+      .bind(id('aud'), session.staffId)
+      .run()
+
+    const { results } = await env.ORDERS.prepare(
+      `SELECT m.id, m.name, m.created_at AS createdAt, s.email
+         FROM merchants m JOIN staff s ON s.merchant_id = m.id AND s.role = 'owner'
+        WHERE m.status = 'pending'
+        ORDER BY m.created_at`,
+    ).all<{ id: string; name: string; createdAt: string; email: string }>()
+    return json({ merchants: results ?? [] })
+  }
+
+  /* Whether the defences are bound, since an absent one allows everything
+     silently. Presence only. */
+  if (path === '/api/health' && method === 'GET') {
+    return json({
+      ok: true,
+      orders: Boolean(env.ORDERS),
+      loginRateLimit: Boolean(env.LOGIN_LIMITER),
+      signupRateLimit: Boolean(env.SIGNUP_LIMITER),
+      durableThrottle: Boolean(env.IP_THROTTLE),
+    })
+  }
+
+  return json({ error: 'not found' }, 404)
+}
+
+export default {
+  async fetch(request: Request, env: ConsoleEnv): Promise<Response> {
+    const url = new URL(request.url)
+
+    /*
+     * The console is same-origin with its own SPA, so a state-changing request
+     * from any other origin is refused. SameSite=Strict does not cover this:
+     * the storefront is a sibling subdomain under the same registrable domain,
+     * which makes it the same site. Some older browsers send no Origin on a
+     * cross-origin form POST, so a missing header is refused rather than
+     * trusted — the same fail-closed rule this codebase applies at its other
+     * boundaries. This is not a defence against a stolen cookie: only a
+     * browser is stopped from forging Origin, and nothing here checks who
+     * holds the cookie. That is HttpOnly, short expiry and hashing the token
+     * at rest.
+     */
+    const origin = request.headers.get('origin')
+    if (request.method !== 'GET' && origin !== url.origin) {
+      return json({ error: 'cross-origin request refused' }, 403)
+    }
+
+    try {
+      return await route(request, env, url)
+    } catch (err) {
+      // Logged, not returned: internal detail in an error body is how binding
+      // names and stack traces end up in someone else's console.
+      console.error('unhandled', err)
+      return json({ error: 'internal error' }, 500)
+    }
+  },
+}

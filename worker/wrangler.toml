@@ -19,15 +19,64 @@ binding = "ORDERS"
 database_name = "nexus-orders"
 database_id = "7aa62821-d17f-43a2-b605-2643780e9690"
 
+# Merchant product photos. nexus-console writes, nexus-api serves (/media/u/*).
+# One bucket per environment: a shared one would put staging's demo uploads
+# behind production URLs, which is the mistake the shared Vectorize index is.
+[[r2_buckets]]
+binding = "MEDIA"
+bucket_name = "nexus-media"
+
 [vars]
 # The deployed storefront and the dev server, in that order. The first entry is
 # what an unrecognised origin gets echoed back, so it must not be localhost.
 ALLOWED_ORIGIN = "https://nexus-tech-collective.mingzhe030228.workers.dev,http://localhost:5173"
 
+# Who verification email comes from. The domain must be verified with the mail
+# provider, or every send is refused with a reason only the log sees.
+MAIL_FROM = "NEXUS <onboarding@resend.dev>"
+
+# Guessing throttles. Two namespaces because signing in and signing up deserve
+# different budgets, and a shared counter would let one starve the other.
+#
+# This is Cloudflare's own rate limiter: per-colo and in-memory, so it is the
+# cheap first line rather than the whole defence. The per-account backoff in
+# auth.ts is the global, durable half — it is what sees a botnet spreading one
+# account's guesses across a thousand addresses, which none of these counters
+# ever would.
+[[ratelimits]]
+name = "LOGIN_LIMITER"
+namespace_id = "1001"
+simple = { limit = 10, period = 60 }
+
+[[ratelimits]]
+name = "SIGNUP_LIMITER"
+namespace_id = "1002"
+simple = { limit = 5, period = 60 }
+
+# The counter that can be trusted. Cloudflare's own limiter above is per-isolate
+# and best-effort — twenty-five parallel sign-ups against a 5-per-minute limit
+# produced one refusal — so it is the pre-filter and this is the limit.
+[[durable_objects.bindings]]
+name = "IP_THROTTLE"
+class_name = "IpThrottle"
+
+# SQLite-backed, which is the class of Durable Object available without a paid
+# Workers plan.
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["IpThrottle"]
+
+# Nightly sweep of expired sessions and spent links. 04:17 rather than a round
+# hour, because every cron on the platform fires on the hour and the quiet
+# minutes are the ones nobody else picked.
+[triggers]
+crons = ["17 4 * * *"]
+
 # Secrets are set with `wrangler secret put`, never written here:
 #   wrangler secret put NEO4J_URI
 #   wrangler secret put NEO4J_USER
 #   wrangler secret put NEO4J_PASSWORD
+#   wrangler secret put RESEND_API_KEY
 
 # ---------------------------------------------------------------- staging --
 #
@@ -70,5 +119,29 @@ binding = "ORDERS"
 database_name = "nexus-orders-staging"
 database_id = "aedb0572-7924-4068-8d30-11b6e61eeed5"
 
+[[env.staging.r2_buckets]]
+binding = "MEDIA"
+bucket_name = "nexus-media-staging"
+
 [env.staging.vars]
 ALLOWED_ORIGIN = "https://nexus-tech-collective-staging.mingzhe030228.workers.dev,http://localhost:5173"
+MAIL_FROM = "NEXUS <onboarding@resend.dev>"
+
+[[env.staging.ratelimits]]
+name = "LOGIN_LIMITER"
+namespace_id = "2001"
+simple = { limit = 10, period = 60 }
+
+[[env.staging.ratelimits]]
+name = "SIGNUP_LIMITER"
+namespace_id = "2002"
+simple = { limit = 5, period = 60 }
+
+[[env.staging.durable_objects.bindings]]
+name = "IP_THROTTLE"
+class_name = "IpThrottle"
+
+[env.staging.triggers]
+crons = ["47 4 * * *"]
+
+

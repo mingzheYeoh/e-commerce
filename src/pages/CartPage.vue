@@ -4,7 +4,7 @@ import { RouterLink, useRouter } from 'vue-router'
 import { Minus, Plus, X, ShoppingBag } from 'lucide-vue-next'
 import { useCartStore, lineKey } from '@/stores/cart'
 import { useCurrency } from '@/composables/useCurrency'
-import { SHIPPING } from '@/lib/money'
+import { DOMESTIC_FREE_ABOVE } from '@/lib/shipping'
 
 const cart = useCartStore()
 const router = useRouter()
@@ -12,7 +12,7 @@ const { format } = useCurrency()
 
 /** How much more earns free standard delivery, or null once it is earned. */
 const toFreeShipping = computed(() => {
-  const threshold = SHIPPING.standard.freeAbove ?? 0
+  const threshold = DOMESTIC_FREE_ABOVE
   const gap = threshold - cart.subtotalCents
   return gap > 0 ? gap : null
 })
@@ -44,7 +44,7 @@ const toFreeShipping = computed(() => {
             class="mb-4 rounded-card border border-border-hairline bg-surface-1 px-4 py-3 text-sm"
           >
             Add <span class="nums font-medium text-accent">{{ format(toFreeShipping) }}</span> more
-            for free standard delivery.
+            for free standard delivery in the US.
           </p>
 
           <ul class="divide-y divide-border-hairline rounded-card border border-border-hairline bg-surface-1">
@@ -101,7 +101,9 @@ const toFreeShipping = computed(() => {
               <span class="text-text-secondary">Subtotal</span>
               <span class="nums text-xl font-bold">{{ format(cart.subtotalCents) }}</span>
             </div>
-            <p class="mt-1 text-xs text-text-muted">Shipping and tax calculated at checkout.</p>
+            <p class="mt-1 text-xs text-text-muted">
+              Shipping and tax depend on the destination, and are calculated at checkout.
+            </p>
 
             <button type="button" class="btn-primary mt-5 w-full" @click="router.push('/checkout')">
               Checkout

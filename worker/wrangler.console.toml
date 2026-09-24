@@ -1,0 +1,105 @@
+# The merchant console. A separate worker from nexus-api, on its own origin,
+# because an authentication surface that moves origin later costs every live
+# session plus the allow-list, CORS and deploy scripts that name it.
+#
+# Same directory as the API on purpose: tenancy.ts and credentials.ts are
+# ordinary imports rather than a cross-project path.
+name = "nexus-console"
+main = "src/console.ts"
+compatibility_date = "2026-09-01"
+compatibility_flags = ["nodejs_compat"]
+
+# The built SPA. run_worker_first is load-bearing: without it the asset
+# handler's SPA fallback answers every /api/* request with index.html before
+# this worker's fetch() ever runs, and the whole API goes dark behind a 200.
+[assets]
+directory = "../console/dist"
+not_found_handling = "single-page-application"
+run_worker_first = ["/api/*"]
+
+[[d1_databases]]
+binding = "ORDERS"
+database_name = "nexus-orders"
+database_id = "7aa62821-d17f-43a2-b605-2643780e9690"
+
+# Merchant product photos. nexus-console writes, nexus-api serves (/media/u/*).
+# One bucket per environment: a shared one would put staging's demo uploads
+# behind production URLs, which is the mistake the shared Vectorize index is.
+[[r2_buckets]]
+binding = "MEDIA"
+bucket_name = "nexus-media"
+
+# Photo URLs are this plus the object key: nexus-api serves the bucket, the
+# console only writes it. Changing it strands every photo already uploaded:
+# the console recognises its own photos by this prefix and refuses to rewrite
+# media it did not mint. `wrangler dev` inherits this production value, so
+# photos uploaded locally render from production's URL and appear broken.
+[vars]
+MEDIA_BASE = "https://nexus-api.mingzhe030228.workers.dev/media/u/"
+
+# Per-IP guessing throttles on staff sign-in and registration, the same pair
+# nexus-api puts in front of shopper sign-in. signIn's per-account backoff
+# cannot see a burst spread across accounts; these can. Namespace ids differ
+# from nexus-api's so staff and shoppers never share a budget.
+[[ratelimits]]
+name = "LOGIN_LIMITER"
+namespace_id = "1003"
+simple = { limit = 10, period = 60 }
+
+[[ratelimits]]
+name = "SIGNUP_LIMITER"
+namespace_id = "1004"
+simple = { limit = 5, period = 60 }
+
+# The counter that can be trusted (see throttle.ts). This worker hosts its own
+# IpThrottle class, re-exported from console.ts, rather than binding nexus-api's
+# with script_name: a cross-script binding would make this worker undeployable
+# until nexus-api was, and would pool staff and shopper counters.
+[[durable_objects.bindings]]
+name = "IP_THROTTLE"
+class_name = "IpThrottle"
+
+# Migrations are inherited by environments; bindings are not.
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["IpThrottle"]
+
+# ---------------------------------------------------------------- staging --
+#
+# Bindings are NOT inherited by an environment in wrangler, so every one is
+# repeated here on purpose — an omission does not warn, it deploys a worker
+# missing a binding. /api/health reports which defences are bound.
+[env.staging]
+name = "nexus-console-staging"
+
+# Not inherited from the top level either — see the comment above [assets].
+[env.staging.assets]
+directory = "../console/dist"
+not_found_handling = "single-page-application"
+run_worker_first = ["/api/*"]
+
+[[env.staging.d1_databases]]
+binding = "ORDERS"
+database_name = "nexus-orders-staging"
+database_id = "aedb0572-7924-4068-8d30-11b6e61eeed5"
+
+[[env.staging.r2_buckets]]
+binding = "MEDIA"
+bucket_name = "nexus-media-staging"
+
+[env.staging.vars]
+MEDIA_BASE = "https://nexus-api-staging.mingzhe030228.workers.dev/media/u/"
+
+[[env.staging.ratelimits]]
+name = "LOGIN_LIMITER"
+namespace_id = "2003"
+simple = { limit = 10, period = 60 }
+
+[[env.staging.ratelimits]]
+name = "SIGNUP_LIMITER"
+namespace_id = "2004"
+simple = { limit = 5, period = 60 }
+
+[[env.staging.durable_objects.bindings]]
+name = "IP_THROTTLE"
+class_name = "IpThrottle"

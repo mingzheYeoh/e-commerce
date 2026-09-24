@@ -1,13 +1,15 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
-import { Search, ShoppingBag, Tag, Sparkles } from 'lucide-vue-next'
+import { Search, ShoppingBag, Tag, Sparkles, User } from 'lucide-vue-next'
 import MegaMenu from './MegaMenu.vue'
 import { useCartStore } from '@/stores/cart'
+import { useAuthStore } from '@/stores/auth'
 import { useUiStore, type CurrencyCode } from '@/stores/ui'
 import { useCurrency } from '@/composables/useCurrency'
 
 const cart = useCartStore()
+const auth = useAuthStore()
 const ui = useUiStore()
 const { format } = useCurrency()
 
@@ -87,6 +89,26 @@ watch(
             {{ code }}
           </option>
         </select>
+
+        <!--
+          Account sits beside the bag rather than in a footer or a menu: it is
+          where every shopper already looks for it, and it is the only place a
+          signed-in name can be shown, which is the fastest way to answer "am I
+          signed in?" without a round trip.
+
+          The label comes from a local hint before the server has answered, so
+          the header does not flicker from "Sign in" to a name on every load.
+        -->
+        <RouterLink
+          to="/account"
+          class="flex h-10 shrink-0 items-center gap-2 rounded border border-border-hairline bg-surface-1 px-3 text-sm font-medium text-text-secondary transition-colors hover:border-border-strong hover:text-text-primary"
+          :aria-label="auth.displayName ? `Account: ${auth.displayName}` : 'Sign in'"
+        >
+          <User class="h-4 w-4" aria-hidden="true" />
+          <span class="hidden max-w-[7rem] truncate md:inline">
+            {{ auth.firstName || 'Sign in' }}
+          </span>
+        </RouterLink>
 
         <button
           type="button"

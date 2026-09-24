@@ -4,8 +4,10 @@ import { products } from './products'
 const inCat = (id: CategoryId) => products.filter((p) => p.category === id)
 const stockIn = (id: CategoryId) =>
   inCat(id).reduce((total, p) => total + p.stockCount, 0)
+// fromPrice is dollars (it feeds formatPrice), so the catalogue's minor units
+// are converted back here, once, rather than at every category card.
 const cheapest = (id: CategoryId) =>
-  Math.min(...inCat(id).map((p) => p.price))
+  Math.min(...inCat(id).map((p) => p.priceMinor)) / 100
 
 export const categories: Category[] = [
   {

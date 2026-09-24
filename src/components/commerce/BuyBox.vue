@@ -49,7 +49,7 @@ const assurances = [
     <p class="text-sm text-text-secondary">{{ brandName(product.brand) }}</p>
     <h1 class="mt-1 text-3xl font-bold md:text-4xl">{{ product.title }}</h1>
 
-    <div class="mt-3 flex items-center gap-2 text-sm">
+    <div v-if="product.reviewCount > 0" class="mt-3 flex items-center gap-2 text-sm">
       <Star class="h-4 w-4 fill-accent-amber text-accent-amber" aria-hidden="true" />
       <span class="nums font-medium">{{ product.rating.toFixed(1) }}</span>
       <span class="nums text-text-secondary">
@@ -58,7 +58,7 @@ const assurances = [
     </div>
 
     <div class="mt-6">
-      <PriceTag :cents="Math.round(product.price * 100)" size="lg" />
+      <PriceTag :cents="product.priceMinor" size="lg" />
       <p class="mt-1.5 text-sm" :class="stockLine.class">{{ stockLine.text }}</p>
     </div>
 

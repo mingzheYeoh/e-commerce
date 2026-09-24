@@ -18,13 +18,13 @@ describe('recommend', () => {
     const { items } = recommend('wireless earbuds under $200')
     expect(items.length).toBeGreaterThan(0)
     for (const item of items) {
-      expect(item.product.price).toBeLessThanOrEqual(200)
+      expect(item.product.priceMinor).toBeLessThanOrEqual(20000)
     }
   })
 
   it('pushes far-over-budget products out of the results entirely', () => {
     const { items } = recommend('headphones under 200')
-    expect(items.some((i) => i.product.price > 1000)).toBe(false)
+    expect(items.some((i) => i.product.priceMinor > 100000)).toBe(false)
   })
 
   it('maps a situation to the right category without naming it', () => {

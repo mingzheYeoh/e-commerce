@@ -63,7 +63,10 @@ const lines = products.map((p, i) => {
   return JSON.stringify({
     id: p.id,
     values,
-    metadata: { title: p.title, category: p.category, brand: p.brand, price: p.price, text: passages[i] },
+    // Dollar-denominated on purpose, like the graph's: tools.ts reads this back
+    // as m.metadata?.price and renders it as `$${r.price}`. Minor units here
+    // would quote a phone at $89,999.
+    metadata: { title: p.title, category: p.category, brand: p.brand, price: p.priceMinor / 100, text: passages[i] },
   })
 })
 await fs.writeFile(OUT, lines.join('\n') + '\n')

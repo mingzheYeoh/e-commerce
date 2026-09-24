@@ -22,7 +22,10 @@ const inStock = () => products.find((p) => p.inStock)!
 function fill(store: ReturnType<typeof useCheckoutStore>) {
   store.address.name = 'Ada Lovelace'
   store.address.email = 'ada@example.com'
+  store.address.phone = ''
+  store.address.country = 'US'
   store.address.line1 = '12 Dean Street'
+  store.address.line2 = ''
   store.address.city = 'London'
   store.address.state = 'CA'
   store.address.postal = '94016'
@@ -127,7 +130,7 @@ describe('checkout store', () => {
 
     const order = checkout.findOrder(result.id)
     expect(order?.totals.total).toBe(expected)
-    expect(order?.lines[0].unitPriceCents).toBe(Math.round(product.price * 100))
+    expect(order?.lines[0].unitPriceCents).toBe(product.priceMinor)
   })
 
   it('carries a declined attempt in the error rather than silently failing', async () => {
@@ -163,9 +166,11 @@ describe('orders beyond this browser', () => {
     mockFetch.mockResolvedValue(null)
   })
 
-  it('sends skus and quantities, never prices', async () => {
+  it('sends catalogue ids and quantities, never prices', async () => {
     // The server prices the order from its own catalogue. Anything this
-    // payload said about money would be a number the client chose.
+    // payload said about money would be a number the client chose — and it
+    // names the product by id, because a sku belongs to a merchant and two of
+    // them may use the same one.
     const cart = useCartStore()
     const checkout = useCheckoutStore()
     cart.add(inStock(), 2)
@@ -176,7 +181,7 @@ describe('orders beyond this browser', () => {
     expect(res.ok).toBe(true)
 
     const sent = mockSave.mock.calls[0][0]
-    expect(sent.lines).toEqual([{ sku: inStock().sku, qty: 2 }])
+    expect(sent.lines).toEqual([{ productId: inStock().id, qty: 2 }])
     expect(JSON.stringify(sent)).not.toMatch(/unitPrice|total|subtotal/i)
   })
 
@@ -205,7 +210,10 @@ describe('orders beyond this browser', () => {
       email: 'a•••@example.com',
       address: {
         name: 'Ada Lovelace',
+        phone: '',
+        country: 'US',
         line1: '12 Analytical Way',
+        line2: '',
         city: 'Portland',
         state: 'OR',
         postal: '97201',
@@ -264,5 +272,161 @@ describe('orders beyond this browser', () => {
 
   it('returns null when the order does not exist anywhere', async () => {
     expect(await useCheckoutStore().loadOrder('NX-QQQQQ')).toBeNull()
+  })
+})
+
+describe('delivery addresses beyond the United States', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    localStorage.clear()
+  })
+
+  it('drops the state and postcode when the country changes', () => {
+    /*
+     * Both belong to exactly one country. Carrying "OR / 97201" into Malaysia
+     * leaves an address that validates nowhere — and, until the server refused
+     * it, a tax line quoting a state the parcel was not going to.
+     */
+    const checkout = useCheckoutStore()
+    fill(checkout)
+    expect(checkout.address.state).toBe('CA')
+
+    checkout.setCountry('MY')
+    expect(checkout.address.state).toBe('')
+    expect(checkout.address.postal).toBe('')
+    // What does not belong to a country stays put; retyping a street address
+    // because you corrected the country is its own small insult.
+    expect(checkout.address.line1).toBe('12 Dean Street')
+  })
+
+  it('leaves everything alone when the country did not actually change', () => {
+    const checkout = useCheckoutStore()
+    fill(checkout)
+    checkout.setCountry('US')
+    expect(checkout.address.state).toBe('CA')
+    expect(checkout.address.postal).toBe('94016')
+  })
+
+  it('accepts a complete address in a country with subdivisions', () => {
+    const checkout = useCheckoutStore()
+    fill(checkout)
+    checkout.setCountry('MY')
+    checkout.address.state = 'SGR'
+    checkout.address.postal = '50450'
+    expect(checkout.stepValid(1)).toBe(true)
+  })
+
+  it('accepts one in a country that has none, with the field empty', () => {
+    // The case an American-shaped form gets wrong: it would demand a state
+    // that does not exist, or accept a meaningless one.
+    const checkout = useCheckoutStore()
+    fill(checkout)
+    checkout.setCountry('SG')
+    checkout.address.postal = '238839'
+    expect(checkout.address.state).toBe('')
+    expect(checkout.stepValid(1)).toBe(true)
+  })
+
+  it('refuses a subdivision or postcode from the wrong country', () => {
+    const checkout = useCheckoutStore()
+    fill(checkout)
+    checkout.setCountry('MY')
+    checkout.address.state = 'OR'
+    checkout.address.postal = '50450'
+    expect(checkout.stepValid(1), 'an Oregon address that says Malaysia').toBe(false)
+
+    checkout.address.state = 'SGR'
+    checkout.address.postal = '94016-1234'
+    expect(checkout.stepValid(1), 'a US ZIP on a Malaysian address').toBe(false)
+  })
+
+  it('taxes the order at the destination rate, not a default one', () => {
+    const cart = useCartStore()
+    const checkout = useCheckoutStore()
+    cart.add(inStock())
+    fill(checkout)
+
+    const us = checkout.totals.tax
+    checkout.setCountry('MY')
+    checkout.address.state = 'SGR'
+    checkout.address.postal = '50450'
+
+    expect(checkout.totals.tax).toBe(Math.round(cart.subtotalCents * 0.08))
+    expect(checkout.totals.tax).not.toBe(us)
+  })
+
+  it('treats the phone as optional but not as a free-text field', () => {
+    const checkout = useCheckoutStore()
+    fill(checkout)
+    expect(checkout.stepValid(1), 'no phone at all is fine').toBe(true)
+
+    checkout.address.phone = '+60 12-345 6789'
+    expect(checkout.stepValid(1)).toBe(true)
+
+    checkout.address.phone = 'call me maybe'
+    expect(checkout.stepValid(1)).toBe(false)
+  })
+})
+
+describe('delivery methods follow the destination', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    localStorage.clear()
+  })
+
+  it('drops a method the new country has no carrier for', () => {
+    // Overnight is a US service. Carried into Malaysia it would have billed
+    // $29.95 for a delivery nobody runs.
+    const checkout = useCheckoutStore()
+    fill(checkout)
+    checkout.method = 'overnight'
+
+    checkout.setCountry('MY')
+    expect(checkout.method).toBe('standard')
+    expect(checkout.stepValid(2)).toBe(true)
+  })
+
+  it('keeps a method the new country does have', () => {
+    const checkout = useCheckoutStore()
+    fill(checkout)
+    checkout.method = 'express'
+    checkout.setCountry('GB')
+    expect(checkout.method).toBe('express')
+  })
+
+  it('refuses to leave the shipping step on a method the address cannot use', () => {
+    // Reachable by a store rehydrated from an older session, or a country
+    // changed from somewhere other than setCountry.
+    const checkout = useCheckoutStore()
+    fill(checkout)
+    checkout.address.country = 'MY'
+    checkout.method = 'overnight'
+    expect(checkout.stepValid(2)).toBe(false)
+  })
+
+  it('charges the destination its own delivery rate', () => {
+    const cart = useCartStore()
+    const checkout = useCheckoutStore()
+    cart.add(inStock())
+    fill(checkout)
+
+    // A basket over $75 ships free in the US and not to Kuala Lumpur, where
+    // the bar is $250 and the carrier charge is three times as large.
+    expect(checkout.totals.shipping).toBe(0)
+    checkout.setCountry('MY')
+    checkout.address.state = 'SGR'
+    checkout.address.postal = '50450'
+    expect(checkout.totals.shipping).toBe(0) // still over the APAC bar
+  })
+
+  it('bills international delivery on a basket that would ship free at home', () => {
+    const cart = useCartStore()
+    const checkout = useCheckoutStore()
+    const cheap = products.find((p) => p.inStock && p.priceMinor < 15000)!
+    cart.add(cheap)
+    fill(checkout)
+
+    checkout.setCountry('MY')
+    expect(checkout.totals.shipping).toBeGreaterThan(0)
   })
 })

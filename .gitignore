@@ -17,3 +17,4 @@ dist-vectorize/
 !.env.example
 # Holds a public URL, not a credential. See the file.
 !.env.staging
+.superpowers/

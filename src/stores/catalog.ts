@@ -14,6 +14,8 @@ export type Sort = 'default' | 'priceDesc' | 'priceAsc'
  */
 export const useCatalogStore = defineStore('catalog', {
   state: () => ({
+    /** The build-time snapshot the storefront paints from. */
+    items: products,
     activeFilter: 'all' as Filter,
     activeBrand: null as string | null,
     dealsOnly: false,
@@ -22,7 +24,7 @@ export const useCatalogStore = defineStore('catalog', {
 
   getters: {
     visible: (state) => {
-      const filtered = products.filter((p) => {
+      const filtered = state.items.filter((p) => {
         if (state.activeBrand && p.brand !== state.activeBrand) return false
         if (state.dealsOnly && p.badge !== 'DISCOUNT') return false
         if (state.activeFilter === 'inStock') return p.inStock
@@ -30,8 +32,8 @@ export const useCatalogStore = defineStore('catalog', {
         return true
       })
 
-      if (state.sort === 'priceDesc') return [...filtered].sort((a, b) => b.price - a.price)
-      if (state.sort === 'priceAsc') return [...filtered].sort((a, b) => a.price - b.price)
+      if (state.sort === 'priceDesc') return [...filtered].sort((a, b) => b.priceMinor - a.priceMinor)
+      if (state.sort === 'priceAsc') return [...filtered].sort((a, b) => a.priceMinor - b.priceMinor)
       return filtered
     },
 

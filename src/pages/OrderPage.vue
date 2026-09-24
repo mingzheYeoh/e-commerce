@@ -10,7 +10,9 @@ import { computed, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import { CheckCircle2, Package } from 'lucide-vue-next'
 import { useCheckoutStore, type Order } from '@/stores/checkout'
-import { SHIPPING } from '@/lib/money'
+import { SHIP_METHODS } from '@/lib/money'
+import { rateFor } from '@/lib/shipping'
+import { findCountry } from '@/lib/regions'
 import OrderSummary from '@/components/checkout/OrderSummary.vue'
 import NotFoundPage from './NotFoundPage.vue'
 
@@ -86,7 +88,7 @@ const placedOn = computed(() =>
           </div>
           <div class="rounded-card border border-border-hairline bg-surface-1 p-4">
             <p class="text-xs text-text-secondary">Delivery</p>
-            <p class="mt-1 text-sm font-medium">{{ SHIPPING[order.method].label }}</p>
+            <p class="mt-1 text-sm font-medium">{{ SHIP_METHODS[order.method].label }}</p>
           </div>
         </div>
 
@@ -96,13 +98,26 @@ const placedOn = computed(() =>
               <Package class="h-3.5 w-3.5 text-text-secondary" aria-hidden="true" />
               Shipping to
             </h2>
+            <!-- The country is spelled out rather than left as a code. A
+                 receipt is the one place the destination has to be unambiguous,
+                 and "MY" is not. -->
             <address class="mt-3 text-sm not-italic leading-relaxed text-text-secondary">
               {{ order.address.name }}<br />
               {{ order.address.line1 }}<br />
-              {{ order.address.city }}, {{ order.address.state }} {{ order.address.postal }}
+              <template v-if="order.address.line2">{{ order.address.line2 }}<br /></template>
+              {{ order.address.city
+              }}<template v-if="order.address.state">, {{ order.address.state }}</template>
+              {{ order.address.postal }}<br />
+              {{ findCountry(order.address.country)?.name ?? order.address.country }}
+              <template v-if="order.address.phone">
+                <br />{{ order.address.phone }}
+              </template>
             </address>
             <p class="mt-4 border-t border-border-hairline pt-4 text-sm text-text-secondary">
-              {{ SHIPPING[order.method].label }} · {{ SHIPPING[order.method].transit }}
+              {{ SHIP_METHODS[order.method].label }}
+              <template v-if="rateFor(order.method, order.address.country)">
+                · {{ rateFor(order.method, order.address.country)!.transit }}
+              </template>
             </p>
           </div>
 
@@ -110,6 +125,7 @@ const placedOn = computed(() =>
             :lines="order.lines"
             :totals="order.totals"
             :method="order.method"
+            :country="order.address.country"
             :state="order.address.state"
           />
         </div>
