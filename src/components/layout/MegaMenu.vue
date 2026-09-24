@@ -4,13 +4,13 @@ import { RouterLink, useRoute } from 'vue-router'
 import { ChevronDown, ArrowRight } from 'lucide-vue-next'
 import { categories } from '@/data/categories'
 import { brands } from '@/data/brands'
-import { products } from '@/data/products'
+import { catalogue } from '@/stores/catalog'
 
 const route = useRoute()
 const open = ref(false)
 const root = ref<HTMLElement | null>(null)
 
-const countIn = (id: string) => products.filter((p) => p.category === id).length
+const countIn = (id: string) => catalogue.value.filter((p) => p.category === id).length
 
 // Close on navigation, on Escape, and on a click outside. A menu that survives
 // a route change is the classic way this component goes wrong.
@@ -95,7 +95,7 @@ onUnmounted(() => {
               to="/shop"
               class="mt-4 flex items-center gap-1.5 px-2 text-sm font-medium text-accent transition-colors hover:text-accent-hover"
             >
-              View all {{ products.length }} products
+              View all {{ catalogue.length }} products
               <ArrowRight class="h-4 w-4" aria-hidden="true" />
             </RouterLink>
           </div>

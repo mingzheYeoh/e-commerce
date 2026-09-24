@@ -44,7 +44,9 @@ const methods = computed(() => methodsFor(checkout.address.country))
  */
 const country = computed(() => findCountry(checkout.address.country))
 
-const canPlace = computed(() => checkout.stepValid(3) && cart.items.length > 0)
+const canPlace = computed(
+  () => checkout.stepValid(3) && cart.items.length > 0 && !cart.hasUnavailable,
+)
 
 onMounted(() => {
   if (!cart.items.length) router.replace('/cart')
@@ -273,12 +275,12 @@ async function place() {
             </div>
 
             <p
-              v-if="checkout.error"
+              v-if="checkout.error || cart.hasUnavailable"
               class="flex items-start gap-2 rounded border border-accent-red/30 bg-accent-red/5 p-3 text-sm text-accent-red"
               role="alert"
             >
               <AlertCircle class="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-              {{ checkout.error }}
+              {{ checkout.error || 'Some items are no longer available. Remove them from your cart to continue.' }}
             </p>
 
             <div class="flex gap-3">
@@ -292,7 +294,7 @@ async function place() {
 
         <div class="lg:sticky lg:top-24 lg:self-start">
           <OrderSummary
-            :lines="cart.items"
+            :lines="cart.lines"
             :totals="checkout.totals"
             :method="checkout.method"
             :country="checkout.address.country"

@@ -79,6 +79,7 @@ const spanClass: Record<Category['span'], string> = {
               </h3>
               <p class="mt-2 max-w-md text-sm text-text-secondary">{{ category.blurb }}</p>
               <span
+                v-if="category.fromPrice"
                 class="mt-3 inline-block text-sm font-medium text-accent"
               >
                 From {{ formatPrice(category.fromPrice) }}

@@ -1,7 +1,17 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterAll } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import { useCompareStore, validIds, MAX_COMPARE } from './compare'
+import { catalogueStatus } from './catalog'
 import { products } from '@/data/products'
+
+// These describe the settled catalogue: an unknown id is gone for good. Before
+// the live fetch answers, an unknown id is held instead - see the last suite.
+beforeEach(() => {
+  catalogueStatus.value = 'live'
+})
+afterAll(() => {
+  catalogueStatus.value = 'pending'
+})
 
 const inCategory = (c: string) => products.filter((p) => p.category === c)
 const phones = inCategory('phones')
@@ -208,5 +218,23 @@ describe('setAt — the dropdown on /compare', () => {
     for (let i = 0; i < MAX_COMPARE; i++) expect(compare.setAt(i, phones[i].id)).toBe(true)
     expect(compare.ids).toHaveLength(MAX_COMPARE)
     expect(compare.setAt(MAX_COMPARE, phones[MAX_COMPARE].id)).toBe(false)
+  })
+})
+
+describe('before the live catalogue answers', () => {
+  it('holds an id the snapshot does not know, and drops it once settled', () => {
+    // A product published since the build is unknown to the snapshot, so a
+    // selection or a shared link naming it must survive until the live list
+    // can say whether it exists. main.ts re-validates when it arrives.
+    catalogueStatus.value = 'pending'
+    localStorage.setItem('nexus:compare', JSON.stringify([phones[0].id, 'published-yesterday']))
+    setActivePinia(createPinia())
+    const compare = useCompareStore()
+    expect(compare.ids).toEqual([phones[0].id, 'published-yesterday'])
+    expect(compare.items.map((p) => p.id), 'only what resolves is shown').toEqual([phones[0].id])
+
+    catalogueStatus.value = 'live'
+    compare.setFromIds(compare.ids)
+    expect(compare.ids).toEqual([phones[0].id])
   })
 })

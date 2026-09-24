@@ -1,13 +1,22 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import { ArrowDown, Truck, RotateCcw, ShieldCheck } from 'lucide-vue-next'
 import VideoBackdrop from '@/components/fx/VideoBackdrop.vue'
+// The curated pick is named by the build-time file; what it costs and how many
+// are left come from the live catalogue, like everywhere else.
 import { featuredDrop } from '@/data/products'
+import { catalogueStatus, findProduct } from '@/stores/catalog'
 import { brandName } from '@/data/brands'
 import { useCartStore } from '@/stores/cart'
 import { useCurrency } from '@/composables/useCurrency'
 
 const cart = useCartStore()
 const { format } = useCurrency()
+
+/** Hidden once the live catalogue says the pick is no longer published. */
+const drop = computed(
+  () => findProduct(featuredDrop.id) ?? (catalogueStatus.value === 'live' ? undefined : featuredDrop),
+)
 
 const assurances = [
   { icon: Truck, text: 'Free standard delivery over $75' },
@@ -60,11 +69,12 @@ const assurances = [
       class="relative z-10 flex flex-col items-start justify-between gap-5 border-t border-border-hairline pt-5 md:flex-row md:items-end"
     >
       <article
+        v-if="drop"
         class="card flex w-full items-center gap-4 p-3 transition-colors hover:border-border-strong md:w-auto"
       >
         <img
-          :src="featuredDrop.media.thumb"
-          :alt="featuredDrop.title"
+          :src="drop.media.thumb"
+          :alt="drop.title"
           width="64"
           height="64"
           loading="eager"
@@ -74,19 +84,19 @@ const assurances = [
         <div class="min-w-0 flex-1">
           <p class="text-xs font-medium text-accent">Featured this week</p>
           <p class="truncate text-sm font-semibold">
-            {{ brandName(featuredDrop.brand) }} {{ featuredDrop.title }}
+            {{ brandName(drop.brand) }} {{ drop.title }}
           </p>
           <p class="nums text-sm text-text-secondary">
-            {{ format(featuredDrop.priceMinor) }}
-            <span class="text-text-muted">· {{ featuredDrop.stockCount }} in stock</span>
+            {{ format(drop.priceMinor) }}
+            <span class="text-text-muted">· {{ drop.stockCount }} in stock</span>
           </p>
         </div>
 
         <button
           type="button"
           class="btn-primary shrink-0 whitespace-nowrap"
-          :aria-label="`Add ${featuredDrop.title} to cart`"
-          @click="cart.add(featuredDrop)"
+          :aria-label="`Add ${drop.title} to cart`"
+          @click="cart.add(drop)"
         >
           Add to cart
         </button>

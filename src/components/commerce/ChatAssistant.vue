@@ -13,11 +13,10 @@ import { RouterLink } from 'vue-router'
 import { Sparkles, ChevronDown, Wrench, AlertCircle, Send } from 'lucide-vue-next'
 import { chat, type AgentStep } from '@/lib/api'
 import { toSegments } from '@/lib/citations'
-import { products } from '@/data/products'
+import { findProduct } from '@/stores/catalog'
 import { useCurrency } from '@/composables/useCurrency'
 
 const { format } = useCurrency()
-const byId = new Map(products.map((p) => [p.id, p]))
 
 interface Turn {
   role: 'user' | 'assistant'
@@ -47,10 +46,10 @@ const history = computed(() =>
 )
 
 const segmentsFor = (text: string, citations: string[] = []) =>
-  toSegments(text, (id) => byId.get(id)?.title, citations)
+  toSegments(text, (id) => findProduct(id)?.title, citations)
 
 const productsFor = (ids: string[] = []) =>
-  ids.map((id) => byId.get(id)).filter((p) => p !== undefined)
+  ids.map((id) => findProduct(id)).filter((p) => p !== undefined)
 
 /** "filter_products" reads as machinery; this is what it did. */
 function describe(step: AgentStep): string {

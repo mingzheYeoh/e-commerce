@@ -98,7 +98,12 @@ const progress = computed(() =>
           </div>
 
           <ul v-else class="divide-y divide-border-hairline">
-            <li v-for="line in cart.items" :key="lineKey(line)" class="flex gap-4 px-5 py-4">
+            <li
+              v-for="line in cart.lines"
+              :key="lineKey(line)"
+              class="flex gap-4 px-5 py-4"
+              :class="!line.available && 'opacity-60'"
+            >
               <img
                 :src="line.thumb"
                 :alt="line.title"
@@ -138,7 +143,7 @@ const progress = computed(() =>
                   </div>
 
                   <div class="flex items-center gap-3">
-                    <span class="nums text-sm font-medium">
+                    <span v-if="line.available" class="nums text-sm font-medium">
                       {{ format(line.unitPriceCents * line.qty) }}
                     </span>
                     <button
@@ -152,7 +157,13 @@ const progress = computed(() =>
                   </div>
                 </div>
 
-                <p v-if="line.qty >= line.stockCount" class="mt-1.5 text-xs text-accent-amber">
+                <p v-if="!line.available" class="mt-1.5 text-xs text-accent-amber">
+                  No longer available. Remove it to check out.
+                </p>
+                <p v-else-if="line.limited" class="mt-1.5 text-xs text-accent-amber">
+                  Only {{ line.stockCount }} in stock right now, so {{ line.qty }} will be ordered.
+                </p>
+                <p v-else-if="line.qty >= line.stockCount" class="mt-1.5 text-xs text-accent-amber">
                   Maximum available quantity
                 </p>
               </div>
@@ -169,7 +180,12 @@ const progress = computed(() =>
             <p class="nums shrink-0 text-2xl font-bold">{{ format(cart.subtotalCents) }}</p>
           </div>
 
-          <button type="button" class="btn-primary mt-4 w-full" @click="toCheckout">
+          <button
+            type="button"
+            class="btn-primary mt-4 w-full disabled:cursor-not-allowed disabled:opacity-40"
+            :disabled="cart.hasUnavailable"
+            @click="toCheckout"
+          >
             Checkout
           </button>
           <p class="mt-2 flex items-center justify-center gap-1.5 text-xs text-text-muted">

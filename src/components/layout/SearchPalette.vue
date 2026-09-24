@@ -2,7 +2,7 @@
 import { computed, onMounted, onUnmounted, ref, toRef, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { Search, CornerDownLeft, Sparkles } from 'lucide-vue-next'
-import { products } from '@/data/products'
+import { catalogue } from '@/stores/catalog'
 import { brandName } from '@/data/brands'
 import { recommend } from '@/lib/recommend'
 import { ensureReady, hybridSearch, semanticState, type SemanticState } from '@/lib/semantic'
@@ -41,8 +41,8 @@ const result = computed(() => recommend(query.value, 6))
 
 const fallback = computed(() => {
   const q = query.value.trim().toLowerCase()
-  if (!q) return products.slice(0, 6)
-  return products
+  if (!q) return catalogue.value.slice(0, 6)
+  return catalogue.value
     .filter((p) =>
       `${p.title} ${p.brand} ${p.sku} ${p.specsSummary.join(' ')}`.toLowerCase().includes(q),
     )

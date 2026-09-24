@@ -1,4 +1,4 @@
-import { products } from '@/data/products'
+import { catalogue } from '@/stores/catalog'
 import { brands } from '@/data/brands'
 import type { Product, CategoryId } from '@/types'
 
@@ -182,7 +182,7 @@ export function recommend(query: string, limit = 6): RecommendResult {
   if (wantsCheap) understood.push('lower prices first')
   if (wantsBest) understood.push('top rated first')
 
-  const scored = products.map((product) => {
+  const scored = catalogue.value.map((product) => {
     const hay = haystackOf(product)
     const reasons: string[] = []
     let score = 0
@@ -229,8 +229,12 @@ export function recommend(query: string, limit = 6): RecommendResult {
     const literal = words.filter((w) => hay.includes(w)).length
     score += literal * 3
 
-    score += product.rating - 4
-    if (wantsBest) score += (product.rating - 4) * 4
+    // A product nobody has reviewed yet (anything new from the console) is
+    // neutral, not a zero-star product: rating 0 would cost it 4 points and
+    // bury it under an exact name match.
+    const rating = product.reviewCount > 0 ? product.rating : 4
+    score += rating - 4
+    if (wantsBest) score += (rating - 4) * 4
     if (wantsCheap) score -= price / 400
     if (score === -Infinity) return { product, score, reasons: [] }
 

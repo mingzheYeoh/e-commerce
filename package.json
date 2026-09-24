@@ -19,6 +19,7 @@
     "deploy": "npm run build && npx --prefix worker wrangler deploy",
     "build:staging": "node scripts/build-catalog.mjs nexus-orders-staging && vite build --mode staging",
     "deploy:staging": "npm run build:staging && npx --prefix worker wrangler deploy --env staging",
+    "deploy:console": "npm run build:console && npx --prefix worker wrangler deploy -c worker/wrangler.console.toml",
     "deploy:console:staging": "npm run build:console && npx --prefix worker wrangler deploy -c worker/wrangler.console.toml --env staging"
   },
   "dependencies": {
