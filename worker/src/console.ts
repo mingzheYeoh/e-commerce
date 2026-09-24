@@ -25,7 +25,7 @@ import {
   type StaffResult,
   type StaffSession,
 } from './staff-auth'
-import { scopedTo, type NewProduct, type ProductPatch, type ProductRow, type Repository } from './tenancy'
+import { id, scopedTo, type NewProduct, type ProductPatch, type ProductRow, type Repository } from './tenancy'
 import { guard, type IpDefences } from './auth'
 
 /*
@@ -255,9 +255,16 @@ async function route(request: Request, env: ConsoleEnv, url: URL): Promise<Respo
       return reply(await approveMerchant(env, session.staffId, approveId, slug))
     }
 
-    // ponytail: the merchants table is outside the Repository, as it is for
-    // approveMerchant, so this read is not audited. Add a platform audit row
-    // here if reading applications ever needs to be on the record.
+    // Every platform read of merchant data is audited, same as the write in
+    // approveMerchant. merchant_id is NULL because this spans every pending
+    // applicant, not one merchant.
+    await env.ORDERS.prepare(
+      `INSERT INTO audit_log (id, actor_id, actor_scope, merchant_id, action)
+       VALUES (?1, ?2, 'platform', NULL, 'merchants.pending.list')`,
+    )
+      .bind(id('aud'), session.staffId)
+      .run()
+
     const { results } = await env.ORDERS.prepare(
       `SELECT m.id, m.name, m.created_at AS createdAt, s.email
          FROM merchants m JOIN staff s ON s.merchant_id = m.id AND s.role = 'owner'

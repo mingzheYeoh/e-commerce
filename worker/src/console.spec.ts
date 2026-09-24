@@ -298,6 +298,24 @@ describe('the console worker: platform', () => {
       slug: 'pending-co',
     })
   })
+
+  it('audits a platform read of pending applications', async () => {
+    const mem = await activeMerchant()
+    await pendingApplication(mem)
+    const cookie = await platformSession(mem)
+
+    const res = await call(mem.db, 'GET', '/api/platform/merchants', { cookie })
+    expect(res.status).toBe(200)
+
+    expect(
+      mem.raw
+        .prepare(
+          `SELECT actor_id, actor_scope, merchant_id, action FROM audit_log
+            WHERE action = 'merchants.pending.list'`,
+        )
+        .get(),
+    ).toEqual({ actor_id: 'stf_admin', actor_scope: 'platform', merchant_id: null, action: 'merchants.pending.list' })
+  })
 })
 
 describe('the console worker: staff authentication', () => {
