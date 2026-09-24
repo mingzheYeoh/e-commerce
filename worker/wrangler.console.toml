@@ -9,8 +9,13 @@ main = "src/console.ts"
 compatibility_date = "2026-09-01"
 compatibility_flags = ["nodejs_compat"]
 
-# No [assets] yet. When the console SPA adds it, /api/* must reach this worker
-# ahead of the SPA fallback (run_worker_first), or every API call gets index.html.
+# The built SPA. run_worker_first is load-bearing: without it the asset
+# handler's SPA fallback answers every /api/* request with index.html before
+# this worker's fetch() ever runs, and the whole API goes dark behind a 200.
+[assets]
+directory = "../console/dist"
+not_found_handling = "single-page-application"
+run_worker_first = ["/api/*"]
 
 [[d1_databases]]
 binding = "ORDERS"
@@ -51,6 +56,12 @@ new_sqlite_classes = ["IpThrottle"]
 # missing a binding. /api/health reports which defences are bound.
 [env.staging]
 name = "nexus-console-staging"
+
+# Not inherited from the top level either — see the comment above [assets].
+[env.staging.assets]
+directory = "../console/dist"
+not_found_handling = "single-page-application"
+run_worker_first = ["/api/*"]
 
 [[env.staging.d1_databases]]
 binding = "ORDERS"
