@@ -358,12 +358,32 @@ describe('signing in', () => {
   })
 
   it('locks the account after repeated failures', async () => {
+    // Refused with the ordinary 401, not a lock status: an address with no
+    // account never locks, so a distinct answer would say which ones exist.
+    const { db, raw } = await activeMerchant()
+    const wrong = await signIn(env(db), { email: good.email, password: 'wrong-but-long-enough' }, req())
+    for (let i = 0; i < 4; i++) {
+      await signIn(env(db), { email: good.email, password: 'wrong-but-long-enough' }, req())
+    }
+    const res = await signIn(env(db), { email: good.email, password: good.password }, req())
+    expect(res).toEqual(wrong)
+    expect(res.status).toBe(401)
+
+    // The refusal was the lock, not a broken account: once the wait is over,
+    // the same password gets in.
+    raw.prepare(`UPDATE staff SET locked_until = ?`).run(new Date(Date.now() - 1000).toISOString())
+    const later = await signIn(env(db), { email: good.email, password: good.password }, req())
+    expect(later.status).toBe(200)
+  })
+
+  it('answers a locked account byte-for-byte as it answers an address with no account', async () => {
     const { db } = await activeMerchant()
     for (let i = 0; i < 5; i++) {
       await signIn(env(db), { email: good.email, password: 'wrong-but-long-enough' }, req())
     }
-    const res = await signIn(env(db), { email: good.email, password: good.password }, req())
-    expect(res.status).toBe(423)
+    const locked = await signIn(env(db), { email: good.email, password: 'wrong-but-long-enough' }, req())
+    const nobody = await signIn(env(db), { email: 'nobody@example.com', password: 'wrong-but-long-enough' }, req())
+    expect(JSON.stringify(locked)).toBe(JSON.stringify(nobody))
   })
 
   it('requires the second factor on every later sign-in', async () => {
@@ -406,9 +426,11 @@ describe('signing in', () => {
 
   it('backs off an attacker-created pending account just as it backs off an existing one', async () => {
     /*
-     * Without this, the status is equal and six attempts still read the
-     * difference: a pre-existing account locks and answers 423, an
-     * attacker-created one never would.
+     * Both answer 401 either way now, so the status alone proves little; the
+     * row is the evidence. If an attacker-created account never locked, a
+     * pre-existing one would refuse its own right password after five misses
+     * while the probe's account kept accepting — and any later difference in
+     * how a locked account is handled would read the two apart.
      */
     const attacker = memoryD1()
     await registerMerchant(env(attacker.db), good)
@@ -423,7 +445,7 @@ describe('signing in', () => {
     }
     const locked = await signIn(env(existing.db), { email: good.email, password: good.password }, req())
 
-    expect(probe.status).toBe(423)
+    expect(probe.status).toBe(401)
     expect(probe).toEqual(locked)
     const row = attacker.raw.prepare(`SELECT failed_attempts, locked_until FROM staff`).get() as {
       failed_attempts: number
@@ -527,10 +549,12 @@ describe('signing in', () => {
     const again = (await staffSession(env(db), withCookie(second)))!
     await confirmTotpEnrolment(env(db), again, { code: '000000' })
 
+    // 423 is fine here and nowhere in signIn: only someone who already has a
+    // session, and so the password, can reach this call.
     const res = await confirmTotpEnrolment(env(db), again, { code: await totpCode(secret) })
     expect(res.status).toBe(423)
     expect(await staffSession(env(db), withCookie(second))).toMatchObject({ kind: 'enrolling' })
     const blocked = await signIn(env(db), { email: good.email, password: good.password }, req())
-    expect(blocked.status).toBe(423)
+    expect(blocked.status).toBe(401)
   })
 })

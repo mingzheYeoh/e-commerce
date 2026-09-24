@@ -39,7 +39,7 @@
  *    One residual is known and deferred, not closed: timing. A fresh
  *    application performs a batched write that a duplicate skips, so a
  *    duplicate answers faster by roughly one write. (Sign-in has a separate,
- *    documented residual of its own — see `signIn` on 423.)
+ *    documented trade-off of its own — see `signIn` on lockout.)
  *
  * 3. The merchant row and its owner are written in one batch. A merchant with
  *    no owner is an application nobody can ever claim.
@@ -350,8 +350,9 @@ const NO_MATCH: StaffResult = Object.freeze({
 })
 
 /*
- * 423 is readable by anyone who guesses six times, and an address with no
- * account never reaches it. See `signIn` for why that is accepted.
+ * Only for a caller already holding a session, which means the right
+ * password: `signIn` never gives a stranger this — see its comment on
+ * lockout.
  */
 const LOCKED: StaffResult = Object.freeze({
   status: 423,
@@ -372,6 +373,12 @@ const lockedNow = (lockedUntil: string | null) => Boolean(lockedUntil) && !isPas
  * batch, because a read-then-write in JS lets a burst of parallel guesses all
  * read the same count and all write count + 1 — a hundred guesses that cost
  * one. `backoffSeconds` stays the one definition of how long the wait is.
+ *
+ * `locked_until` is written on every call, NULL below the threshold, rather
+ * than only when a wait begins: the attempt that engages the lock would
+ * otherwise be the one answer a round trip slower than an unknown address.
+ * NULL is safe because below the threshold nothing can have set it — the
+ * count and the lock are only ever cleared together.
  */
 async function recordFailure(env: StaffEnv, staffId: string): Promise<void> {
   const [, read] = await env.ORDERS.batch<{ failed_attempts: number }>([
@@ -381,11 +388,9 @@ async function recordFailure(env: StaffEnv, staffId: string): Promise<void> {
     env.ORDERS.prepare(`SELECT failed_attempts FROM staff WHERE id = ?1`).bind(staffId),
   ])
   const wait = backoffSeconds(read.results[0]?.failed_attempts ?? 0)
-  if (wait) {
-    await env.ORDERS.prepare(`UPDATE staff SET locked_until = ?2 WHERE id = ?1`)
-      .bind(staffId, inSeconds(wait))
-      .run()
-  }
+  await env.ORDERS.prepare(`UPDATE staff SET locked_until = ?2 WHERE id = ?1`)
+    .bind(staffId, wait ? inSeconds(wait) : null)
+    .run()
 }
 
 /**
@@ -404,15 +409,19 @@ async function recordFailure(env: StaffEnv, staffId: string): Promise<void> {
  *   the password, so an attacker can register a victim's address and sign in
  *   with their own choice. A pending account's correct password therefore
  *   counts as a failure too — it increments `failed_attempts` and engages
- *   backoff — or six attempts would tell a probe-created account (never
- *   locks) from a pre-existing one (locks, and says 423).
+ *   backoff — so a probe-created account and a pre-existing one lock alike.
  *
- * - A locked account answers 423. An address with no account never locks, so
- *   six wrong guesses say whether a staff account exists. The customer side
- *   answers a locked account with its ordinary 401 to avoid exactly this;
- *   staff get the distinct status because the plan chose it, and the cost is
- *   the address's existence, not anything about the account. Closing it means
- *   counting failures for addresses that have no row, which needs a table.
+ * - A locked account also gets NO_MATCH, even for the right password. An
+ *   address with no account never locks, so a distinct lock status (the plan
+ *   first said 423) would turn six wrong guesses into a way to learn whether
+ *   a staff account exists. Decided in review of this task, matching the
+ *   customer side for the same reason. The lock is still enforced — the
+ *   right password is refused until the wait is over — it is just not
+ *   announced. What that costs is a real owner who cannot tell "locked" from
+ *   "mistyped"; waiting and retrying is the answer to both.
+ *
+ * Every refusal also pays the same KDF and the same three statements, the
+ * unknown and locked ones running `recordFailure` against no row.
  *
  * @param _request is where a per-IP throttle will read the client address.
  * The per-account backoff here cannot see a burst spread across accounts.
@@ -451,14 +460,16 @@ export async function signIn(env: StaffEnv, body: unknown, _request: Request): P
     row?.kdf_rounds ?? KDF_ROUNDS,
   )
 
-  if (!row) {
-    // The same two statements a real failure costs, matching no row, so an
-    // unknown address is not the answer that skipped a database round trip.
+  /*
+   * An unknown address and a locked account run the statements a real
+   * failure costs, against no row, so neither is the answer that skipped a
+   * round trip. Guesses made while locked are not counted: the wait is what
+   * slows them.
+   */
+  if (!row || lockedNow(row.locked_until)) {
     await recordFailure(env, '')
     return NO_MATCH
   }
-  // Guesses made while locked are not counted: the wait is what slows them.
-  if (lockedNow(row.locked_until)) return LOCKED
 
   const mayTrade = row.scope === 'platform' || row.merchant_status === 'active'
   if (!sameBytes(attempt, fromB64(row.password_hash)) || !mayTrade) {
