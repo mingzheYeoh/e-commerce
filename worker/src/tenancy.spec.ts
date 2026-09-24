@@ -28,6 +28,14 @@ describe('the migration and the schema', () => {
     const mig = norm('worker/migrations/0006-tenancy.sql')
     expect(norm('worker/schema.sql')).toContain(mig.slice(mig.indexOf('-- A merchant selling')))
   })
+
+  it('keeps 0012 and its block in schema.sql identical', () => {
+    // The same guard for the audit paging index: schema.sql carries the
+    // migration verbatim, so the index every test runs against is the one the
+    // file production runs creates.
+    const norm = (p: string) => readFileSync(p, 'utf8').replace(/\r\n/g, '\n').trim()
+    expect(norm('worker/schema.sql')).toContain(norm('worker/migrations/0012-audit-merchant-seq-index.sql'))
+  })
 })
 
 /**
@@ -226,7 +234,7 @@ describe('the schema refuses states that must not exist', () => {
   })
 })
 
-import { scopedTo, platformWide, methodNames, utcDay, type TenancyEnv, type Repository } from './tenancy'
+import { scopedTo, platformWide, methodNames, utcDay, SELF_AUDITED, type TenancyEnv, type Repository } from './tenancy'
 
 /**
  * Two merchants, each with one product. B's is marked so a leak is obvious.
@@ -452,7 +460,7 @@ const CASES: Record<string, unknown[]> = {
   'merchants.list': [],
   'merchants.suspend': ['mch_b'],
   'merchants.restore': ['mch_b'],
-  'audit.list': [{ merchantId: null, page: 0 }],
+  'audit.list': [{ merchantId: null, before: null }],
 }
 
 /** Everything in CASES that a merchant repository does not carry at all. */
@@ -843,38 +851,198 @@ describe('suspending a merchant', () => {
     await (await platformWide(env, 'stf_p')).merchants.suspend('mch_a')
     await expect(scopedTo(env, 'mch_a', 'stf_a')).rejects.toThrow(/not active/)
   })
+
+  it('leaves the status alone when its audit row cannot be written', async () => {
+    // The change and its row are one batch. A trigger stands in for any
+    // failure of the INSERT: the UPDATE before it must roll back with it.
+    const { env, raw, rows } = await sales()
+    const breakAudit = () =>
+      raw.prepare(`CREATE TRIGGER audit_down BEFORE INSERT ON audit_log BEGIN SELECT RAISE(ABORT, 'audit down'); END`).run()
+    const mendAudit = () => raw.prepare(`DROP TRIGGER audit_down`).run()
+    const platform = await platformWide(env, 'stf_p')
+
+    breakAudit()
+    await expect(platform.merchants.suspend('mch_a')).rejects.toThrow(/audit down/)
+    expect(rows('merchants').find((m) => m.id === 'mch_a')!.status).toBe('active')
+
+    mendAudit()
+    await platform.merchants.suspend('mch_a')
+    breakAudit()
+    await expect(platform.merchants.restore('mch_a')).rejects.toThrow(/audit down/)
+    expect(rows('merchants').find((m) => m.id === 'mch_a')!.status).toBe('suspended')
+  })
+
+  it('is recorded by its own batch only, never again by the wrapper', () => {
+    // Exactly the writes that insert their own row; the first test in this
+    // block would count four rows instead of two if the wrapper also did.
+    expect([...SELF_AUDITED].sort()).toEqual(['merchants.restore', 'merchants.suspend'])
+  })
 })
 
 describe('the audit log', () => {
-  it('pages newest first, and filters to one merchant', async () => {
-    const { env, raw } = await sales()
+  /** `count` rows, alternately B's and A's, all in the same second: ties only rowid can order. */
+  const seedLog = (raw: Raw, count: number, from = 0) => {
     const insert = raw.prepare(
-      `INSERT INTO audit_log (id, at, actor_id, actor_scope, merchant_id, action) VALUES (?, ?, 'stf_p', 'platform', ?, 'x')`,
+      `INSERT INTO audit_log (id, at, actor_id, actor_scope, merchant_id, action)
+       VALUES (?, '2026-01-01 00:00:00', 'stf_p', 'platform', ?, 'x')`,
     )
-    for (let i = 0; i < 60; i++) {
-      insert.run(`aud_${String(i).padStart(2, '0')}`, `2026-01-01 00:00:${String(i).padStart(2, '0')}`, i % 2 ? 'mch_a' : 'mch_b')
+    // Ids that sort the opposite way to their insertion, so an ORDER BY id
+    // would show exactly the wrong order.
+    for (let i = from; i < from + count; i++) insert.run(`aud_${String(999 - i).padStart(3, '0')}`, i % 2 ? 'mch_a' : 'mch_b')
+  }
+
+  async function everyPage(platform: Awaited<ReturnType<typeof platformWide>>, merchantId: string | null, between?: () => void) {
+    const seen: string[] = []
+    let before: number | null = null
+    for (;;) {
+      const page = await platform.audit.list({ merchantId, before })
+      seen.push(...page.entries.map((e) => e.id))
+      if (page.next === null) return seen
+      between?.()
+      before = page.next
     }
-    const platform = await platformWide(env, 'stf_p')
+  }
 
-    const first = await platform.audit.list({ merchantId: null, page: 0 })
-    expect(first.entries).toHaveLength(50)
-    expect(first.hasMore).toBe(true)
-    expect(first.entries[0].id).toBe('aud_59')
-    const second = await platform.audit.list({ merchantId: null, page: 1 })
-    // 60 seeded, plus the row the first read wrote about itself, which is newest of all.
-    expect(second.entries.map((e) => e.id).slice(-1)).toEqual(['aud_00'])
-    expect(second.hasMore).toBe(false)
-
-    const onlyA = await platform.audit.list({ merchantId: 'mch_a', page: 0 })
-    expect(onlyA.entries).toHaveLength(30)
-    expect(onlyA.entries.every((e) => e.merchant_id === 'mch_a' && e.merchant_name === 'MCH_A')).toBe(true)
+  it('reads newest first in insertion order, even within one second', async () => {
+    const { env, raw } = await sales()
+    seedLog(raw, 3)
+    const page = await (await platformWide(env, 'stf_p')).audit.list({ merchantId: null, before: null })
+    // Inserted aud_999, aud_998, aud_997: newest first is the reverse, whatever the ids say.
+    expect(page.entries.map((e) => e.id)).toEqual(['aud_997', 'aud_998', 'aud_999'])
+    expect(page.next).toBeNull()
   })
 
-  it("records a filtered read against that merchant, so it shows up in their own log", async () => {
+  it('pages through every row exactly once while new rows keep arriving', async () => {
+    /*
+     * Each read writes its own audit.list row, and more are inserted between
+     * pages. Under OFFSET both shifted every later page and repeated entries.
+     * A cursor on rowid only ever looks further back than it has been.
+     */
     const { env, raw } = await sales()
-    await (await platformWide(env, 'stf_p')).audit.list({ merchantId: 'mch_a', page: 0 })
-    expect(raw.prepare(`SELECT action, merchant_id FROM audit_log`).all()).toEqual([
-      { action: 'audit.list', merchant_id: 'mch_a' },
+    seedLog(raw, 120)
+    let more = 1000
+    const seen = await everyPage(await platformWide(env, 'stf_p'), null, () => seedLog(raw, 7, (more += 7)))
+
+    const seeded = Array.from({ length: 120 }, (_, i) => `aud_${String(999 - i).padStart(3, '0')}`).reverse()
+    expect(seen.filter((id) => seeded.includes(id))).toEqual(seeded)
+    expect(new Set(seen).size, 'no entry shown twice').toBe(seen.length)
+  })
+
+  it('pages one merchant through, and only that merchant', async () => {
+    const { env, raw } = await sales()
+    seedLog(raw, 120)
+    const seen = await everyPage(await platformWide(env, 'stf_p'), 'mch_a')
+    // A's 60 (the odd ones), newest first. The audit.list rows each page wrote
+    // against A are newer than the first page, so no later page reaches them.
+    const ofA = Array.from({ length: 120 }, (_, i) => i)
+      .filter((i) => i % 2)
+      .map((i) => `aud_${String(999 - i).padStart(3, '0')}`)
+      .reverse()
+    expect(seen).toEqual(ofA)
+  })
+
+  it('hands back every merchant name for the filter, and names merchants on entries', async () => {
+    const { env, raw } = await sales()
+    seedLog(raw, 2)
+    const page = await (await platformWide(env, 'stf_p')).audit.list({ merchantId: 'mch_a', before: null })
+    expect(page.merchants).toEqual([
+      { id: 'mch_a', name: 'MCH_A' },
+      { id: 'mch_b', name: 'MCH_B' },
     ])
+    expect(page.entries.every((e) => e.merchant_id === 'mch_a' && e.merchant_name === 'MCH_A')).toBe(true)
+  })
+
+  it('records one row per read, against the merchant filtered to', async () => {
+    // The names ride along with the read; no merchants.list, so no row per merchant.
+    const { env, raw } = await sales()
+    const platform = await platformWide(env, 'stf_p')
+    await platform.audit.list({ merchantId: 'mch_a', before: null })
+    await platform.audit.list({ merchantId: null, before: null })
+    expect(raw.prepare(`SELECT action, merchant_id FROM audit_log ORDER BY rowid`).all()).toEqual([
+      { action: 'audit.list', merchant_id: 'mch_a' },
+      // Unfiltered is not one merchant's log: NULL, as documented at drawnOn.
+      { action: 'audit.list', merchant_id: null },
+    ])
+  })
+
+  it('refuses a merchant that does not exist, and records nothing', async () => {
+    // It used to read the page, then fail the audit row's foreign key: a 500.
+    const { env, rows } = await sales()
+    await expect(
+      (await platformWide(env, 'stf_p')).audit.list({ merchantId: 'mch_nope', before: null }),
+    ).rejects.toThrow(/does not exist/)
+    expect(rows('audit_log')).toEqual([])
+  })
+
+  it('reads each page by index, never by sorting the whole log', () => {
+    // What migration 0012 is for. The unfiltered page seeks on the table's own
+    // key; the filtered one on (merchant_id, rowid). A temp B-tree here means a
+    // sort of every row the merchant has, on every page.
+    const { raw } = memoryD1()
+    const plan = (where: string) =>
+      (raw.prepare(`EXPLAIN QUERY PLAN SELECT a.rowid FROM audit_log a WHERE ${where} ORDER BY a.rowid DESC LIMIT 51`).all() as {
+        detail: string
+      }[])
+        .map((r) => r.detail)
+        .join(' | ')
+    expect(plan(`a.rowid < 100`)).not.toMatch(/TEMP B-TREE|SCAN/)
+    const filtered = plan(`a.merchant_id = 'm' AND a.rowid < 100`)
+    expect(filtered).toContain('audit_merchant_seq_idx')
+    expect(filtered).not.toMatch(/TEMP B-TREE/)
+  })
+})
+
+describe('what a platform read records', () => {
+  it('writes every row of a list in one statement, however many merchants it touched', async () => {
+    const { env, raw } = await sales()
+    for (let i = 0; i < 48; i++) {
+      raw.prepare(`INSERT INTO merchants (id, slug, name, settlement_currency, status) VALUES (?, ?, 'M', 'USD', 'active')`).run(`mch_${i}`, `m${i}`)
+    }
+    const statements: string[] = []
+    const counting = {
+      ...env.ORDERS,
+      prepare: (sql: string) => {
+        statements.push(sql)
+        return env.ORDERS.prepare(sql)
+      },
+    } as unknown as D1Database
+
+    const list = await (await platformWide({ ORDERS: counting }, 'stf_p')).merchants.list()
+    expect(list).toHaveLength(50)
+    expect(statements.filter((s) => /INSERT INTO audit_log/.test(s))).toHaveLength(1)
+    // Still one row per merchant, each findable under its own id.
+    expect(raw.prepare(`SELECT COUNT(DISTINCT merchant_id) AS n, COUNT(*) AS rows FROM audit_log`).get()).toEqual({ n: 50, rows: 50 })
+  })
+
+  it('records the merchants a platform order read drew on, not NULL', async () => {
+    const { env, raw } = await sales()
+    const platform = await platformWide(env, 'stf_p')
+    await platform.orders.list(ALL_TIME)
+    const listed = raw.prepare(`SELECT merchant_id FROM audit_log WHERE action = 'orders.list' ORDER BY merchant_id`).all()
+    expect(listed).toEqual([{ merchant_id: 'mch_a' }, { merchant_id: 'mch_b' }])
+
+    // o1 is shared: reading it reads both merchants' lines, so both are told.
+    await platform.orders.get('o1')
+    const got = raw.prepare(`SELECT merchant_id, subject FROM audit_log WHERE action = 'orders.get' ORDER BY merchant_id`).all()
+    expect(got).toEqual([
+      { merchant_id: 'mch_a', subject: 'o1' },
+      { merchant_id: 'mch_b', subject: 'o1' },
+    ])
+  })
+
+  it('records a platform-wide aggregate once, against NULL meaning every merchant', async () => {
+    // Documented at drawnOn: stats.overview is not one merchant's data, and a
+    // row per merchant for a single number would be noise that grows with N.
+    const { env, raw } = await sales()
+    await (await platformWide(env, 'stf_p')).stats.overview()
+    expect(raw.prepare(`SELECT action, merchant_id FROM audit_log`).all()).toEqual([
+      { action: 'stats.overview', merchant_id: null },
+    ])
+  })
+
+  it('records nothing for a list that came back empty: it drew on nobody', async () => {
+    const { env, rows } = await sales()
+    await (await platformWide(env, 'stf_p')).orders.list({ from: '2001-01-01', to: '2001-01-02' })
+    expect(rows('audit_log')).toEqual([])
   })
 })

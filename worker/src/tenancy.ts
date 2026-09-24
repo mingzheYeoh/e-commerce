@@ -77,6 +77,10 @@ export interface Repository {
    * the order's total, which includes other merchants' goods.
    */
   orders: {
+    /**
+     * Newest first, at most ORDER_CAP + 1: one past the cap, so the caller can
+     * say the list was cut instead of silently showing a partial one.
+     */
     list(range: OrderRange): Promise<OrderSummary[]>
     get(id: string): Promise<OrderDetail | null>
   }
@@ -93,13 +97,20 @@ export interface Repository {
 export interface PlatformRepository extends Repository {
   merchants: {
     list(): Promise<MerchantSummary[]>
-    /** active → suspended. Throws when the merchant is not active, so no audit row claims it happened. */
+    /**
+     * active → suspended, and its audit row, in one batch. Throws when the
+     * merchant is not active; nothing is written then.
+     */
     suspend(id: string): Promise<{ merchant_id: string; status: 'suspended' }>
-    /** suspended → active. Never pending → active: approval is its own flow. */
+    /** suspended → active, the same way. Never pending → active: approval is its own flow. */
     restore(id: string): Promise<{ merchant_id: string; status: 'active' }>
   }
   audit: {
-    list(filter: { merchantId: string | null; page: number }): Promise<AuditPage>
+    /**
+     * Newest first by insertion order. `before` is the previous page's `next`.
+     * Throws when `merchantId` names no merchant.
+     */
+    list(filter: { merchantId: string | null; before: number | null }): Promise<AuditPage>
   }
 }
 
@@ -126,6 +137,8 @@ export interface OrderSummary {
   /** Units of in-scope lines. */
   items: number
   totals: Amount[]
+  /** Whose lines these are: the merchant itself, or on a platform read every merchant in the order. */
+  merchant_ids: string[]
 }
 
 /**
@@ -147,6 +160,7 @@ export interface OrderDetail {
   ship_postal: string
   lines: {
     product_id: string
+    merchant_id: string
     sku: string
     title: string
     variant: string
@@ -155,6 +169,8 @@ export interface OrderDetail {
     currency: string
   }[]
   totals: Amount[]
+  /** Whose lines were read, as on OrderSummary. */
+  merchant_ids: string[]
 }
 
 export interface Overview {
@@ -183,9 +199,11 @@ export interface MerchantSummary {
 export interface AuditPage {
   /** The merchant filtered to, so the read of their log is recorded against them. */
   merchant_id: string | null
-  page: number
-  hasMore: boolean
+  /** Pass as `before` for the next, older page; null on the last one. */
+  next: number | null
   entries: {
+    /** The row's insertion sequence (SQLite rowid): the order the log is read in, and the cursor. */
+    seq: number
     id: string
     at: string
     actor_id: string
@@ -196,12 +214,22 @@ export interface AuditPage {
     action: string
     subject: string | null
   }[]
+  /**
+   * Every merchant's id and name, for the viewer's filter. Carried by this
+   * read rather than fetched through merchants.list, which is audited once
+   * per merchant: opening the log would otherwise write a row per merchant
+   * into the log being opened. Names are the platform's own registry, not a
+   * merchant's orders, prices or revenue.
+   */
+  merchants: { id: string; name: string }[]
 }
 
 /** Published and at or under this many units: the overview's low-stock alert. */
 export const LOW_STOCK = 5
 /** One audit page. */
 export const AUDIT_PAGE = 50
+/** The most orders one list returns. orders.list fetches one more, to tell. */
+export const ORDER_CAP = 1000
 
 /** Exported so staff-auth mints `mch_`/`stf_` the one way this worker mints ids. */
 export const id = (prefix: string) =>
@@ -247,7 +275,15 @@ function assertIntegerMinor(value: number, field: string): void {
 const READS = new Set(['products.list', 'products.get', 'orders.list', 'orders.get', 'stats.overview'])
 
 /**
- * Whether this call is worth a row.
+ * Writes that record their own audit row, in the same batch as the change,
+ * so the change and its row commit or fail together. The wrapper stays out of
+ * them, or each would be recorded twice. A method belongs here only if its
+ * body writes the row itself; the test that pins this set says so too.
+ */
+export const SELF_AUDITED = new Set(['merchants.suspend', 'merchants.restore'])
+
+/**
+ * Whether this call is worth a row from the wrapper.
  *
  * Every write by anyone, and every platform read. A merchant reading their own
  * data is not an event, and recording it would bury the entries that are.
@@ -258,27 +294,52 @@ const READS = new Set(['products.list', 'products.get', 'orders.list', 'orders.g
  * added later, because audit_log is append-only.
  */
 const worthAuditing = (scope: Scope, dotted: string): boolean =>
-  scope.kind === 'platform' || !READS.has(dotted)
+  !SELF_AUDITED.has(dotted) && (scope.kind === 'platform' || !READS.has(dotted))
 
 /**
- * One audit row.
+ * The merchants a platform call's result drew on, one audit row each.
  *
- * Numbered `?1..?6` here, against the anonymous `?` this file argues for
- * above: a fixed six-column INSERT has no clause that appears or disappears,
+ * A result (or each row of a list) names them as `merchant_id` or
+ * `merchant_ids`. A result that names none is recorded once against NULL,
+ * which in this log means "not one merchant's": a platform-wide aggregate
+ * such as stats.overview, or the unfiltered audit log. An empty list drew on
+ * nobody and records nothing.
+ */
+function drawnOn(result: unknown): (string | null)[] {
+  const rows = Array.isArray(result) ? result : [result]
+  const named = rows.flatMap((r) => {
+    const { merchant_id, merchant_ids } = (r ?? {}) as { merchant_id?: string | null; merchant_ids?: string[] }
+    const ids = [...(merchant_ids ?? []), ...(merchant_id ? [merchant_id] : [])]
+    return ids.length ? ids : [null]
+  })
+  return [...new Set(named)]
+}
+
+/**
+ * Every audit row for one call, in ONE statement, whatever the merchant count.
+ *
+ * A statement per merchant made a platform list cost N statements. With 41
+ * merchants the overview page passed Workers Free's 50 per invocation and
+ * failed after some of its rows were already written. One INSERT ... SELECT
+ * over a JSON array of [id, merchant] pairs is one statement for 1 or 1000.
+ * The ids are minted here, the way every other id in this worker is.
+ *
+ * Numbered `?1..?5`: a fixed INSERT has no clause that appears or disappears,
  * so there is no numbering to shift under an off-by-one.
  */
 async function record(
   env: TenancyEnv,
   scope: Scope,
   dotted: string,
-  merchantId: string | null,
+  merchants: (string | null)[],
   subject: string | null,
 ): Promise<void> {
+  if (!merchants.length) return
   await env.ORDERS.prepare(
     `INSERT INTO audit_log (id, actor_id, actor_scope, merchant_id, action, subject)
-     VALUES (?1,?2,?3,?4,?5,?6)`,
+     SELECT json_extract(value, '$[0]'), ?1, ?2, json_extract(value, '$[1]'), ?3, ?4 FROM json_each(?5)`,
   )
-    .bind(id('aud'), scope.staffId, scope.kind, merchantId, dotted, subject)
+    .bind(scope.staffId, scope.kind, dotted, subject, JSON.stringify(merchants.map((m) => [id('aud'), m])))
     .run()
 }
 
@@ -297,8 +358,10 @@ async function record(
  * changed. Making the two atomic would mean every write carrying its own
  * `env.ORDERS.batch([...])` so the row and the change land in one
  * transaction — done in each write method instead of here, which is
- * exactly the coverage this wrapper trades away. `record`'s own failure is
- * still not swallowed: see the catch below.
+ * exactly the coverage this wrapper trades away. Suspend and restore do pay
+ * that price (SELF_AUDITED): a merchant's status is the one write whose
+ * missing row would matter most. `record`'s own failure is still not
+ * swallowed: see the catch below.
  *
  * One group at a time, named explicitly at the call site below, so that the
  * result is an object literal TypeScript can check against Repository. A
@@ -336,25 +399,12 @@ const wrapGroup = (env: TenancyEnv, scope: Scope, group: string, methods: object
                 typeof args[0] === 'string'
                   ? (args[0] as string)
                   : ((result as { id?: string } | null)?.id ?? null)
-              // ponytail: a platform list across N merchants writes N rows.
-              // The upgrade if that volume ever matters is one row plus a
-              // `detail` JSON of ids — but only alongside a merchant-facing
-              // query that reads it, or the row becomes unfindable again.
+              // One row per merchant drawn on, so each merchant finds the read
+              // under their own id — written by one statement, not N.
               const touched: (string | null)[] =
-                scope.kind === 'merchant'
-                  ? [scope.merchantId]
-                  : Array.isArray(result)
-                    ? [
-                        ...new Set(
-                          // `?? null`: a row that spans merchants (a platform
-                          // order summary) has no merchant_id, and D1 refuses
-                          // to bind undefined.
-                          (result as { merchant_id?: string }[]).map((r) => r.merchant_id ?? null),
-                        ),
-                      ]
-                    : [(result as { merchant_id?: string } | null)?.merchant_id ?? null]
+                scope.kind === 'merchant' ? [scope.merchantId] : drawnOn(result)
               try {
-                for (const m of touched) await record(env, scope, dotted, m, subject)
+                await record(env, scope, dotted, touched, subject)
               } catch (err) {
                 // The call already did its work (read or write), and the
                 // caller is about to be told it failed. Nothing in the
@@ -411,15 +461,27 @@ const amountsOf = (rows: { currency: string; minor: number }[]): Amount[] =>
   rows.map(({ currency, minor }) => ({ currency, minor }))
 
 /** Merchants a platform repository can act on that no merchant repository has. */
-function platformOnly(env: TenancyEnv): Omit<PlatformRepository, keyof Repository> {
-  const transition = async (merchantId: string, from: string, to: string) => {
-    const { meta } = await env.ORDERS.prepare(`UPDATE merchants SET status = ? WHERE id = ? AND status = ?`)
-      .bind(to, merchantId, from)
-      .run()
-    // Thrown rather than returned as null: the wrapper records the call once
-    // it returns, and a refused suspension must not leave a row saying
-    // 'merchants.suspend' happened.
-    if (meta.changes !== 1) throw new Error(`merchant ${merchantId} is not ${from}`)
+function platformOnly(env: TenancyEnv, staffId: string): Omit<PlatformRepository, keyof Repository> {
+  /*
+   * The status change and its audit row in one batch, the way approveMerchant
+   * does it: D1 runs a batch as one transaction, so either both land or
+   * neither does. The INSERT is conditional on changes() = 1, so a refused
+   * transition (pending, already there, no such merchant) writes no row.
+   */
+  const transition = async (merchantId: string, from: string, to: string, action: string) => {
+    const [update, audit] = await env.ORDERS.batch([
+      env.ORDERS.prepare(`UPDATE merchants SET status = ?1 WHERE id = ?2 AND status = ?3`).bind(to, merchantId, from),
+      env.ORDERS.prepare(
+        `INSERT INTO audit_log (id, actor_id, actor_scope, merchant_id, action, subject)
+         SELECT ?1, ?2, 'platform', ?3, ?4, ?3 WHERE changes() = 1`,
+      ).bind(id('aud'), staffId, merchantId, action),
+    ])
+    // Relies on a batch running in order on one connection, as approveMerchant
+    // does; this makes the day that stops holding visible instead of silent.
+    if (audit.meta.changes !== update.meta.changes) {
+      console.error('merchant status: audit row did not match the update', { merchantId, action })
+    }
+    if (update.meta.changes !== 1) throw new Error(`merchant ${merchantId} is not ${from}`)
   }
 
   return {
@@ -450,39 +512,60 @@ function platformOnly(env: TenancyEnv): Omit<PlatformRepository, keyof Repositor
       },
 
       async suspend(merchantId: string) {
-        await transition(merchantId, 'active', 'suspended')
+        await transition(merchantId, 'active', 'suspended', 'merchants.suspend')
         return { merchant_id: merchantId, status: 'suspended' as const }
       },
 
       async restore(merchantId: string) {
-        await transition(merchantId, 'suspended', 'active')
+        await transition(merchantId, 'suspended', 'active', 'merchants.restore')
         return { merchant_id: merchantId, status: 'active' as const }
       },
     },
 
     audit: {
-      async list({ merchantId, page }) {
-        const w = where([merchantId === null ? null : ['a.merchant_id = ?', merchantId]])
-        // ponytail: OFFSET paging, which rescans skipped rows and shifts by
-        // whatever was written since page one. Keyset on (at, id) if anyone
-        // ever pages deep into it.
-        const { results } = await env.ORDERS.prepare(
-          `SELECT a.id, a.at, a.actor_id, s.email AS actor_email, a.actor_scope,
-                  a.merchant_id, m.name AS merchant_name, a.action, a.subject
-             FROM audit_log a
-             LEFT JOIN staff s ON s.id = a.actor_id
-             LEFT JOIN merchants m ON m.id = a.merchant_id${w.sql}
-            ORDER BY a.at DESC, a.id DESC
-            LIMIT ? OFFSET ?`,
-        )
-          .bind(...w.args, AUDIT_PAGE + 1, page * AUDIT_PAGE)
-          .all<AuditPage['entries'][number]>()
-        const rows = results ?? []
+      async list({ merchantId, before }) {
+        /*
+         * Keyset on rowid, not OFFSET. The log is append-only (no DELETE, by
+         * trigger), so rowid is its insertion order: unique, increasing, and
+         * the true order among rows written in the same second, where `at`
+         * ties and the random `id` would shuffle them. Reading a page writes
+         * its own audit.list row; under OFFSET that shifted every later page
+         * by one and showed an entry twice. `rowid < before` cannot shift.
+         * Unfiltered, this seeks on the table's own key; filtered, on
+         * audit_merchant_seq_idx (migration 0012).
+         */
+        const w = where([
+          merchantId === null ? null : ['a.merchant_id = ?', merchantId],
+          before === null ? null : ['a.rowid < ?', before],
+        ])
+        const [merchants, page] = await Promise.all([
+          env.ORDERS.prepare(`SELECT id, name FROM merchants ORDER BY name, id`).all<{ id: string; name: string }>(),
+          env.ORDERS.prepare(
+            `SELECT a.rowid AS seq, a.id, a.at, a.actor_id, s.email AS actor_email, a.actor_scope,
+                    a.merchant_id, m.name AS merchant_name, a.action, a.subject
+               FROM audit_log a
+               LEFT JOIN staff s ON s.id = a.actor_id
+               LEFT JOIN merchants m ON m.id = a.merchant_id${w.sql}
+              ORDER BY a.rowid DESC
+              LIMIT ?`,
+          )
+            .bind(...w.args, AUDIT_PAGE + 1)
+            .all<AuditPage['entries'][number]>(),
+        ])
+        const names = merchants.results ?? []
+        // Checked, not left to the audit row's foreign key: that failed as a
+        // 500 after the read. Thrown so the wrapper records nothing — no log
+        // was read.
+        if (merchantId !== null && !names.some((m) => m.id === merchantId)) {
+          throw new Error(`merchant ${merchantId} does not exist`)
+        }
+        const rows = page.results ?? []
+        const entries = rows.slice(0, AUDIT_PAGE)
         return {
           merchant_id: merchantId,
-          page,
-          hasMore: rows.length > AUDIT_PAGE,
-          entries: rows.slice(0, AUDIT_PAGE),
+          next: rows.length > AUDIT_PAGE ? entries[entries.length - 1].seq : null,
+          entries,
+          merchants: names,
         }
       },
     },
@@ -620,33 +703,47 @@ function build(env: TenancyEnv, scope: Scope): Repository {
       async list(range: OrderRange) {
         // The tenant clause is on the LINE, so an order shared with another
         // merchant appears here, but summed over this merchant's lines only.
-        const w = where([
+        const picked = where([
           PAID,
           ['o.created_at >= ?', range.from],
           ["o.created_at < date(?, '+1 day')", range.to],
           tenant(scope, 'l.merchant_id'),
         ])
-        // ponytail: capped, not paged. The date range is the pager; a seller
-        // with 1000 orders in one range needs a narrower range or real paging.
+        const mine = where([tenant(scope, 'l.merchant_id')])
+        // The cap counts ORDERS, in the CTE. A LIMIT on the grouped rows below
+        // would count an order once per currency, and cut an order in half.
+        // ponytail: capped, not paged — the date range is the pager. Real
+        // paging when a seller routinely has more than ORDER_CAP in a range.
         const { results } = await env.ORDERS.prepare(
-          `SELECT o.id, o.created_at, o.method, o.payment_status, ${CURRENCY} AS currency,
-                  SUM(l.qty) AS items, SUM(l.qty * l.unit_price_cents) AS minor
-             ${SALES}${w.sql}
+          `WITH picked AS (
+             SELECT o.id FROM orders o JOIN order_lines l ON l.order_id = o.id${picked.sql}
+              GROUP BY o.id
+              ORDER BY o.created_at DESC, o.id DESC
+              LIMIT ?
+           )
+           SELECT o.id, o.created_at, o.method, o.payment_status, ${CURRENCY} AS currency,
+                  SUM(l.qty) AS items, SUM(l.qty * l.unit_price_cents) AS minor,
+                  json_group_array(DISTINCT l.merchant_id) AS merchant_ids
+             FROM picked
+             JOIN orders o ON o.id = picked.id
+             JOIN order_lines l ON l.order_id = o.id
+             LEFT JOIN products p ON p.id = l.product_id${mine.sql}
             GROUP BY o.id, ${CURRENCY}
-            ORDER BY o.created_at DESC, o.id DESC, ${CURRENCY}
-            LIMIT 1000`,
+            ORDER BY o.created_at DESC, o.id DESC, ${CURRENCY}`,
         )
-          .bind(...w.args)
-          .all<Omit<OrderSummary, 'totals'> & Amount>()
+          .bind(...picked.args, ORDER_CAP + 1, ...mine.args)
+          .all<Omit<OrderSummary, 'totals' | 'merchant_ids'> & Amount & { merchant_ids: string }>()
 
         const orders = new Map<string, OrderSummary>()
-        for (const { currency, minor, items, ...o } of results ?? []) {
+        for (const { currency, minor, items, merchant_ids, ...o } of results ?? []) {
+          const ids = JSON.parse(merchant_ids) as string[]
           const seen = orders.get(o.id)
           if (seen) {
             seen.items += items
             seen.totals.push({ currency, minor })
+            seen.merchant_ids = [...new Set([...seen.merchant_ids, ...ids])]
           } else {
-            orders.set(o.id, { ...o, items, totals: [{ currency, minor }] })
+            orders.set(o.id, { ...o, items, totals: [{ currency, minor }], merchant_ids: ids })
           }
         }
         return [...orders.values()]
@@ -656,7 +753,8 @@ function build(env: TenancyEnv, scope: Scope): Repository {
         const w = where([['l.order_id = ?', orderId], tenant(scope, 'l.merchant_id')])
         const [lines, totals] = await Promise.all([
           env.ORDERS.prepare(
-            `SELECT l.product_id, l.sku, l.title, l.variant, l.qty, l.unit_price_cents, ${CURRENCY} AS currency
+            `SELECT l.product_id, l.merchant_id, l.sku, l.title, l.variant, l.qty, l.unit_price_cents,
+                    ${CURRENCY} AS currency
                FROM order_lines l LEFT JOIN products p ON p.id = l.product_id${w.sql}
               ORDER BY l.title, l.variant`,
           )
@@ -680,9 +778,14 @@ function build(env: TenancyEnv, scope: Scope): Repository {
              FROM orders WHERE id = ? AND payment_status = ?`,
         )
           .bind(orderId, 'succeeded')
-          .first<Omit<OrderDetail, 'lines' | 'totals'>>()
+          .first<Omit<OrderDetail, 'lines' | 'totals' | 'merchant_ids'>>()
         if (!header) return null
-        return { ...header, lines: lines.results, totals: amountsOf(totals.results ?? []) }
+        return {
+          ...header,
+          lines: lines.results,
+          totals: amountsOf(totals.results ?? []),
+          merchant_ids: [...new Set(lines.results.map((l) => l.merchant_id))],
+        }
       },
     },
 
@@ -825,7 +928,7 @@ export const scopedTo = async (
  */
 export const platformWide = async (env: TenancyEnv, staffId: string): Promise<PlatformRepository> => {
   const scope: Scope = { kind: 'platform', staffId }
-  const only = platformOnly(env)
+  const only = platformOnly(env, staffId)
   return {
     ...build(env, scope),
     merchants: wrapGroup(env, scope, 'merchants', only.merchants) as PlatformRepository['merchants'],

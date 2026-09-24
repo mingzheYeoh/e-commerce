@@ -27,6 +27,7 @@ import {
 } from './staff-auth'
 import {
   id,
+  ORDER_CAP,
   scopedTo,
   platformWide,
   utcDay,
@@ -131,17 +132,25 @@ async function platformRepo(env: ConsoleEnv, request: Request): Promise<Platform
 /* ---------------------------------------------------------------- orders io */
 
 const DAY = /^\d{4}-\d{2}-\d{2}$/
-/** A real calendar date: 2026-02-30 matches the pattern and is not one. */
-const isDay = (v: string) => DAY.test(v) && new Date(`${v}T00:00:00Z`).toISOString().startsWith(v)
+/**
+ * A real calendar date between 2000 and 2100. 2026-02-30 matches the pattern
+ * and is not one; 9999-12-31 is one, but SQLite's date(to, '+1 day') past
+ * year 9999 is NULL, and a NULL bound silently matches nothing.
+ */
+const isDay = (v: string) =>
+  DAY.test(v) && v >= '2000-01-01' && v <= '2100-12-31' && new Date(`${v}T00:00:00Z`).toISOString().startsWith(v)
 
 /** from/to as inclusive UTC dates, defaulting to the last 30 days. */
 function orderRange(url: URL): { from: string; to: string } | string {
   const from = url.searchParams.get('from') || utcDay(29)
   const to = url.searchParams.get('to') || utcDay(0)
-  if (!isDay(from) || !isDay(to)) return 'Dates are YYYY-MM-DD.'
+  if (!isDay(from) || !isDay(to)) return 'Dates are YYYY-MM-DD, between 2000 and 2100.'
   if (from > to) return 'The start date is after the end date.'
   return { from, to }
 }
+
+/** Orders carry a name and a delivery address: no shared cache may keep them. */
+const PRIVATE = { 'cache-control': 'no-store' }
 
 const orderSummary = (o: OrderSummary) => ({
   id: o.id,
@@ -184,6 +193,9 @@ const overviewOut = (o: Overview) => ({
   lowStock: o.lowStock.map((p) => ({ id: p.id, title: p.title, stockCount: p.stock_count })),
 })
 
+/** The platform page shows neither top products nor low stock, so neither is sent. */
+const platformOverviewOut = ({ revenue, orders, trend, products }: Overview) => ({ revenue, orders, trend, products })
+
 const merchantOut = (m: MerchantSummary) => ({
   id: m.merchant_id,
   name: m.name,
@@ -196,9 +208,10 @@ const merchantOut = (m: MerchantSummary) => ({
 
 const auditOut = (a: AuditPage) => ({
   merchantId: a.merchant_id,
-  page: a.page,
-  hasMore: a.hasMore,
+  next: a.next,
+  merchants: a.merchants,
   entries: a.entries.map((e) => ({
+    seq: e.seq,
     id: e.id,
     at: e.at,
     actorId: e.actor_id,
@@ -559,7 +572,14 @@ async function route(request: Request, env: ConsoleEnv, url: URL): Promise<Respo
     if (repo instanceof Response) return repo
     const range = orderRange(url)
     if (typeof range === 'string') return json({ error: range }, 400)
-    return json({ ...range, orders: (await repo.orders.list(range)).map(orderSummary) })
+    const orders = await repo.orders.list(range)
+    // The repository returns one past the cap exactly so this can be said
+    // rather than a partial list passing for the whole range.
+    return json(
+      { ...range, truncated: orders.length > ORDER_CAP, orders: orders.slice(0, ORDER_CAP).map(orderSummary) },
+      200,
+      PRIVATE,
+    )
   }
 
   const orderId = path.match(ORDER)?.[1]
@@ -569,7 +589,7 @@ async function route(request: Request, env: ConsoleEnv, url: URL): Promise<Respo
     // An order with none of this merchant's lines is a 404, the same answer
     // as no such order: "exists, not yours" would confirm the id.
     const order = await repo.orders.get(orderId)
-    return order ? json(orderDetail(order)) : json({ error: 'not found' }, 404)
+    return order ? json(orderDetail(order), 200, PRIVATE) : json({ error: 'not found' }, 404)
   }
 
   /* ------------------------------------------------------------ platform */
@@ -580,7 +600,7 @@ async function route(request: Request, env: ConsoleEnv, url: URL): Promise<Respo
     // Ranking and the pending/active/suspended counts are read off the one
     // merchant list rather than asked for again.
     const [overview, merchants] = await Promise.all([repo.stats.overview(), repo.merchants.list()])
-    return json({ overview: overviewOut(overview), merchants: merchants.map(merchantOut) })
+    return json({ overview: platformOverviewOut(overview), merchants: merchants.map(merchantOut) })
   }
 
   if (path === '/api/platform/merchants/all' && method === 'GET') {
@@ -613,10 +633,19 @@ async function route(request: Request, env: ConsoleEnv, url: URL): Promise<Respo
     const repo = await platformRepo(env, request)
     if (repo instanceof Response) return repo
     const merchantId = url.searchParams.get('merchant') || null
-    const page = Number(url.searchParams.get('page') ?? 0)
-    if (!Number.isSafeInteger(page) || page < 0 || page > 10_000) return json({ error: 'page is a whole number.' }, 400)
+    // A positive whole number of at most 15 digits, so always a safe integer.
+    const cursor = url.searchParams.get('before')
+    if (cursor !== null && !/^[1-9]\d{0,14}$/.test(cursor)) {
+      return json({ error: 'before is the next value of the page before.' }, 400)
+    }
+    const before = cursor === null ? null : Number(cursor)
     if (merchantId !== null && merchantId.length > 64) return json({ error: 'not a merchant id' }, 400)
-    return json(auditOut(await repo.audit.list({ merchantId, page })))
+    try {
+      return json(auditOut(await repo.audit.list({ merchantId, before })))
+    } catch (err) {
+      if (/does not exist/.test(String(err))) return json({ error: 'No merchant with that id.' }, 404)
+      throw err
+    }
   }
 
   const approveId = path.match(APPROVE)?.[1]

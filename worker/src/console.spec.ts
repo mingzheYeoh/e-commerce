@@ -746,6 +746,62 @@ describe('the console worker: merchant orders and overview', () => {
     expect(body.products).toEqual({ draft: 1, published: 0, archived: 0 })
     expect(raw.prepare(`SELECT COUNT(*) AS n FROM audit_log WHERE actor_scope = 'merchant'`).get()).toEqual({ n: 0 })
   })
+
+  it('refuses a date past 2100, where SQLite date arithmetic turns NULL and would match nothing', async () => {
+    const { db, cookie } = await activeSession()
+    for (const q of ['to=9999-12-31', 'from=1999-12-31', 'from=2026-01-01&to=2101-01-01']) {
+      expect((await call(db, 'GET', `/api/merchant/orders?${q}`, { cookie })).status, q).toBe(400)
+    }
+    expect((await call(db, 'GET', '/api/merchant/orders?from=2000-01-01&to=2100-12-31', { cookie })).status).toBe(200)
+  })
+
+  it('keeps orders out of every cache: they carry a name and an address', async () => {
+    const { db, raw, cookie, merchantId } = await activeSession()
+    sharedOrders(raw, merchantId)
+    for (const path of ['/api/merchant/orders', '/api/merchant/orders/o_shared']) {
+      const res = await call(db, 'GET', path, { cookie })
+      expect(res.status, path).toBe(200)
+      expect(res.headers.get('cache-control'), path).toBe('no-store')
+    }
+  })
+
+  it('says when the list stops at 1000 orders, counting orders rather than currency rows', async () => {
+    const { db, raw, cookie, merchantId } = await activeSession()
+    seedProduct(raw, merchantId, 'prd_usd')
+    seedProduct(raw, merchantId, 'prd_sgd')
+    raw.prepare(`UPDATE products SET currency = 'SGD' WHERE id = 'prd_sgd'`).run()
+    const order = raw.prepare(
+      `INSERT INTO orders (id, created_at, email, ship_name, ship_line1, ship_city, ship_state, ship_postal,
+                           method, subtotal_cents, shipping_cents, tax_cents, total_cents, payment_status)
+       VALUES (?, datetime('now', ?), 'e@x.co', 'N', 'L', 'C', 'OR', '97201', 'standard', 0, 0, 0, 0, 'succeeded')`,
+    )
+    const line = raw.prepare(
+      `INSERT INTO order_lines (order_id, product_id, merchant_id, sku, title, qty, unit_price_cents)
+       VALUES (?, ?, ?, ?, 'T', 1, 100)`,
+    )
+    for (let i = 0; i < 1000; i++) {
+      order.run(`o${i}`, `-${i} seconds`)
+      line.run(`o${i}`, 'prd_usd', merchantId, 'sku-usd')
+    }
+    // One order in two currencies is two grouped rows but still one order: a
+    // LIMIT on the rows would call exactly 1000 orders truncated.
+    line.run('o0', 'prd_sgd', merchantId, 'sku-sgd')
+
+    const all = (await (await call(db, 'GET', '/api/merchant/orders', { cookie })).json()) as {
+      truncated: boolean
+      orders: { id: string; totals: unknown[] }[]
+    }
+    expect(all.truncated).toBe(false)
+    expect(all.orders).toHaveLength(1000)
+    expect(all.orders[0]).toMatchObject({ id: 'o0', totals: [{ currency: 'SGD', minor: 100 }, { currency: 'USD', minor: 100 }] })
+
+    order.run('o_one_more', '+0 seconds')
+    line.run('o_one_more', 'prd_usd', merchantId, 'sku-usd')
+    const cut = (await (await call(db, 'GET', '/api/merchant/orders', { cookie })).json()) as typeof all
+    expect(cut.truncated).toBe(true)
+    expect(cut.orders).toHaveLength(1000)
+    expect(cut.orders[0].id).toBe('o_one_more')
+  })
 })
 
 describe('the console worker: platform merchant management', () => {
@@ -786,7 +842,7 @@ describe('the console worker: platform merchant management', () => {
     expect(mem.raw.prepare(`SELECT status FROM merchants WHERE id = ?`).get(pending)).toEqual({ status: 'pending' })
   })
 
-  it("signs a suspended merchant's staff out of every merchant route", async () => {
+  it("refuses a suspended merchant's staff on every merchant route", async () => {
     const mem = await activeSession()
     const admin = await platformSession(mem)
     await call(mem.db, 'POST', `/api/platform/merchants/${mem.merchantId}/suspend`, { cookie: admin })
@@ -813,15 +869,72 @@ describe('the console worker: platform merchant management', () => {
 
     const overview = await call(mem.db, 'GET', '/api/platform/overview', { cookie })
     expect(overview.status).toBe(200)
-    expect(await overview.json()).toMatchObject({ overview: { orders: { month: 0 } }, merchants: expect.any(Array) })
+    const body = (await overview.json()) as { overview: Record<string, unknown>; merchants: unknown[] }
+    expect(body).toMatchObject({ overview: { orders: { month: 0 } }, merchants: expect.any(Array) })
+    // The page shows neither, so the platform response carries neither.
+    expect(Object.keys(body.overview).sort()).toEqual(['orders', 'products', 'revenue', 'trend'])
 
     const audit = (await (await call(mem.db, 'GET', `/api/platform/audit?merchant=${mem.merchantId}`, { cookie })).json()) as {
       entries: { merchantId: string; action: string }[]
-      hasMore: boolean
+      merchants: { id: string; name: string }[]
+      next: number | null
     }
     // The approval, then the two lists above, each of which touched this merchant.
     expect(audit.entries.map((e) => e.action)).toContain('merchants.approve')
     expect(audit.entries.every((e) => e.merchantId === mem.merchantId)).toBe(true)
-    expect((await call(mem.db, 'GET', '/api/platform/audit?page=-1', { cookie })).status).toBe(400)
+    expect(audit.merchants.map((m) => m.id).sort()).toEqual([mem.merchantId, pending].sort())
+    expect(audit.next).toBeNull()
+    for (const q of ['before=abc', 'before=0', 'before=-3', 'before=1.5']) {
+      expect((await call(mem.db, 'GET', `/api/platform/audit?${q}`, { cookie })).status, q).toBe(400)
+    }
+  })
+
+  it('answers the audit log for a merchant that does not exist with 404, and writes nothing', async () => {
+    // It used to fail the audit row's foreign key after reading: a 500.
+    const mem = await activeMerchant()
+    const cookie = await platformSession(mem)
+    const before = mem.raw.prepare(`SELECT COUNT(*) AS n FROM audit_log`).get()
+    const res = await call(mem.db, 'GET', '/api/platform/audit?merchant=mch_nope', { cookie })
+    expect(res.status).toBe(404)
+    expect(mem.raw.prepare(`SELECT COUNT(*) AS n FROM audit_log`).get()).toEqual(before)
+  })
+
+  it('costs the same number of D1 statements for 50 merchants as for 1, and succeeds', async () => {
+    /*
+     * Workers Free allows 50 D1 statements per invocation. With one audit
+     * INSERT per merchant, the overview passed that at about 41 merchants and
+     * failed with its audit rows half written. Counted at prepare(): every
+     * statement, batched or not, is prepared exactly once.
+     */
+    const statementsFor = async (extra: number) => {
+      const mem = await activeMerchant()
+      const cookie = await platformSession(mem)
+      for (let i = 0; i < extra; i++) {
+        mem.raw
+          .prepare(`INSERT INTO merchants (id, slug, name, settlement_currency, status) VALUES (?, ?, 'M', 'USD', 'active')`)
+          .run(`mch_n${i}`, `n${i}`)
+      }
+      let count = 0
+      const counting = {
+        ...mem.db,
+        prepare: (sql: string) => {
+          count++
+          return mem.db.prepare(sql)
+        },
+      } as unknown as D1Database
+      const res = await call(counting, 'GET', '/api/platform/overview', { cookie })
+      expect(res.status).toBe(200)
+      const { merchants } = (await res.json()) as { merchants: unknown[] }
+      expect(merchants).toHaveLength(1 + extra)
+      // Still a row per merchant the list read, each under its own id.
+      expect(
+        mem.raw.prepare(`SELECT COUNT(*) AS n FROM audit_log WHERE action = 'merchants.list'`).get(),
+      ).toEqual({ n: 1 + extra })
+      return count
+    }
+    const one = await statementsFor(0)
+    const fifty = await statementsFor(49)
+    expect(fifty).toBe(one)
+    expect(fifty).toBeLessThan(50)
   })
 })
