@@ -7,7 +7,8 @@ const stockIn = (id: CategoryId) =>
   inCat(id).reduce((total, p) => total + p.stockCount, 0)
 // fromPrice is dollars (it feeds formatPrice), so the catalogue's minor units
 // are converted back here, once, rather than at every category card.
-// An emptied category (every product in it unpublished) reads 0, not Infinity.
+// An emptied category (every product in it unpublished) reads 0, not Infinity,
+// and the launchpad hides a 0 rather than advertising "From $0.00".
 const cheapest = (id: CategoryId) => {
   const prices = inCat(id).map((p) => p.priceMinor)
   return prices.length ? Math.min(...prices) / 100 : 0

@@ -153,7 +153,9 @@ export async function hybridSearch(query: string, limit = 6): Promise<HybridResu
     findProduct(id),
   )
   if (!semantic.length) {
-    return { products: keyword.slice(0, limit).map((id) => findProduct(id)!), semantic: false }
+    // Looked up again after the await: the list may have been swapped meanwhile.
+    const hits = keyword.map((id) => findProduct(id)).filter((p): p is Product => p !== undefined)
+    return { products: hits.slice(0, limit), semantic: false }
   }
 
   const fused = fuseRanks([keyword, semantic])

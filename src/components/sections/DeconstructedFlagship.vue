@@ -65,9 +65,13 @@ const stage = computed(() => {
  */
 const product = computed(() => catalogue.value.find((p) => p.sku === flagship.sku))
 
+/** Only finishes the product is sold in; the order endpoint refuses any other. */
+const variants = computed(() =>
+  product.value?.colorways.length ? product.value.colorways : flagship.variants,
+)
+
 function preorder() {
   if (!product.value) return
-  // A finish the product does not list is dropped by cart.add, same as anywhere.
   cart.add(product.value, 1, variant.value.name)
   added.value = true
   window.setTimeout(() => (added.value = false), 1200)
@@ -125,7 +129,7 @@ function preorder() {
 
           <div class="mt-3 flex items-center gap-2">
             <button
-              v-for="option in flagship.variants"
+              v-for="option in variants"
               :key="option.name"
               type="button"
               class="h-7 w-7 rounded-full border-2 transition-transform"
