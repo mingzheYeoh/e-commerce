@@ -98,6 +98,12 @@ staging by the whole accounts phase, not broken by it.
    errors — the table is there, it is just empty. Print
    `SELECT COUNT(*) FROM products` before deploying: 45 is right, 0 means stop.
 
+6. **`0011` has to land before this branch's `nexus-api`, not only before the
+   console.** The nightly sweep deletes expired `sessions`, `email_tokens` and
+   `staff_sessions` in one batch, and a batch is one transaction: against a
+   database without `staff_sessions` the whole sweep fails, customer tables
+   included. Nothing surfaces it except `purge failed` in the worker's logs.
+
 ## Known drift
 
 **Staging's `staff_sessions.totp_pending` still has `DEFAULT 0`.** `0011`
