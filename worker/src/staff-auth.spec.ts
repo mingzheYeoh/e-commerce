@@ -201,6 +201,38 @@ describe('approveMerchant', () => {
     const id = (raw.prepare(`SELECT id FROM merchants`).get() as { id: string }).id
     await approveMerchant(env(db), 'stf_platform', id, 'acme')
     const audit = raw.prepare(`SELECT actor_id, action, merchant_id FROM audit_log`).get()
-    expect(audit).toMatchObject({ actor_id: 'stf_platform', merchant_id: id })
+    expect(audit).toMatchObject({
+      actor_id: 'stf_platform',
+      action: 'merchants.approve',
+      merchant_id: id,
+    })
+  })
+
+  it('writes no second audit row when the application is no longer pending', async () => {
+    // Two admins approving at once: only the UPDATE that changed a row may
+    // record an approval, or the log names someone who approved nothing.
+    const { db, raw } = memoryD1()
+    await registerMerchant(env(db), good)
+    const [id] = merchantIds(raw)
+    await approveMerchant(env(db), 'stf_first', id, 'acme')
+
+    const res = await approveMerchant(env(db), 'stf_second', id, 'acme-two')
+    expect(res.status).toBe(404)
+    expect(raw.prepare(`SELECT actor_id FROM audit_log`).all()).toEqual([{ actor_id: 'stf_first' }])
+    expect(raw.prepare(`SELECT slug FROM merchants`).get()).toEqual({ slug: 'acme' })
+  })
+
+  it('answers 503 rather than throwing when the database fails', async () => {
+    const { db, raw } = memoryD1()
+    await registerMerchant(env(db), good)
+    const [id] = merchantIds(raw)
+    db.batch = async () => {
+      throw new Error('D1_ERROR: storage unavailable')
+    }
+    const quiet = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    const res = await approveMerchant(env(db), 'stf_platform', id, 'acme')
+    quiet.mockRestore()
+    expect(res.status).toBe(503)
   })
 })

@@ -85,11 +85,15 @@ const DEFAULT_CURRENCY = 'USD'
  * It has to be true whether a merchant was just created or the address
  * already had one, and useful in both. Waiting on a human is the only thing
  * that is.
+ *
+ * Frozen because every return site hands out this one object by reference —
+ * which is what keeps the outcomes byte-identical — so a caller that mutated
+ * it would change what the next applicant is told, whichever branch they hit.
  */
-const APPLICATION_RECEIVED = {
+const APPLICATION_RECEIVED = Object.freeze({
   pending: true,
   message: 'Your application is with our team. We will be in touch once it is reviewed.',
-}
+})
 
 const refuse = (error: string): StaffResult => ({ status: 400, body: { error } })
 
@@ -107,7 +111,7 @@ export async function registerMerchant(env: StaffEnv, body: unknown): Promise<St
 
   const password = typeof p.password === 'string' ? p.password : ''
   if (password.length < MIN_PASSWORD || password.length > MAX_PASSWORD) {
-    return refuse(`Use at least ${MIN_PASSWORD} characters.`)
+    return refuse(`Use between ${MIN_PASSWORD} and ${MAX_PASSWORD} characters.`)
   }
 
   // Length is a poor predictor and everybody knows it. Only the first five
@@ -189,6 +193,12 @@ export async function registerMerchant(env: StaffEnv, body: unknown): Promise<St
  * audits every repository call: this changes `merchants`, and the repository
  * does not reach that table. Both statements go in one batch, so there is no
  * window in which a merchant went active and no row says who did it.
+ *
+ * The UPDATE is conditional on `status = 'pending'` and the audit INSERT on
+ * `changes() = 1`, rather than a SELECT deciding first: two admins approving
+ * at once would both read `pending` and both write an audit row, one of them
+ * recording an approval that changed nothing. `changes()` reads the UPDATE
+ * because a batch runs its statements in order on one connection.
  */
 export async function approveMerchant(
   env: StaffEnv,
@@ -201,34 +211,33 @@ export async function approveMerchant(
     return refuse('A storefront address is lowercase letters, numbers and hyphens.')
   }
 
-  const merchant = await env.ORDERS.prepare(`SELECT status FROM merchants WHERE id = ?1`)
-    .bind(merchantId)
-    .first<{ status: string }>()
-
-  // One answer for "no such application" and for "already approved": the
-  // admin's next move is the same either way, which is to go and look.
-  if (merchant?.status !== 'pending') {
-    return { status: 404, body: { error: 'No pending application with that id.' } }
-  }
-
+  let changed: number
   try {
-    await env.ORDERS.batch([
-      env.ORDERS.prepare(`UPDATE merchants SET status = 'active', slug = ?2 WHERE id = ?1`).bind(
-        merchantId,
-        address,
-      ),
+    const [update] = await env.ORDERS.batch([
+      env.ORDERS.prepare(
+        `UPDATE merchants SET status = 'active', slug = ?2 WHERE id = ?1 AND status = 'pending'`,
+      ).bind(merchantId, address),
       env.ORDERS.prepare(
         `INSERT INTO audit_log (id, actor_id, actor_scope, merchant_id, action)
-         VALUES (?1,?2,'platform',?3,'merchants.approve')`,
+         SELECT ?1,?2,'platform',?3,'merchants.approve' WHERE changes() = 1`,
       ).bind(id('aud'), staffId, merchantId),
     ])
+    changed = update.meta.changes
   } catch (err) {
     // Settled by the constraint rather than a SELECT first, so two approvals
     // reaching for one address cannot both see it free.
     if (/UNIQUE/i.test(String(err)) && /merchants\.slug/i.test(String(err))) {
       return { status: 409, body: { error: 'That storefront address is taken.' } }
     }
-    throw err
+    console.error('merchant approval failed', err)
+    return { status: 503, body: { error: 'Could not approve the application. Try again shortly.' } }
+  }
+
+  // One answer for "no such application" and for "already approved", which
+  // includes losing a race to another admin: the next move is the same either
+  // way, which is to go and look.
+  if (changed !== 1) {
+    return { status: 404, body: { error: 'No pending application with that id.' } }
   }
 
   return { status: 200, body: { id: merchantId, status: 'active', slug: address } }
