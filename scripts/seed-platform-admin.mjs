@@ -20,10 +20,13 @@
  *
  *   node scripts/seed-platform-admin.mjs <email> <database>
  *
- * Git Bash — reads the password without echoing it to the terminal:
+ * Git Bash — reads the password without echoing it to the terminal. `node.exe`,
+ * not `node`: inside mintty, Git for Windows aliases `node` to `winpty node.exe`
+ * (/etc/profile.d/aliases.sh), and winpty refuses a piped stdin with
+ * "stdin is not a tty" before the script ever runs.
  *
  *   read -s -p "Admin password: " PW; echo
- *   printf '%s' "$PW" | node scripts/seed-platform-admin.mjs you@example.com nexus-orders-staging
+ *   printf '%s' "$PW" | node.exe scripts/seed-platform-admin.mjs you@example.com nexus-orders-staging
  *   unset PW
  *
  * PowerShell:
