@@ -425,7 +425,7 @@ describe('approveMerchant', () => {
     const { db, raw } = memoryD1()
     await registerMerchant(env(db), good)
     const id = (raw.prepare(`SELECT id FROM merchants`).get() as { id: string }).id
-    const res = await approveMerchant(env(db), 'stf_platform', id)
+    const res = await approveMerchant(env(db), 'stf_platform', id, 'acme')
     expect(res.status).toBe(200)
     expect(raw.prepare(`SELECT status FROM merchants`).get()).toEqual({ status: 'active' })
   })
@@ -434,7 +434,7 @@ describe('approveMerchant', () => {
     const { db, raw } = memoryD1()
     await registerMerchant(env(db), good)
     const id = (raw.prepare(`SELECT id FROM merchants`).get() as { id: string }).id
-    await approveMerchant(env(db), 'stf_platform', id)
+    await approveMerchant(env(db), 'stf_platform', id, 'acme')
     const audit = raw.prepare(`SELECT actor_id, action, merchant_id FROM audit_log`).get()
     expect(audit).toMatchObject({ actor_id: 'stf_platform', merchant_id: id })
   })
@@ -593,7 +593,8 @@ async function activeMerchant() {
   const mem = memoryD1()
   await registerMerchant(env(mem.db), good)
   const id = (mem.raw.prepare(`SELECT id FROM merchants`).get() as { id: string }).id
-  await approveMerchant(env(mem.db), 'stf_platform', id)
+  const approved = await approveMerchant(env(mem.db), 'stf_platform', id, 'acme')
+  if (approved.status !== 200) throw new Error(`fixture approval failed: ${approved.status}`)
   return mem
 }
 
@@ -619,6 +620,7 @@ Requirements the tests encode:
 - **Every sign-in starts as `totp_pending = 1`,** whether or not TOTP was already confirmed. The last test is the one that matters: a password alone must never produce an active session, not even on the hundredth sign-in.
 - `staffSession` returns `{ kind: 'enrolling' }` when the row's `totp_pending` is 1, and `{ kind: 'active', merchantId, scope }` when it is 0. **Only the active branch carries `merchantId`.**
 - A wrong password and an unknown email answer identically, with a 401 and no detail.
+- **A correct password for a staff member of a non-`active` merchant answers exactly as a wrong password does** — 401, the same body, the same KDF cost, and it **increments `failed_attempts` and engages the same backoff**. This closes an enumeration channel that registration cannot close on its own: an attacker registers a victim's address with a password *they* chose, then signs in with it. If a pending account's correct password were distinguishable, `signIn` would answer 200 for an account the probe just created and 401 for one that already existed. The lockout clause matters as much as the status: skip it and six attempts read the difference anyway, because a pre-existing account locks and returns 423 while an attacker-created one never does. A genuine applicant discovers approval by signing in, as spec Section 0 says; before approval they are refused like anyone else, and the backoff is bounded, not permanent.
 - Lockout: reuse `backoffSeconds` from `credentials.ts` — **do not invent a flat duration.** The customer side does exponential backoff (5 failures → 60s, then doubling to a 900s cap), and the decision for this feature was that staff get a *stricter* posture than customers, not a looser one. A flat lock would be looser. `failed_attempts` increments on each failure and `locked_until` is set to `backoffSeconds(failures)` ahead; a locked account answers 423 even with the right password.
 
   The plan originally named a `LOCKOUT_MINUTES` constant here. That was a misreading of what `auth.ts` does, caught during Task 2 — there is no flat duration to share, only the backoff function.
