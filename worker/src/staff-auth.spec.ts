@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { memoryD1 } from '../test/d1-memory'
+import { memoryD1, type MemoryD1 } from '../test/d1-memory'
 import { registerMerchant, approveMerchant } from './staff-auth'
 
 /*
@@ -37,7 +37,12 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals())
 
 const env = (db: D1Database) => ({ ORDERS: db })
-const good = { email: 'owner@example.com', name: 'Acme', slug: 'acme', password: 'Xq7!vurnLp2$wedge' }
+const good = { email: 'owner@example.com', name: 'Acme', password: 'Xq7!vurnLp2$wedge' }
+
+const merchantIds = (raw: MemoryD1['raw']) =>
+  (raw.prepare(`SELECT id FROM merchants ORDER BY rowid`).all() as { id: string }[]).map(
+    (r) => r.id,
+  )
 
 describe('registerMerchant', () => {
   it('creates a pending merchant and its owner', async () => {
@@ -50,7 +55,10 @@ describe('registerMerchant', () => {
     expect(res.status).toBe(202)
 
     const merchant = raw.prepare(`SELECT status, slug FROM merchants`).get()
-    expect(merchant).toMatchObject({ status: 'pending', slug: 'acme' })
+    expect(merchant).toMatchObject({
+      status: 'pending',
+      slug: expect.stringMatching(/^pending_[a-z0-9]{32,}$/),
+    })
 
     const staff = raw.prepare(`SELECT scope, role, totp_secret FROM staff`).get()
     expect(staff).toMatchObject({ scope: 'merchant', role: 'owner', totp_secret: null })
@@ -79,26 +87,31 @@ describe('registerMerchant', () => {
     // into the status line, which is readable before any body is, without
     // parsing anything. Do not "fix" the success case back to 201 for REST
     // tidiness; that reopens exactly this hole.
+    //
+    // This is now the whole answer to one- and two-request probing, because
+    // the applicant supplies nothing another request can collide with. The
+    // timing difference (a fresh application pays for a write a duplicate
+    // skips) is the residual, and it is deferred rather than closed.
     const { db } = memoryD1()
-    await registerMerchant(env(db), good)
-    const res = await registerMerchant(env(db), { ...good, slug: 'other' })
-    expect(res.status).toBe(202)
+    const first = await registerMerchant(env(db), good)
+    const res = await registerMerchant(env(db), good)
+    expect(res).toEqual(first)
     expect(JSON.stringify(res.body)).not.toMatch(/taken|exists|duplicate/i)
   })
 
-  it('leaves nothing behind when the slug is already used', async () => {
-    const { db, raw } = memoryD1()
-    await registerMerchant(env(db), good)
-    const res = await registerMerchant(env(db), { ...good, email: 'other@example.com' })
-    // A merchant row without its owner is an application nobody can ever claim.
-    expect(raw.prepare(`SELECT COUNT(*) AS n FROM merchants`).get()).toEqual({ n: 1 })
+  it('ignores a supplied slug and mints a pending one', async () => {
     /*
-     * And it says which of the two collided. The taken slug is the one answer
-     * this module owes the applicant — they chose it and can choose again —
-     * so it must not arrive as the 503 an unrecognised failure gets, nor as
-     * the 202 a taken address gets.
+     * An applicant-chosen slug is what let two probes read whether an email
+     * was registered: the second collided only if the first had created a
+     * merchant. Ignored rather than refused, so a caller still sending the
+     * old shape is not broken — it just does not get to pick.
      */
-    expect(res.status).toBe(409)
+    const { db, raw } = memoryD1()
+    const res = await registerMerchant(env(db), { ...good, slug: 'acme' })
+    expect(res.status).toBe(202)
+    const { slug } = raw.prepare(`SELECT slug FROM merchants`).get() as { slug: string }
+    expect(slug).not.toBe('acme')
+    expect(slug).toMatch(/^pending_[a-z0-9]{32,}$/)
   })
 })
 
@@ -107,16 +120,54 @@ describe('approveMerchant', () => {
     const { db, raw } = memoryD1()
     await registerMerchant(env(db), good)
     const id = (raw.prepare(`SELECT id FROM merchants`).get() as { id: string }).id
-    const res = await approveMerchant(env(db), 'stf_platform', id)
+    const res = await approveMerchant(env(db), 'stf_platform', id, 'acme')
     expect(res.status).toBe(200)
     expect(raw.prepare(`SELECT status FROM merchants`).get()).toEqual({ status: 'active' })
+  })
+
+  it('assigns the storefront address the platform chose', async () => {
+    const { db, raw } = memoryD1()
+    await registerMerchant(env(db), good)
+    const [id] = merchantIds(raw)
+    await approveMerchant(env(db), 'stf_platform', id, 'Acme-Tools')
+    expect(raw.prepare(`SELECT slug FROM merchants`).get()).toEqual({ slug: 'acme-tools' })
+  })
+
+  it('refuses a malformed storefront address and leaves the application pending', async () => {
+    const { db, raw } = memoryD1()
+    await registerMerchant(env(db), good)
+    const [id] = merchantIds(raw)
+    // The underscore matters most: it is what keeps an approved address from
+    // ever equalling a minted `pending_` placeholder.
+    for (const bad of ['', 'pending_x', '-acme', 'acme tools', 'a'.repeat(41), 42]) {
+      const res = await approveMerchant(env(db), 'stf_platform', id, bad)
+      expect(res.status).toBe(400)
+    }
+    expect(raw.prepare(`SELECT status FROM merchants`).get()).toEqual({ status: 'pending' })
+  })
+
+  it('refuses an address another merchant holds with 409', async () => {
+    // 409 here, where registration never says "taken": the caller is platform
+    // staff, who can already list every merchant and its address.
+    const { db, raw } = memoryD1()
+    await registerMerchant(env(db), good)
+    await registerMerchant(env(db), { ...good, email: 'second@example.com' })
+    const [first, second] = merchantIds(raw)
+    await approveMerchant(env(db), 'stf_platform', first, 'acme')
+
+    const res = await approveMerchant(env(db), 'stf_platform', second, 'acme')
+    expect(res.status).toBe(409)
+    expect(raw.prepare(`SELECT status FROM merchants WHERE id = ?`).get(second)).toEqual({
+      status: 'pending',
+    })
+    expect(raw.prepare(`SELECT COUNT(*) AS n FROM audit_log`).get()).toEqual({ n: 1 })
   })
 
   it('records who approved it', async () => {
     const { db, raw } = memoryD1()
     await registerMerchant(env(db), good)
     const id = (raw.prepare(`SELECT id FROM merchants`).get() as { id: string }).id
-    await approveMerchant(env(db), 'stf_platform', id)
+    await approveMerchant(env(db), 'stf_platform', id, 'acme')
     const audit = raw.prepare(`SELECT actor_id, action, merchant_id FROM audit_log`).get()
     expect(audit).toMatchObject({ actor_id: 'stf_platform', merchant_id: id })
   })
