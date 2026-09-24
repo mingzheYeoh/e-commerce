@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { totpConfirm, isError } from '../api'
+import { totpConfirm, signOut, isError } from '../api'
 
 const router = useRouter()
 const code = ref('')
@@ -18,6 +18,13 @@ async function submit() {
   } finally {
     confirming.value = false
   }
+}
+
+/* Someone who stops halfway — wrong account, phone not to hand — must be able
+   to walk away; every other page redirects an enrolling session back here. */
+async function leave() {
+  await signOut()
+  await router.replace('/signin')
 }
 </script>
 
@@ -41,5 +48,9 @@ async function submit() {
         {{ confirming ? 'Checking…' : 'Confirm' }}
       </button>
     </form>
+
+    <button class="mt-6 text-sm text-text-secondary underline" type="button" @click="leave">
+      Not now — sign out
+    </button>
   </div>
 </template>

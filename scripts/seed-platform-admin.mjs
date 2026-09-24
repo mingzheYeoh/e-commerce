@@ -32,6 +32,10 @@
  *   [Runtime.InteropServices.Marshal]::PtrToStringAuto([Runtime.InteropServices.Marshal]::SecureStringToBSTR($pw)) | node scripts/seed-platform-admin.mjs you@example.com nexus-orders-staging
  *   Remove-Variable pw
  *
+ * Windows PowerShell 5.1 pipes text to a native program as ASCII, so a password
+ * with any non-ASCII character arrives with `?` in its place and the admin can
+ * never sign in. Use Git Bash, or keep the password ASCII.
+ *
  * Both pipes are read to end-of-stream and have exactly one trailing line
  * ending stripped here (Git Bash's `printf '%s'` sends none; PowerShell's
  * pipeline appends `\r\n`) — trusting neither shell to agree with the other

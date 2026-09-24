@@ -35,8 +35,12 @@ A walk through the whole seller-side loop, in order:
    `/applications` with a storefront address (a slug).
 3. **Sign in as the merchant.** TOTP enrolment is mandatory here too — an
    authenticator app is required, there is no way to skip it.
-4. **Sell something.** Add a product, set its stock, and publish it. It
-   appears on the storefront above once it does.
+4. **Manage a catalogue.** Add a product, then set its price and stock.
+   Publishing is refused for now, on purpose: the console cannot upload photos
+   yet, and the storefront cannot render a product without them. The
+   storefront is also a build-time snapshot of the catalogue, so a published
+   product would show up only after the next storefront build, not the moment
+   you publish it.
 
 Payments are simulated with Stripe's published test card numbers, not a real
 gateway — see [`src/lib/payment.ts`](src/lib/payment.ts) — and nothing here
