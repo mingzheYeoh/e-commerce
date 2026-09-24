@@ -15,7 +15,8 @@ const router = useRouter()
 const sku = ref('')
 const title = ref('')
 const brand = ref('')
-const category = ref(CATEGORIES[0]!.id)
+// No default: a preselected Phones is how headphones end up filed as phones.
+const category = ref('')
 const price = ref('')
 const error = ref<string | null>(null)
 const submitting = ref(false)
@@ -71,7 +72,8 @@ async function submit() {
       </div>
       <div>
         <label class="label mb-1 block" for="product-category">Category</label>
-        <select id="product-category" v-model="category" class="input">
+        <select id="product-category" v-model="category" class="input" required>
+          <option value="" disabled>Choose a category</option>
           <option v-for="c in CATEGORIES" :key="c.id" :value="c.id">{{ c.label }}</option>
         </select>
       </div>

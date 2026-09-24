@@ -19,6 +19,13 @@ binding = "ORDERS"
 database_name = "nexus-orders"
 database_id = "7aa62821-d17f-43a2-b605-2643780e9690"
 
+# Merchant product photos. nexus-console writes, nexus-api serves (/media/u/*).
+# One bucket per environment: a shared one would put staging's demo uploads
+# behind production URLs, which is the mistake the shared Vectorize index is.
+[[r2_buckets]]
+binding = "MEDIA"
+bucket_name = "nexus-media"
+
 [vars]
 # The deployed storefront and the dev server, in that order. The first entry is
 # what an unrecognised origin gets echoed back, so it must not be localhost.
@@ -111,6 +118,10 @@ index_name = "nexus-products"
 binding = "ORDERS"
 database_name = "nexus-orders-staging"
 database_id = "aedb0572-7924-4068-8d30-11b6e61eeed5"
+
+[[env.staging.r2_buckets]]
+binding = "MEDIA"
+bucket_name = "nexus-media-staging"
 
 [env.staging.vars]
 ALLOWED_ORIGIN = "https://nexus-tech-collective-staging.mingzhe030228.workers.dev,http://localhost:5173"

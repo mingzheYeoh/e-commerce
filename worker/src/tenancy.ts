@@ -30,6 +30,7 @@ export interface ProductRow {
   currency: string
   status: string
   stock_count: number
+  specs_summary: string
   specs: string
   colorways: string
   media: string
@@ -48,6 +49,9 @@ export interface ProductPatch {
   priceMinor?: number
   status?: string
   stockCount?: number
+  category?: string
+  specsSummary?: string[]
+  specs?: { label: string; value: string }[]
 }
 
 export interface Repository {
@@ -56,6 +60,16 @@ export interface Repository {
     get(id: string): Promise<ProductRow | null>
     create(input: NewProduct): Promise<ProductRow>
     update(id: string, patch: ProductPatch): Promise<ProductRow | null>
+    /**
+     * Replaces `media` only if it still equals `expected`, so two uploads
+     * racing on one product cannot drop each other's photo. Null when the row
+     * is not this scope's, or when it changed underneath the caller.
+     *
+     * Separate from `update` on purpose: ProductPatch is what a request may
+     * say, and media URLs are never something a request says — the console
+     * mints them from the storage keys it wrote.
+     */
+    setMedia(id: string, media: string, expected: string): Promise<ProductRow | null>
   }
 }
 
@@ -234,6 +248,7 @@ function build(env: TenancyEnv, scope: Scope): Repository {
         await env.ORDERS.prepare(
           `UPDATE products
               SET title = ?, price_minor = ?, status = ?, stock_count = ?,
+                  category = ?, specs_summary = ?, specs = ?,
                   updated_at = datetime('now')${w.sql}`,
         )
           .bind(
@@ -241,10 +256,23 @@ function build(env: TenancyEnv, scope: Scope): Repository {
             patch.priceMinor ?? existing.price_minor,
             patch.status ?? existing.status,
             patch.stockCount ?? existing.stock_count,
+            patch.category ?? existing.category,
+            patch.specsSummary ? JSON.stringify(patch.specsSummary) : existing.specs_summary,
+            patch.specs ? JSON.stringify(patch.specs) : existing.specs,
             ...w.args,
           )
           .run()
         return get(productId)
+      },
+
+      async setMedia(productId: string, media: string, expected: string) {
+        const w = where([['id = ?', productId], ['media = ?', expected], tenant(scope)])
+        const { meta } = await env.ORDERS.prepare(
+          `UPDATE products SET media = ?, updated_at = datetime('now')${w.sql}`,
+        )
+          .bind(media, ...w.args)
+          .run()
+        return meta.changes === 1 ? get(productId) : null
       },
     },
   }

@@ -27,6 +27,18 @@ import {
 } from './staff-auth'
 import { id, scopedTo, type NewProduct, type ProductPatch, type ProductRow, type Repository } from './tenancy'
 import { guard, type IpDefences } from './auth'
+import {
+  MAX_LARGE_BYTES,
+  MAX_PHOTOS,
+  MAX_THUMB_BYTES,
+  isPhotoName,
+  isWebp,
+  keyFor,
+  mediaFor,
+  namesIn,
+  newPhotoName,
+  type Media,
+} from './photos'
 
 /*
  * Re-exported because Cloudflare resolves a Durable Object class by name from
@@ -35,7 +47,12 @@ import { guard, type IpDefences } from './auth'
  */
 export { IpThrottle } from './throttle'
 
-export interface ConsoleEnv extends StaffEnv, IpDefences {}
+export interface ConsoleEnv extends StaffEnv, IpDefences {
+  /** Product photos. One bucket per environment, never shared. */
+  MEDIA: R2Bucket
+  /** Where nexus-api serves MEDIA from, ending in '/'. Photo URLs are this plus a key. */
+  MEDIA_BASE: string
+}
 
 const json = (body: unknown, status = 200, headers: Record<string, string> = {}) =>
   new Response(JSON.stringify(body), {
@@ -151,30 +168,67 @@ function productPatch(body: unknown): ProductPatch | string {
     }
     patch.status = p.status
   }
+  if (p.category !== undefined) {
+    if (typeof p.category !== 'string' || !CATEGORIES.has(p.category)) {
+      return 'category is one of the storefront categories.'
+    }
+    patch.category = p.category
+  }
+  if (p.specsSummary !== undefined) {
+    // Blank boxes are dropped rather than refused: a draft may be half written.
+    // Publishing is what insists on all three.
+    if (!Array.isArray(p.specsSummary) || p.specsSummary.length > 3) return 'Up to three highlights.'
+    const lines: string[] = []
+    for (const v of p.specsSummary) {
+      if (typeof v !== 'string') return 'Highlights are text.'
+      if (v.trim().length > 60) return 'Each highlight is 60 characters or fewer.'
+      if (v.trim()) lines.push(v.trim())
+    }
+    patch.specsSummary = lines
+  }
+  if (p.specs !== undefined) {
+    if (!Array.isArray(p.specs) || p.specs.length > 20) return 'Up to twenty specification rows.'
+    const rows: { label: string; value: string }[] = []
+    for (const r of p.specs) {
+      const { label, value } = fields(r)
+      if (typeof label !== 'string' || typeof value !== 'string') return 'A specification row is a label and a value.'
+      const [l, v] = [label.trim(), value.trim()]
+      if (!l && !v) continue
+      if (!l || !v) return 'Every specification row needs both a name and a value.'
+      if (l.length > 40 || v.length > 120) return 'Specification names are 40 characters and values 120 at most.'
+      rows.push({ label: l, value: v })
+    }
+    patch.specs = rows
+  }
   if (Object.keys(patch).length === 0) return 'Nothing to change.'
   return patch
 }
 
-/**
- * Why this row cannot go on sale yet, or null if it can.
- *
- * The storefront renders `media.thumb` and `media.gallery` unconditionally,
- * and the console has no way to upload photos yet — so a product the console
- * created would reach the shop grid as a broken card. Refused here, at the
- * write, rather than tolerated at the render.
- */
-function unpublishable(row: ProductRow, priceMinor: number): string | null {
-  let media: { thumb?: unknown; gallery?: unknown }
+const parse = <T>(s: string, fallback: T): T => {
   try {
-    media = JSON.parse(row.media) ?? {}
+    return (JSON.parse(s) as T) ?? fallback
   } catch {
-    media = {}
+    return fallback
   }
-  if (!media.thumb || !Array.isArray(media.gallery) || media.gallery.length === 0) {
-    return 'A product needs photos before it can be published, and photo upload is not in the console yet.'
-  }
-  if (priceMinor === 0) return 'A product needs a price before it can be published.'
-  return null
+}
+
+/**
+ * What this product still lacks before it can go on sale, as one sentence,
+ * or null if nothing.
+ *
+ * The storefront renders `media.thumb`, `media.gallery` and three highlights
+ * unconditionally, so a product without them reaches the shop grid as a
+ * broken card. Refused here, at the write, rather than tolerated at the
+ * render — and every gap is named at once, so a merchant fixes them in one
+ * pass instead of discovering them one refusal at a time.
+ */
+function unpublishable(priceMinor: number, specsSummary: string[], media: string): string | null {
+  const m = parse<{ thumb?: unknown; gallery?: unknown }>(media, {})
+  const missing: string[] = []
+  if (!m.thumb || !Array.isArray(m.gallery) || m.gallery.length === 0) missing.push('at least one photo')
+  if (priceMinor === 0) missing.push('a price')
+  if (specsSummary.length < 3) missing.push(`${3 - specsSummary.length} more highlight${specsSummary.length === 2 ? '' : 's'}`)
+  return missing.length ? `Before publishing, add ${missing.join(', ')}.` : null
 }
 
 const product = (r: ProductRow) => ({
@@ -188,11 +242,17 @@ const product = (r: ProductRow) => ({
   currency: r.currency,
   status: r.status,
   stockCount: r.stock_count,
+  specsSummary: parse<string[]>(r.specs_summary, []),
+  specs: parse<{ label: string; value: string }[]>(r.specs, []),
+  media: parse<Partial<Media>>(r.media, {}),
 })
 
 /* ------------------------------------------------------------------ routes */
 
 const PRODUCT = /^\/api\/merchant\/products\/([^/]+)$/
+const PHOTOS = /^\/api\/merchant\/products\/([^/]+)\/photos$/
+const PHOTO = /^\/api\/merchant\/products\/([^/]+)\/photos\/([^/]+)$/
+const PHOTO_MAIN = /^\/api\/merchant\/products\/([^/]+)\/photos\/([^/]+)\/main$/
 const APPROVE = /^\/api\/platform\/merchants\/([^/]+)\/approve$/
 
 async function route(request: Request, env: ConsoleEnv, url: URL): Promise<Response> {
@@ -266,21 +326,97 @@ async function route(request: Request, env: ConsoleEnv, url: URL): Promise<Respo
     if (repo instanceof Response) return repo
     const patch = productPatch(await readBody(request))
     if (typeof patch === 'string') return json({ error: patch }, 400)
-    // Checked on the row as it will be, so dropping the price of something
-    // already on sale to zero is refused too.
-    if (patch.status === 'published' || patch.priceMinor === 0) {
-      const existing = await repo.products.get(productId)
-      if (!existing) return json({ error: 'not found' }, 404)
-      const why =
-        (patch.status ?? existing.status) === 'published'
-          ? unpublishable(existing, patch.priceMinor ?? existing.price_minor)
-          : null
-      if (why) return json({ error: why }, 409)
-    }
     // Someone else's product is a 404, not a 403: the repository cannot see
     // it, and "exists but not yours" would confirm the id to a stranger.
+    const existing = await repo.products.get(productId)
+    if (!existing) return json({ error: 'not found' }, 404)
+    // Checked on the row as it will be, so emptying a highlight or zeroing the
+    // price of something already on sale is refused too, not only publishing.
+    if ((patch.status ?? existing.status) === 'published') {
+      const why = unpublishable(
+        patch.priceMinor ?? existing.price_minor,
+        patch.specsSummary ?? parse<string[]>(existing.specs_summary, []),
+        existing.media,
+      )
+      if (why) return json({ error: why }, 409)
+    }
     const row = await repo.products.update(productId, patch)
     return row ? json(product(row)) : json({ error: 'not found' }, 404)
+  }
+
+  /* ----------------------------------------------------- product photos */
+
+  const uploadTo = path.match(PHOTOS)?.[1]
+  if (uploadTo && method === 'POST') {
+    const repo = await merchantRepo(env, request)
+    if (repo instanceof Response) return repo
+    const existing = await repo.products.get(uploadTo)
+    if (!existing) return json({ error: 'not found' }, 404)
+    // merchant_id from the row the scoped repository returned, so it is the
+    // session's merchant: the storage key cannot name anyone else's folder.
+    const names = namesIn(existing.media, env.MEDIA_BASE, existing.merchant_id, existing.id)
+    if (!names) return json({ error: "This product's photos are not managed in the console." }, 409)
+    if (names.length >= MAX_PHOTOS) return json({ error: `A product has at most ${MAX_PHOTOS} photos.` }, 409)
+
+    const form = await request.formData().catch(() => null)
+    const large = form?.get('large')
+    const thumb = form?.get('thumb')
+    if (!(large instanceof File) || !(thumb instanceof File)) {
+      return json({ error: 'Send the photo as two files, large and thumb.' }, 400)
+    }
+    if (large.size > MAX_LARGE_BYTES || thumb.size > MAX_THUMB_BYTES) {
+      return json({ error: 'That photo is too large, even after resizing.' }, 413)
+    }
+    const [largeBytes, thumbBytes] = await Promise.all([large.arrayBuffer(), thumb.arrayBuffer()])
+    // The bytes, not the file name or the declared type: both are the client's word.
+    if (!isWebp(new Uint8Array(largeBytes)) || !isWebp(new Uint8Array(thumbBytes))) {
+      return json({ error: 'Photos are uploaded as webp.' }, 415)
+    }
+
+    const name = newPhotoName()
+    const keys = [keyFor(existing.merchant_id, existing.id, name, 1600), keyFor(existing.merchant_id, existing.id, name, 400)]
+    const meta = { httpMetadata: { contentType: 'image/webp' } }
+    await Promise.all([env.MEDIA.put(keys[0], largeBytes, meta), env.MEDIA.put(keys[1], thumbBytes, meta)])
+
+    const media = mediaFor(env.MEDIA_BASE, existing.merchant_id, existing.id, [...names, name])
+    const row = await repo.products.setMedia(existing.id, media, existing.media)
+    if (!row) {
+      // Lost a race with another change to this product's photos. The objects
+      // were written first, so take them back out rather than orphan them.
+      await env.MEDIA.delete(keys)
+      return json({ error: 'The photos changed while this one uploaded. Reload and try again.' }, 409)
+    }
+    return json(product(row), 201)
+  }
+
+  const photo = path.match(PHOTO_MAIN) ?? path.match(PHOTO)
+  const isMain = PHOTO_MAIN.test(path)
+  if (photo && ((isMain && method === 'POST') || (!isMain && method === 'DELETE'))) {
+    const [, productId2, name] = photo
+    const repo = await merchantRepo(env, request)
+    if (repo instanceof Response) return repo
+    const existing = await repo.products.get(productId2)
+    if (!existing) return json({ error: 'not found' }, 404)
+    const names = namesIn(existing.media, env.MEDIA_BASE, existing.merchant_id, existing.id)
+    if (!names) return json({ error: "This product's photos are not managed in the console." }, 409)
+    if (!isPhotoName(name) || !names.includes(name)) return json({ error: 'not found' }, 404)
+
+    const rest = names.filter((n) => n !== name)
+    if (!isMain && rest.length === 0 && existing.status === 'published') {
+      return json({ error: 'A published product keeps at least one photo. Unpublish it first.' }, 409)
+    }
+    const media = mediaFor(env.MEDIA_BASE, existing.merchant_id, existing.id, isMain ? [name, ...rest] : rest)
+    const row = await repo.products.setMedia(existing.id, media, existing.media)
+    if (!row) return json({ error: 'The photos changed in the meantime. Reload and try again.' }, 409)
+    if (!isMain) {
+      // After the row stops pointing at them, so a failure here leaves an
+      // unreferenced object rather than a broken image.
+      await env.MEDIA.delete([
+        keyFor(existing.merchant_id, existing.id, name, 1600),
+        keyFor(existing.merchant_id, existing.id, name, 400),
+      ]).catch((err) => console.error('photo objects not deleted', { name, err }))
+    }
+    return json(product(row))
   }
 
   /* ------------------------------------------------------------ platform */

@@ -104,6 +104,13 @@ staging by the whole accounts phase, not broken by it.
    database without `staff_sessions` the whole sweep fails, customer tables
    included. Nothing surfaces it except `purge failed` in the worker's logs.
 
+7. **Create the production photo bucket before deploying either worker.**
+   `npx wrangler r2 bucket create nexus-media`. Both `wrangler.toml` and
+   `wrangler.console.toml` bind it at the top level, and a deploy that binds a
+   bucket which does not exist fails. Staging's is `nexus-media-staging`,
+   created 2026-09-24; the two are separate on purpose, so a demo upload on
+   staging can never appear behind a production URL.
+
 ## Known drift
 
 **Staging's `staff_sessions.totp_pending` still has `DEFAULT 0`.** `0011`
