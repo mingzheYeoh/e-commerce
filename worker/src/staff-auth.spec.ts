@@ -145,6 +145,47 @@ describe('registerMerchant', () => {
     // And the loser hears what any taken address hears.
     expect(res.status).toBe(202)
   })
+
+  it('logs a UNIQUE failure that is not the email race', async () => {
+    /*
+     * Any UNIQUE is answered 202 so an email race isn't given a different
+     * status to read — but a UNIQUE that isn't staff.email means nothing was
+     * stored while the applicant was told otherwise, and that must leave a
+     * trace. Forced here by pinning the RNG that mints `merchants.id` so it
+     * repeats across two registrations with different emails: the second
+     * merchants INSERT collides on the primary key, a UNIQUE failure that
+     * cannot be staff.email.
+     */
+    const { db, raw } = memoryD1()
+    const real = crypto.getRandomValues.bind(crypto)
+    const pinned = vi.spyOn(crypto, 'getRandomValues').mockImplementation(((arr: unknown) => {
+      // Only the 12-byte draw `id()` uses is pinned; the salt (16) and the
+      // pending-slug token (32) stay genuinely random so this doesn't also
+      // collide the slug or reuse a password salt.
+      if (arr instanceof Uint8Array && arr.length === 12) return arr
+      return real(arr as Parameters<typeof real>[0])
+    }) as typeof crypto.getRandomValues)
+    const quiet = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    try {
+      await registerMerchant(env(db), good)
+      const res = await registerMerchant(env(db), { ...good, email: 'second@example.com' })
+
+      expect(res.status).toBe(202)
+      expect(raw.prepare(`SELECT COUNT(*) AS n FROM merchants`).get()).toEqual({ n: 1 })
+      expect(quiet).toHaveBeenCalledWith(
+        'registration: unexpected UNIQUE, answered 202',
+        expect.anything(),
+      )
+      const [, loggedErr] = quiet.mock.calls[0]
+      expect(String(loggedErr)).not.toMatch(/staff\.email/i)
+    } finally {
+      // A leaked mock here would pin every later test's merchant/staff ids
+      // too, so cleanup must run even when an assertion above throws.
+      pinned.mockRestore()
+      quiet.mockRestore()
+    }
+  })
 })
 
 describe('approveMerchant', () => {

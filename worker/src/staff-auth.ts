@@ -22,13 +22,24 @@
  *
  * 2. A taken email gets the same status *and* body a success does — 202
  *    either way. That equalisation used to be decorative, because the slug
- *    reopened the channel one request later. With nothing left for an
- *    applicant to choose, there is nothing a second request can collide
- *    with, so one request or two read the same answer whether or not the
- *    address has an account. What remains is timing: a fresh application
- *    performs a batched write that a duplicate skips, so a duplicate answers
- *    faster by roughly one write. That residual is known and deferred; the
- *    channel is narrowed to a clock, not shut.
+ *    reopened the channel one request later. With the slug gone,
+ *    registration's own answers are equalised across a new address and an
+ *    existing one: there is nothing left in this response, or in what a
+ *    second `registerMerchant` call can collide with, that tells the two
+ *    apart.
+ *
+ *    Two things still leak, and neither is this function's to close. First,
+ *    a register-then-sign-in probe: the applicant still chooses the
+ *    password, so an attacker who registers a victim's address with a
+ *    password of their own picking can sign in with it afterward and read
+ *    the account's existence off the sign-in answer. Removing the slug took
+ *    away one applicant-chosen value; the password is another, and it is
+ *    read at sign-in, not here. Closing that channel is `signIn`'s job — a
+ *    correct password for a staff member of a non-`active` merchant must
+ *    answer exactly as a wrong one does, including the failed-attempt count
+ *    and backoff. Second, timing: a fresh application performs a batched
+ *    write that a duplicate skips, so a duplicate answers faster by roughly
+ *    one write. Both residuals are known and deferred, not closed.
  *
  * 3. The merchant row and its owner are written in one batch. A merchant with
  *    no owner is an application nobody can ever claim.
@@ -120,10 +131,11 @@ export async function registerMerchant(env: StaffEnv, body: unknown): Promise<St
   if (breached) return refuse(breached)
 
   /*
-   * Hashed before the duplicate check rather than after it, so that both
-   * answers cost the same ~139ms. The two responses are identical by design;
-   * a taken address that comes back in a fraction of the time is the same
-   * oracle, read off a clock instead of off the page.
+   * Hashed before the duplicate check rather than after it, so both paths
+   * pay the same ~139ms KDF regardless of which one a request takes. That
+   * does not make the two answers equally fast overall — see the header for
+   * the write-time residual that remains — it only keeps the KDF itself
+   * from being a second clock to read.
    */
   const salt = crypto.getRandomValues(new Uint8Array(16))
   const hash = await derive(password, salt, KDF_ROUNDS)
@@ -164,6 +176,13 @@ export async function registerMerchant(env: StaffEnv, body: unknown): Promise<St
     // other unique value in this batch is random, so a message this cannot
     // parse is still the address, and 503 would be the oracle.
     if (/UNIQUE/i.test(String(err))) {
+      // Still 202 — answering 503 on an email race would itself be an oracle
+      // during the race. But a UNIQUE that isn't staff.email (an RNG fault,
+      // or a future UNIQUE column) means nothing was stored and the
+      // applicant was told otherwise; that must leave a trace somewhere.
+      if (!/staff\.email/i.test(String(err))) {
+        console.error('registration: unexpected UNIQUE, answered 202', err)
+      }
       return { status: 202, body: APPLICATION_RECEIVED }
     }
     console.error('merchant registration failed', err)
@@ -213,7 +232,7 @@ export async function approveMerchant(
 
   let changed: number
   try {
-    const [update] = await env.ORDERS.batch([
+    const [update, audit] = await env.ORDERS.batch([
       env.ORDERS.prepare(
         `UPDATE merchants SET status = 'active', slug = ?2 WHERE id = ?1 AND status = 'pending'`,
       ).bind(merchantId, address),
@@ -223,6 +242,17 @@ export async function approveMerchant(
       ).bind(id('aud'), staffId, merchantId),
     ])
     changed = update.meta.changes
+    // Relies on a batch running its statements in order on one connection —
+    // true of D1 today. If that ever stopped holding, the UPDATE would
+    // commit and the audit row would be silently skipped; this is what makes
+    // that detectable instead of assumed.
+    if (audit.meta.changes !== changed) {
+      console.error('merchant approval: audit row did not match the update', {
+        merchantId,
+        changed,
+        audited: audit.meta.changes,
+      })
+    }
   } catch (err) {
     // Settled by the constraint rather than a SELECT first, so two approvals
     // reaching for one address cannot both see it free.
