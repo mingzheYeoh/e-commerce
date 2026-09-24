@@ -226,7 +226,7 @@ describe('the schema refuses states that must not exist', () => {
   })
 })
 
-import { scopedTo, platformWide, methodNames, type TenancyEnv, type Repository } from './tenancy'
+import { scopedTo, platformWide, methodNames, utcDay, type TenancyEnv, type Repository } from './tenancy'
 
 /**
  * Two merchants, each with one product. B's is marked so a leak is obvious.
@@ -258,7 +258,36 @@ async function twoTenants() {
        VALUES ('LEAK_p_b','mch_b','LEAK_SKU','LEAK_TITLE','LEAK_SONY','LEAK_audio',200,'LEAK_SGD','published')`,
     )
     .run()
+  // One order both merchants sold into, and one that is B's alone. B's lines
+  // carry the marker, so a leaked line shows up in the sweep below.
+  for (const id of ['o_shared', 'LEAK_o_b']) placeOrderRow(raw, id)
+  addLine(raw, 'o_shared', 'p_a', 'mch_a', 'Mine', 1, 100)
+  addLine(raw, 'o_shared', 'LEAK_p_b', 'mch_b', 'LEAK_LINE', 1, 200)
+  addLine(raw, 'LEAK_o_b', 'LEAK_p_b', 'mch_b', 'LEAK_LINE', 1, 200)
   return { env: { ORDERS: db } as TenancyEnv, raw, rows }
+}
+
+type Raw = import('node:sqlite').DatabaseSync
+
+/** An order row as checkout writes one, placed `ago` in SQLite's own date modifiers. */
+function placeOrderRow(raw: Raw, id: string, ago = '+0 days', payment = 'succeeded') {
+  raw
+    .prepare(
+      `INSERT INTO orders (id, created_at, email, ship_name, ship_phone, ship_line1, ship_city, ship_state,
+                           ship_postal, method, subtotal_cents, shipping_cents, tax_cents, total_cents, payment_status)
+       VALUES (?, datetime('now', ?), 'buyer@example.com', 'Ada Buyer', '+1 555 0100', '1 Road', 'Town',
+               'OR', '97201', 'standard', 0, 0, 0, 0, ?)`,
+    )
+    .run(id, ago, payment)
+}
+
+function addLine(raw: Raw, orderId: string, productId: string, merchantId: string, title: string, qty: number, unit: number) {
+  raw
+    .prepare(
+      `INSERT INTO order_lines (order_id, product_id, merchant_id, sku, title, qty, unit_price_cents)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    )
+    .run(orderId, productId, merchantId, `SKU-${productId}`, title, qty, unit)
 }
 
 describe('the repository', () => {
@@ -414,7 +443,20 @@ const CASES: Record<string, unknown[]> = {
   ],
   'products.update': ['LEAK_p_b', { title: 'Sweep' }],
   'products.setMedia': ['LEAK_p_b', '{"gallery":[]}', '{}'],
+  'orders.list': [{ from: '2000-01-01', to: '2999-12-31' }],
+  'orders.get': ['LEAK_o_b'],
+  'stats.overview': [],
+  // Platform only: a merchant repository has no such groups, which the
+  // completeness tests below pin. Suspend before restore, because the audit
+  // sweep runs them in this order against an active mch_b.
+  'merchants.list': [],
+  'merchants.suspend': ['mch_b'],
+  'merchants.restore': ['mch_b'],
+  'audit.list': [{ merchantId: null, page: 0 }],
 }
+
+/** Everything in CASES that a merchant repository does not carry at all. */
+const PLATFORM_ONLY = ['merchants.list', 'merchants.suspend', 'merchants.restore', 'audit.list']
 
 const call = (repo: Repository, dotted: string, args: unknown[]) => {
   const [group, name] = dotted.split('.')
@@ -433,8 +475,8 @@ describe('isolation', () => {
     const { env } = await twoTenants()
     const mine = await scopedTo(env, 'mch_a', 'stf_1')
 
-    for (const [dotted, args] of Object.entries(CASES)) {
-      const result = await call(mine, dotted, args)
+    for (const dotted of methodNames(mine)) {
+      const result = await call(mine, dotted, CASES[dotted])
       expect(JSON.stringify(result ?? null), `${dotted} leaked merchant B`).not.toContain('LEAK_')
     }
   })
@@ -552,7 +594,20 @@ describe('completeness', () => {
      */
     const { env } = await twoTenants()
     const methods = methodNames(await scopedTo(env, 'mch_a', 'stf_1')).sort()
-    expect(methods).toEqual(Object.keys(CASES).sort())
+    expect(methods).toEqual(Object.keys(CASES).filter((m) => !PLATFORM_ONLY.includes(m)).sort())
+  })
+
+  it('has an audit case for every method on the platform repository', async () => {
+    const { env } = await twoTenants()
+    expect(methodNames(await platformWide(env, 'stf_p')).sort()).toEqual(Object.keys(CASES).sort())
+  })
+
+  it('gives a merchant repository no way to suspend, restore or read the audit log', async () => {
+    // Structural, not a refusal: the method is not there to call.
+    const { env } = await twoTenants()
+    const mine = await scopedTo(env, 'mch_a', 'stf_1')
+    expect('merchants' in mine).toBe(false)
+    expect('audit' in mine).toBe(false)
   })
 })
 
@@ -590,5 +645,236 @@ describe('a merchant who is not active', () => {
   it('refuses a merchant id that does not exist', async () => {
     const { db } = seed('active')
     await expect(scopedTo(db4(db), 'mch_ghost', 'stf_1')).rejects.toThrow(/not active/i)
+  })
+})
+
+/**
+ * Two merchants in two currencies, and orders whose sums are worked out by
+ * hand in the comments. Every expected number below is arithmetic on this
+ * table, not a value read back from the code under test.
+ *
+ *   A (USD): pa1 1000 published stock 3 · pa2 2500 published stock 10 · pa3 draft
+ *   B (SGD): pb1 700 published stock 50
+ *
+ *   o1 today      pa1 x2 = 2000 USD, pb1 x1 = 700 SGD   shared
+ *   o2 3 days     pa2 x1 = 2500 USD
+ *   o3 10 days    pa1 x1 = 1000, pa2 x2 = 5000 USD
+ *   o4 40 days    pa1 x5 = 5000 USD                      outside 30 days
+ *   o5 today      pa2 x1, card declined                   never revenue
+ *   o6 today      pb1 x3 = 2100 SGD
+ */
+function sales() {
+  const { db, raw, rows } = memoryD1()
+  for (const [id, currency] of [
+    ['mch_a', 'USD'],
+    ['mch_b', 'SGD'],
+  ]) {
+    raw
+      .prepare(`INSERT INTO merchants (id, slug, name, settlement_currency, status) VALUES (?, ?, ?, ?, 'active')`)
+      .run(id, id, id.toUpperCase(), currency)
+  }
+  const product = raw.prepare(
+    `INSERT INTO products (id, merchant_id, sku, title, brand, category, price_minor, currency, status, stock_count)
+     VALUES (?, ?, ?, ?, 'B', 'phones', ?, ?, ?, ?)`,
+  )
+  product.run('pa1', 'mch_a', 'A1', 'Alpha One', 1000, 'USD', 'published', 3)
+  product.run('pa2', 'mch_a', 'A2', 'Alpha Two', 2500, 'USD', 'published', 10)
+  product.run('pa3', 'mch_a', 'A3', 'Alpha Draft', 900, 'USD', 'draft', 0)
+  product.run('pb1', 'mch_b', 'B1', 'Beta One', 700, 'SGD', 'published', 50)
+
+  placeOrderRow(raw, 'o1')
+  addLine(raw, 'o1', 'pa1', 'mch_a', 'Alpha One', 2, 1000)
+  addLine(raw, 'o1', 'pb1', 'mch_b', 'Beta One', 1, 700)
+  placeOrderRow(raw, 'o2', '-3 days')
+  addLine(raw, 'o2', 'pa2', 'mch_a', 'Alpha Two', 1, 2500)
+  placeOrderRow(raw, 'o3', '-10 days')
+  addLine(raw, 'o3', 'pa1', 'mch_a', 'Alpha One', 1, 1000)
+  addLine(raw, 'o3', 'pa2', 'mch_a', 'Alpha Two', 2, 2500)
+  placeOrderRow(raw, 'o4', '-40 days')
+  addLine(raw, 'o4', 'pa1', 'mch_a', 'Alpha One', 5, 1000)
+  placeOrderRow(raw, 'o5', '+0 days', 'card_declined')
+  addLine(raw, 'o5', 'pa2', 'mch_a', 'Alpha Two', 1, 2500)
+  placeOrderRow(raw, 'o6')
+  addLine(raw, 'o6', 'pb1', 'mch_b', 'Beta One', 3, 700)
+  return { env: { ORDERS: db } as TenancyEnv, raw, rows }
+}
+
+const ALL_TIME = { from: '2000-01-01', to: '2999-12-31' }
+
+describe('a shared order', () => {
+  it('shows each merchant its own lines and its own sum, never the other merchant or the order total', async () => {
+    const { env } = await sales()
+    const a = await (await scopedTo(env, 'mch_a', 'stf_a')).orders.get('o1')
+    const b = await (await scopedTo(env, 'mch_b', 'stf_b')).orders.get('o1')
+
+    expect(a!.lines.map((l) => l.product_id)).toEqual(['pa1'])
+    expect(a!.totals).toEqual([{ currency: 'USD', minor: 2000 }])
+    expect(b!.lines.map((l) => l.product_id)).toEqual(['pb1'])
+    expect(b!.totals).toEqual([{ currency: 'SGD', minor: 700 }])
+    // Both still get what they need to ship, and nothing to contact anyone by.
+    expect(a).toMatchObject({ ship_name: 'Ada Buyer', ship_postal: '97201', method: 'standard' })
+    expect(JSON.stringify(a)).not.toMatch(/buyer@example\.com|555 0100|Beta One|pb1/)
+    expect(JSON.stringify(b)).not.toMatch(/buyer@example\.com|555 0100|Alpha One|pa1/)
+  })
+
+  it('lists the shared order to both, each summed over its own lines', async () => {
+    const { env } = await sales()
+    const a = await (await scopedTo(env, 'mch_a', 'stf_a')).orders.list(ALL_TIME)
+    const b = await (await scopedTo(env, 'mch_b', 'stf_b')).orders.list(ALL_TIME)
+    // Newest first; o5 was declined, so it is nobody's order to fulfil.
+    expect(a.map((o) => o.id)).toEqual(['o1', 'o2', 'o3', 'o4'])
+    expect(a[0]).toMatchObject({ items: 2, totals: [{ currency: 'USD', minor: 2000 }] })
+    expect(a[2]).toMatchObject({ items: 3, totals: [{ currency: 'USD', minor: 6000 }] })
+    expect(b.map((o) => o.id).sort()).toEqual(['o1', 'o6'])
+    expect(b.find((o) => o.id === 'o1')).toMatchObject({ items: 1, totals: [{ currency: 'SGD', minor: 700 }] })
+  })
+
+  it("keeps each merchant's revenue to its own lines", async () => {
+    const { env } = await sales()
+    const a = await (await scopedTo(env, 'mch_a', 'stf_a')).stats.overview()
+    const b = await (await scopedTo(env, 'mch_b', 'stf_b')).stats.overview()
+    expect(a.revenue.today).toEqual([{ currency: 'USD', minor: 2000 }])
+    // 700 from the shared order and 2100 from o6, and none of A's 2000.
+    expect(b.revenue.today).toEqual([{ currency: 'SGD', minor: 2800 }])
+  })
+
+  it('refuses another merchant its orders by id, and filters by date', async () => {
+    const { env } = await sales()
+    const a = await scopedTo(env, 'mch_a', 'stf_a')
+    expect(await a.orders.get('o6')).toBeNull()
+    expect(await a.orders.get('o5'), 'a declined attempt is not an order').toBeNull()
+    expect(await a.orders.get('no-such-order')).toBeNull()
+    // The last two days only: o1 today; o2 is three days back.
+    const recent = await a.orders.list({ from: utcDay(1), to: utcDay(0) })
+    expect(recent.map((o) => o.id)).toEqual(['o1'])
+  })
+})
+
+describe('the overview', () => {
+  it("adds up a merchant's own sales by hand-checked windows", async () => {
+    const { env } = await sales()
+    const o = await (await scopedTo(env, 'mch_a', 'stf_a')).stats.overview()
+
+    // today: o1 2000. 7 days: + o2 2500. 30 days: + o3 6000. o4 is outside, o5 declined.
+    expect(o.revenue).toEqual({
+      today: [{ currency: 'USD', minor: 2000 }],
+      week: [{ currency: 'USD', minor: 4500 }],
+      month: [{ currency: 'USD', minor: 10500 }],
+    })
+    expect(o.orders).toEqual({ today: 1, week: 2, month: 3 })
+
+    expect(o.trend).toHaveLength(30)
+    expect(o.trend[29]).toEqual({ day: utcDay(0), revenue: [{ currency: 'USD', minor: 2000 }] })
+    expect(o.trend.find((d) => d.day === utcDay(3))!.revenue).toEqual([{ currency: 'USD', minor: 2500 }])
+    expect(o.trend.find((d) => d.day === utcDay(10))!.revenue).toEqual([{ currency: 'USD', minor: 6000 }])
+    expect(o.trend.filter((d) => d.revenue.length).map((d) => d.day)).toEqual([utcDay(10), utcDay(3), utcDay(0)])
+
+    // pa2: 2500 + 5000 = 7500 over 3 units. pa1: 2000 + 1000 = 3000 over 3.
+    expect(o.top).toEqual([
+      { product_id: 'pa2', title: 'Alpha Two', currency: 'USD', minor: 7500, qty: 3 },
+      { product_id: 'pa1', title: 'Alpha One', currency: 'USD', minor: 3000, qty: 3 },
+    ])
+    // Published and at most five: pa1 at 3. The draft at 0 is not on sale.
+    expect(o.lowStock).toEqual([{ id: 'pa1', title: 'Alpha One', stock_count: 3 }])
+    expect(o.products).toEqual({ draft: 1, published: 2, archived: 0 })
+  })
+
+  it('never adds two currencies together, platform-wide', async () => {
+    const { env } = await sales()
+    const o = await (await platformWide(env, 'stf_p')).stats.overview()
+    expect(o.revenue.month).toEqual([
+      { currency: 'SGD', minor: 2800 },
+      { currency: 'USD', minor: 10500 },
+    ])
+    // o1, o2, o3, o6. o1 counts once although two merchants sold into it.
+    expect(o.orders).toEqual({ today: 2, week: 3, month: 4 })
+    expect(o.trend[29].revenue).toEqual([
+      { currency: 'SGD', minor: 2800 },
+      { currency: 'USD', minor: 2000 },
+    ])
+    // Ranked within each currency, since 7500 cents and 2800 cents are not comparable.
+    expect(o.top.map((t) => [t.currency, t.product_id])).toEqual([
+      ['SGD', 'pb1'],
+      ['USD', 'pa2'],
+      ['USD', 'pa1'],
+    ])
+  })
+
+  it('lists every merchant with its product count and 30-day revenue', async () => {
+    const { env, raw } = await sales()
+    raw.prepare(`INSERT INTO merchants (id, slug, name, settlement_currency, status) VALUES ('mch_p','p','P','USD','pending')`).run()
+    const list = await (await platformWide(env, 'stf_p')).merchants.list()
+    const by = Object.fromEntries(list.map((m) => [m.merchant_id, m]))
+    expect(by.mch_a).toMatchObject({ status: 'active', product_count: 3, revenue: [{ currency: 'USD', minor: 10500 }] })
+    expect(by.mch_b).toMatchObject({ status: 'active', product_count: 1, revenue: [{ currency: 'SGD', minor: 2800 }] })
+    expect(by.mch_p).toMatchObject({ status: 'pending', product_count: 0, revenue: [] })
+  })
+})
+
+describe('suspending a merchant', () => {
+  it('suspends and restores, auditing each against the merchant', async () => {
+    const { env, rows } = await sales()
+    const platform = await platformWide(env, 'stf_p')
+    await platform.merchants.suspend('mch_b')
+    expect(rows('merchants').find((m) => m.id === 'mch_b')!.status).toBe('suspended')
+    await platform.merchants.restore('mch_b')
+    expect(rows('merchants').find((m) => m.id === 'mch_b')!.status).toBe('active')
+
+    const log = rows('audit_log').map((r) => [r.action, r.merchant_id, r.subject, r.actor_id, r.actor_scope])
+    expect(log).toEqual([
+      ['merchants.suspend', 'mch_b', 'mch_b', 'stf_p', 'platform'],
+      ['merchants.restore', 'mch_b', 'mch_b', 'stf_p', 'platform'],
+    ])
+  })
+
+  it('never touches a pending application, and writes no audit row for the refusal', async () => {
+    const { env, raw, rows } = await sales()
+    raw.prepare(`INSERT INTO merchants (id, slug, name, settlement_currency, status) VALUES ('mch_p','p','P','USD','pending')`).run()
+    const platform = await platformWide(env, 'stf_p')
+    await expect(platform.merchants.suspend('mch_p')).rejects.toThrow(/is not active/)
+    await expect(platform.merchants.restore('mch_p')).rejects.toThrow(/is not suspended/)
+    await expect(platform.merchants.restore('mch_a'), 'already active').rejects.toThrow(/is not suspended/)
+    expect(rows('merchants').find((m) => m.id === 'mch_p')!.status).toBe('pending')
+    expect(rows('audit_log')).toEqual([])
+  })
+
+  it("closes the suspended merchant's own door", async () => {
+    const { env } = await sales()
+    await (await platformWide(env, 'stf_p')).merchants.suspend('mch_a')
+    await expect(scopedTo(env, 'mch_a', 'stf_a')).rejects.toThrow(/not active/)
+  })
+})
+
+describe('the audit log', () => {
+  it('pages newest first, and filters to one merchant', async () => {
+    const { env, raw } = await sales()
+    const insert = raw.prepare(
+      `INSERT INTO audit_log (id, at, actor_id, actor_scope, merchant_id, action) VALUES (?, ?, 'stf_p', 'platform', ?, 'x')`,
+    )
+    for (let i = 0; i < 60; i++) {
+      insert.run(`aud_${String(i).padStart(2, '0')}`, `2026-01-01 00:00:${String(i).padStart(2, '0')}`, i % 2 ? 'mch_a' : 'mch_b')
+    }
+    const platform = await platformWide(env, 'stf_p')
+
+    const first = await platform.audit.list({ merchantId: null, page: 0 })
+    expect(first.entries).toHaveLength(50)
+    expect(first.hasMore).toBe(true)
+    expect(first.entries[0].id).toBe('aud_59')
+    const second = await platform.audit.list({ merchantId: null, page: 1 })
+    // 60 seeded, plus the row the first read wrote about itself, which is newest of all.
+    expect(second.entries.map((e) => e.id).slice(-1)).toEqual(['aud_00'])
+    expect(second.hasMore).toBe(false)
+
+    const onlyA = await platform.audit.list({ merchantId: 'mch_a', page: 0 })
+    expect(onlyA.entries).toHaveLength(30)
+    expect(onlyA.entries.every((e) => e.merchant_id === 'mch_a' && e.merchant_name === 'MCH_A')).toBe(true)
+  })
+
+  it("records a filtered read against that merchant, so it shows up in their own log", async () => {
+    const { env, raw } = await sales()
+    await (await platformWide(env, 'stf_p')).audit.list({ merchantId: 'mch_a', page: 0 })
+    expect(raw.prepare(`SELECT action, merchant_id FROM audit_log`).all()).toEqual([
+      { action: 'audit.list', merchant_id: 'mch_a' },
+    ])
   })
 })

@@ -296,3 +296,9 @@ CREATE INDEX IF NOT EXISTS staff_sessions_staff_idx ON staff_sessions(staff_id);
 -- Read by the nightly sweep. Without it that is a full scan of every session
 -- ever issued.
 CREATE INDEX IF NOT EXISTS staff_sessions_expiry_idx ON staff_sessions(expires_at);
+
+-- ---------------------------------------------------------------- 0012
+-- The audit log viewer's unfiltered, newest-first page. Without it every page
+-- view scans and sorts an append-only table. See the migration.
+
+CREATE INDEX IF NOT EXISTS audit_at_idx ON audit_log(at DESC);

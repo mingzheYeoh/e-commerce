@@ -44,6 +44,7 @@ Verified against `sqlite_master` on 2026-09-21.
 | `0009` order lines product id | ❌ | ✅ applied 2026-09-21 |
 | `0010` display order | ❌ | ✅ applied 2026-09-21, rebuilt 2026-09-22 |
 | `0011` staff sessions | ❌ | ✅ applied 2026-09-22 |
+| `0012` audit at index | ❌ | ❌ |
 
 Production currently holds six tables: `orders`, `order_lines`, and the four
 from `0006`. It has never had `users`, `sessions`, `email_tokens` or
@@ -110,6 +111,9 @@ staging by the whole accounts phase, not broken by it.
    bucket which does not exist fails. Staging's is `nexus-media-staging`,
    created 2026-09-24; the two are separate on purpose, so a demo upload on
    staging can never appear behind a production URL.
+
+8. **`0012` is an index only.** Safe in either order relative to the console
+   worker; without it the audit log viewer still works, it just scans the log.
 
 ## Known drift
 

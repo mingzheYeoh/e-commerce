@@ -151,11 +151,19 @@ const MERCHANT_ROUTES = [
   ['GET', '/api/merchant/products'],
   ['POST', '/api/merchant/products'],
   ['PATCH', '/api/merchant/products/p1'],
+  ['GET', '/api/merchant/overview'],
+  ['GET', '/api/merchant/orders'],
+  ['GET', '/api/merchant/orders/o1'],
 ] as const
 
 const PLATFORM_ROUTES = [
   ['GET', '/api/platform/merchants'],
   ['POST', '/api/platform/merchants/mch_x/approve'],
+  ['GET', '/api/platform/overview'],
+  ['GET', '/api/platform/merchants/all'],
+  ['POST', '/api/platform/merchants/mch_x/suspend'],
+  ['POST', '/api/platform/merchants/mch_x/restore'],
+  ['GET', '/api/platform/audit'],
 ] as const
 
 describe('the console worker: who may reach what', () => {
@@ -187,10 +195,24 @@ describe('the console worker: who may reach what', () => {
     }
   })
 
-  it('refuses a platform route to merchant staff', async () => {
-    const { db, cookie } = await activeSession()
-    const res = await call(db, 'GET', '/api/platform/merchants', { cookie })
-    expect(res.status).toBe(403)
+  it('refuses every platform route to merchant staff', async () => {
+    const { db, raw, cookie, merchantId } = await activeSession()
+    const before = raw.prepare(`SELECT COUNT(*) AS n FROM audit_log`).get()
+    for (const [method, path] of [...PLATFORM_ROUTES, ['POST', `/api/platform/merchants/${merchantId}/suspend`] as const]) {
+      const res = await call(db, method, path, { cookie, body: method === 'GET' ? undefined : {} })
+      expect(res.status, `${method} ${path}`).toBe(403)
+    }
+    expect(raw.prepare(`SELECT COUNT(*) AS n FROM audit_log`).get()).toEqual(before)
+    expect(raw.prepare(`SELECT status FROM merchants WHERE id = ?`).get(merchantId)).toEqual({ status: 'active' })
+  })
+
+  it('refuses every merchant route to platform staff', async () => {
+    const mem = await activeMerchant()
+    const cookie = await platformSession(mem)
+    for (const [method, path] of MERCHANT_ROUTES) {
+      const res = await call(mem.db, method, path, { cookie, body: method === 'GET' ? undefined : {} })
+      expect(res.status, `${method} ${path}`).toBe(403)
+    }
   })
 
   it('refuses approval to merchant staff, so nobody approves their own application', async () => {
@@ -640,5 +662,166 @@ describe('the console worker: staff authentication', () => {
     })
     expect(register.status).toBe(429)
     expect(raw.prepare(`SELECT COUNT(*) AS n FROM merchants`).get()).toEqual({ n: 1 })
+  })
+})
+
+/**
+ * The signed-in merchant and mch_other both sold into o_shared; o_theirs is
+ * mch_other's alone. mine: 2 x 1000. theirs: 1 x 1000 in each order.
+ */
+function sharedOrders(raw: MemoryD1['raw'], merchantId: string) {
+  seedProduct(raw, merchantId, 'prd_mine')
+  seedProduct(raw, 'mch_other', 'prd_theirs')
+  const order = raw.prepare(
+    `INSERT INTO orders (id, email, ship_name, ship_phone, ship_line1, ship_city, ship_state, ship_postal,
+                         method, subtotal_cents, shipping_cents, tax_cents, total_cents, payment_status)
+     VALUES (?, 'shopper@example.com', 'Sam Shopper', '+1 555 0199', '9 Lane', 'Portland', 'OR', '97201',
+             'express', 3000, 0, 0, 3000, 'succeeded')`,
+  )
+  const line = raw.prepare(
+    `INSERT INTO order_lines (order_id, product_id, merchant_id, sku, title, qty, unit_price_cents)
+     VALUES (?, ?, ?, ?, ?, ?, 1000)`,
+  )
+  order.run('o_shared')
+  order.run('o_theirs')
+  line.run('o_shared', 'prd_mine', merchantId, 'sku-mine', 'Mine', 2)
+  line.run('o_shared', 'prd_theirs', 'mch_other', 'sku-theirs', 'THEIRS', 1)
+  line.run('o_theirs', 'prd_theirs', 'mch_other', 'sku-theirs', 'THEIRS', 1)
+}
+
+describe('the console worker: merchant orders and overview', () => {
+  it('shows a shared order as only this merchant\'s lines, with what shipping needs and no contact details', async () => {
+    const { db, raw, cookie, merchantId } = await activeSession()
+    sharedOrders(raw, merchantId)
+    const res = await call(db, 'GET', '/api/merchant/orders/o_shared', { cookie })
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body).toMatchObject({
+      id: 'o_shared',
+      method: 'express',
+      status: 'succeeded',
+      shipTo: { name: 'Sam Shopper', line1: '9 Lane', city: 'Portland', state: 'OR', postal: '97201', country: 'US' },
+      lines: [{ productId: 'prd_mine', title: 'Mine', qty: 2, unitMinor: 1000, currency: 'USD' }],
+      totals: [{ currency: 'USD', minor: 2000 }],
+    })
+    // Neither the other merchant's line nor the order's own 3000 total.
+    expect(JSON.stringify(body)).not.toMatch(/THEIRS|prd_theirs|3000|shopper@example\.com|555 0199/)
+  })
+
+  it("answers another merchant's order with 404, the same as no order at all", async () => {
+    const { db, raw, cookie, merchantId } = await activeSession()
+    sharedOrders(raw, merchantId)
+    for (const id of ['o_theirs', 'o_nothing']) {
+      const res = await call(db, 'GET', `/api/merchant/orders/${id}`, { cookie })
+      expect(res.status, id).toBe(404)
+      expect(await res.json()).toEqual({ error: 'not found' })
+    }
+  })
+
+  it('lists only orders with a line of its own, summed over those lines', async () => {
+    const { db, raw, cookie, merchantId } = await activeSession()
+    sharedOrders(raw, merchantId)
+    const res = await call(db, 'GET', '/api/merchant/orders', { cookie })
+    const body = (await res.json()) as { orders: { id: string; items: number; totals: unknown }[] }
+    expect(body.orders).toEqual([
+      expect.objectContaining({ id: 'o_shared', items: 2, totals: [{ currency: 'USD', minor: 2000 }] }),
+    ])
+  })
+
+  it('refuses a date range it cannot read', async () => {
+    const { db, cookie } = await activeSession()
+    for (const q of ['from=yesterday', 'to=2026-02-30', 'from=2026-09-10&to=2026-09-01']) {
+      expect((await call(db, 'GET', `/api/merchant/orders?${q}`, { cookie })).status, q).toBe(400)
+    }
+    expect((await call(db, 'GET', '/api/merchant/orders?from=2026-09-01&to=2026-09-10', { cookie })).status).toBe(200)
+  })
+
+  it("counts only its own lines in its overview, and writes no audit row for reading its own data", async () => {
+    const { db, raw, cookie, merchantId } = await activeSession()
+    sharedOrders(raw, merchantId)
+    const res = await call(db, 'GET', '/api/merchant/overview', { cookie })
+    const body = (await res.json()) as { revenue: { today: unknown }; orders: { today: number }; products: unknown }
+    expect(body.revenue.today).toEqual([{ currency: 'USD', minor: 2000 }])
+    expect(body.orders.today).toBe(1)
+    expect(body.products).toEqual({ draft: 1, published: 0, archived: 0 })
+    expect(raw.prepare(`SELECT COUNT(*) AS n FROM audit_log WHERE actor_scope = 'merchant'`).get()).toEqual({ n: 0 })
+  })
+})
+
+describe('the console worker: platform merchant management', () => {
+  it('suspends a merchant, which takes its products off the storefront and out of checkout, then restores it', async () => {
+    const mem = await activeMerchant()
+    seedProduct(mem.raw, mem.merchantId, 'prd_live')
+    mem.raw.prepare(`UPDATE products SET status = 'published' WHERE id = 'prd_live'`).run()
+    const cookie = await platformSession(mem)
+    const { publishedProducts } = await import('./catalogue')
+    expect((await publishedProducts({ ORDERS: mem.db })).map((p) => p.id)).toEqual(['prd_live'])
+
+    const suspended = await call(mem.db, 'POST', `/api/platform/merchants/${mem.merchantId}/suspend`, { cookie })
+    expect(suspended.status).toBe(200)
+    expect(await publishedProducts({ ORDERS: mem.db })).toEqual([])
+
+    const restored = await call(mem.db, 'POST', `/api/platform/merchants/${mem.merchantId}/restore`, { cookie })
+    expect(restored.status).toBe(200)
+    expect((await publishedProducts({ ORDERS: mem.db })).map((p) => p.id)).toEqual(['prd_live'])
+
+    expect(
+      mem.raw
+        .prepare(`SELECT action, merchant_id, actor_id FROM audit_log WHERE action LIKE 'merchants.s%' OR action LIKE 'merchants.r%' ORDER BY rowid`)
+        .all(),
+    ).toEqual([
+      { action: 'merchants.suspend', merchant_id: mem.merchantId, actor_id: 'stf_admin' },
+      { action: 'merchants.restore', merchant_id: mem.merchantId, actor_id: 'stf_admin' },
+    ])
+  })
+
+  it('refuses to suspend or restore a pending application: approval is its own flow', async () => {
+    const mem = await activeMerchant()
+    const pending = await pendingApplication(mem)
+    const cookie = await platformSession(mem)
+    for (const action of ['suspend', 'restore']) {
+      const res = await call(mem.db, 'POST', `/api/platform/merchants/${pending}/${action}`, { cookie })
+      expect(res.status, action).toBe(409)
+    }
+    expect(mem.raw.prepare(`SELECT status FROM merchants WHERE id = ?`).get(pending)).toEqual({ status: 'pending' })
+  })
+
+  it("signs a suspended merchant's staff out of every merchant route", async () => {
+    const mem = await activeSession()
+    const admin = await platformSession(mem)
+    await call(mem.db, 'POST', `/api/platform/merchants/${mem.merchantId}/suspend`, { cookie: admin })
+    for (const [method, path] of MERCHANT_ROUTES) {
+      const res = await call(mem.db, method, path, { cookie: mem.cookie, body: method === 'GET' ? undefined : {} })
+      expect(res.status, `${method} ${path}`).toBe(403)
+    }
+  })
+
+  it('lists every merchant, reports the overview, and pages the audit log filtered to one merchant', async () => {
+    const mem = await activeMerchant()
+    const pending = await pendingApplication(mem)
+    const cookie = await platformSession(mem)
+
+    const all = (await (await call(mem.db, 'GET', '/api/platform/merchants/all', { cookie })).json()) as {
+      merchants: { id: string; status: string }[]
+    }
+    expect(all.merchants.map((m) => [m.id, m.status]).sort()).toEqual(
+      [
+        [mem.merchantId, 'active'],
+        [pending, 'pending'],
+      ].sort(),
+    )
+
+    const overview = await call(mem.db, 'GET', '/api/platform/overview', { cookie })
+    expect(overview.status).toBe(200)
+    expect(await overview.json()).toMatchObject({ overview: { orders: { month: 0 } }, merchants: expect.any(Array) })
+
+    const audit = (await (await call(mem.db, 'GET', `/api/platform/audit?merchant=${mem.merchantId}`, { cookie })).json()) as {
+      entries: { merchantId: string; action: string }[]
+      hasMore: boolean
+    }
+    // The approval, then the two lists above, each of which touched this merchant.
+    expect(audit.entries.map((e) => e.action)).toContain('merchants.approve')
+    expect(audit.entries.every((e) => e.merchantId === mem.merchantId)).toBe(true)
+    expect((await call(mem.db, 'GET', '/api/platform/audit?page=-1', { cookie })).status).toBe(400)
   })
 })

@@ -25,7 +25,22 @@ import {
   type StaffResult,
   type StaffSession,
 } from './staff-auth'
-import { id, scopedTo, type NewProduct, type ProductPatch, type ProductRow, type Repository } from './tenancy'
+import {
+  id,
+  scopedTo,
+  platformWide,
+  utcDay,
+  type AuditPage,
+  type MerchantSummary,
+  type NewProduct,
+  type Overview,
+  type OrderDetail,
+  type OrderSummary,
+  type PlatformRepository,
+  type ProductPatch,
+  type ProductRow,
+  type Repository,
+} from './tenancy'
 import { guard, type IpDefences } from './auth'
 import {
   MAX_LARGE_BYTES,
@@ -104,6 +119,97 @@ async function merchantRepo(env: ConsoleEnv, request: Request): Promise<Reposito
     throw err
   }
 }
+
+/** The platform repository for platform staff, or the refusal to send. */
+async function platformRepo(env: ConsoleEnv, request: Request): Promise<PlatformRepository | Response> {
+  const session = await actor(env, request)
+  if (session instanceof Response) return session
+  if (session.scope !== 'platform') return json({ error: 'not a platform account' }, 403)
+  return platformWide(env, session.staffId)
+}
+
+/* ---------------------------------------------------------------- orders io */
+
+const DAY = /^\d{4}-\d{2}-\d{2}$/
+/** A real calendar date: 2026-02-30 matches the pattern and is not one. */
+const isDay = (v: string) => DAY.test(v) && new Date(`${v}T00:00:00Z`).toISOString().startsWith(v)
+
+/** from/to as inclusive UTC dates, defaulting to the last 30 days. */
+function orderRange(url: URL): { from: string; to: string } | string {
+  const from = url.searchParams.get('from') || utcDay(29)
+  const to = url.searchParams.get('to') || utcDay(0)
+  if (!isDay(from) || !isDay(to)) return 'Dates are YYYY-MM-DD.'
+  if (from > to) return 'The start date is after the end date.'
+  return { from, to }
+}
+
+const orderSummary = (o: OrderSummary) => ({
+  id: o.id,
+  placedAt: o.created_at,
+  method: o.method,
+  status: o.payment_status,
+  items: o.items,
+  totals: o.totals,
+})
+
+const orderDetail = (o: OrderDetail) => ({
+  id: o.id,
+  placedAt: o.created_at,
+  method: o.method,
+  status: o.payment_status,
+  shipTo: {
+    name: o.ship_name,
+    line1: o.ship_line1,
+    line2: o.ship_line2,
+    city: o.ship_city,
+    state: o.ship_state,
+    postal: o.ship_postal,
+    country: o.ship_country,
+  },
+  lines: o.lines.map((l) => ({
+    productId: l.product_id,
+    sku: l.sku,
+    title: l.title,
+    finish: l.variant || null,
+    qty: l.qty,
+    unitMinor: l.unit_price_cents,
+    currency: l.currency,
+  })),
+  totals: o.totals,
+})
+
+const overviewOut = (o: Overview) => ({
+  ...o,
+  top: o.top.map((t) => ({ productId: t.product_id, title: t.title, currency: t.currency, minor: t.minor, qty: t.qty })),
+  lowStock: o.lowStock.map((p) => ({ id: p.id, title: p.title, stockCount: p.stock_count })),
+})
+
+const merchantOut = (m: MerchantSummary) => ({
+  id: m.merchant_id,
+  name: m.name,
+  slug: m.slug,
+  status: m.status,
+  createdAt: m.created_at,
+  productCount: m.product_count,
+  revenue: m.revenue,
+})
+
+const auditOut = (a: AuditPage) => ({
+  merchantId: a.merchant_id,
+  page: a.page,
+  hasMore: a.hasMore,
+  entries: a.entries.map((e) => ({
+    id: e.id,
+    at: e.at,
+    actorId: e.actor_id,
+    actorEmail: e.actor_email,
+    actorScope: e.actor_scope,
+    merchantId: e.merchant_id,
+    merchantName: e.merchant_name,
+    action: e.action,
+    subject: e.subject,
+  })),
+})
 
 /* ------------------------------------------------------------- products io */
 
@@ -255,6 +361,8 @@ const PHOTOS = /^\/api\/merchant\/products\/([^/]+)\/photos$/
 const PHOTO = /^\/api\/merchant\/products\/([^/]+)\/photos\/([^/]+)$/
 const PHOTO_MAIN = /^\/api\/merchant\/products\/([^/]+)\/photos\/([^/]+)\/main$/
 const APPROVE = /^\/api\/platform\/merchants\/([^/]+)\/approve$/
+const ORDER = /^\/api\/merchant\/orders\/([^/]+)$/
+const TRANSITION = /^\/api\/platform\/merchants\/([^/]+)\/(suspend|restore)$/
 
 async function route(request: Request, env: ConsoleEnv, url: URL): Promise<Response> {
   const path = url.pathname
@@ -438,7 +546,78 @@ async function route(request: Request, env: ConsoleEnv, url: URL): Promise<Respo
     return json(product(row))
   }
 
+  /* --------------------------------------------- merchant orders, overview */
+
+  if (path === '/api/merchant/overview' && method === 'GET') {
+    const repo = await merchantRepo(env, request)
+    if (repo instanceof Response) return repo
+    return json(overviewOut(await repo.stats.overview()))
+  }
+
+  if (path === '/api/merchant/orders' && method === 'GET') {
+    const repo = await merchantRepo(env, request)
+    if (repo instanceof Response) return repo
+    const range = orderRange(url)
+    if (typeof range === 'string') return json({ error: range }, 400)
+    return json({ ...range, orders: (await repo.orders.list(range)).map(orderSummary) })
+  }
+
+  const orderId = path.match(ORDER)?.[1]
+  if (orderId && method === 'GET') {
+    const repo = await merchantRepo(env, request)
+    if (repo instanceof Response) return repo
+    // An order with none of this merchant's lines is a 404, the same answer
+    // as no such order: "exists, not yours" would confirm the id.
+    const order = await repo.orders.get(orderId)
+    return order ? json(orderDetail(order)) : json({ error: 'not found' }, 404)
+  }
+
   /* ------------------------------------------------------------ platform */
+
+  if (path === '/api/platform/overview' && method === 'GET') {
+    const repo = await platformRepo(env, request)
+    if (repo instanceof Response) return repo
+    // Ranking and the pending/active/suspended counts are read off the one
+    // merchant list rather than asked for again.
+    const [overview, merchants] = await Promise.all([repo.stats.overview(), repo.merchants.list()])
+    return json({ overview: overviewOut(overview), merchants: merchants.map(merchantOut) })
+  }
+
+  if (path === '/api/platform/merchants/all' && method === 'GET') {
+    const repo = await platformRepo(env, request)
+    if (repo instanceof Response) return repo
+    return json({ merchants: (await repo.merchants.list()).map(merchantOut) })
+  }
+
+  const transition = path.match(TRANSITION)
+  if (transition && method === 'POST') {
+    const repo = await platformRepo(env, request)
+    if (repo instanceof Response) return repo
+    const [, merchantId, action] = transition
+    try {
+      return json(action === 'suspend' ? await repo.merchants.suspend(merchantId) : await repo.merchants.restore(merchantId))
+    } catch (err) {
+      // Pending, already in the target state, or no such merchant. Approval
+      // is the only way out of pending, so this route never is.
+      if (/is not (active|suspended)/.test(String(err))) {
+        return json(
+          { error: action === 'suspend' ? 'Only an active merchant can be suspended.' : 'Only a suspended merchant can be restored.' },
+          409,
+        )
+      }
+      throw err
+    }
+  }
+
+  if (path === '/api/platform/audit' && method === 'GET') {
+    const repo = await platformRepo(env, request)
+    if (repo instanceof Response) return repo
+    const merchantId = url.searchParams.get('merchant') || null
+    const page = Number(url.searchParams.get('page') ?? 0)
+    if (!Number.isSafeInteger(page) || page < 0 || page > 10_000) return json({ error: 'page is a whole number.' }, 400)
+    if (merchantId !== null && merchantId.length > 64) return json({ error: 'not a merchant id' }, 400)
+    return json(auditOut(await repo.audit.list({ merchantId, page })))
+  }
 
   const approveId = path.match(APPROVE)?.[1]
   if ((path === '/api/platform/merchants' && method === 'GET') || (approveId && method === 'POST')) {
