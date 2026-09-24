@@ -151,6 +151,8 @@ export default {
           headers: {
             'content-type': 'image/webp',
             'cache-control': 'public, max-age=31536000, immutable',
+            // Only the first twelve bytes were checked at upload.
+            'x-content-type-options': 'nosniff',
             etag: object.httpEtag,
           },
         })

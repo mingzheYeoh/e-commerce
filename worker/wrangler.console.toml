@@ -30,7 +30,10 @@ binding = "MEDIA"
 bucket_name = "nexus-media"
 
 # Photo URLs are this plus the object key: nexus-api serves the bucket, the
-# console only writes it.
+# console only writes it. Changing it strands every photo already uploaded:
+# the console recognises its own photos by this prefix and refuses to rewrite
+# media it did not mint. `wrangler dev` inherits this production value, so
+# photos uploaded locally render from production's URL and appear broken.
 [vars]
 MEDIA_BASE = "https://nexus-api.mingzhe030228.workers.dev/media/u/"
 

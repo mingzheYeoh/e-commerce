@@ -31,6 +31,7 @@ import {
   MAX_LARGE_BYTES,
   MAX_PHOTOS,
   MAX_THUMB_BYTES,
+  isPhotoKey,
   isPhotoName,
   isWebp,
   keyFor,
@@ -358,6 +359,13 @@ async function route(request: Request, env: ConsoleEnv, url: URL): Promise<Respo
     if (!names) return json({ error: "This product's photos are not managed in the console." }, 409)
     if (names.length >= MAX_PHOTOS) return json({ error: `A product has at most ${MAX_PHOTOS} photos.` }, 409)
 
+    // formData() buffers the whole body, and an isolate has 128MB against a
+    // 100MB request limit, so the cap has to be enforced before it runs.
+    // Browsers always send content-length for a FormData fetch.
+    const length = Number(request.headers.get('content-length'))
+    if (!length || length > MAX_LARGE_BYTES + MAX_THUMB_BYTES + 64_000) {
+      return json({ error: 'That photo is too large, even after resizing.' }, 413)
+    }
     const form = await request.formData().catch(() => null)
     const large = form?.get('large')
     const thumb = form?.get('thumb')
@@ -375,15 +383,26 @@ async function route(request: Request, env: ConsoleEnv, url: URL): Promise<Respo
 
     const name = newPhotoName()
     const keys = [keyFor(existing.merchant_id, existing.id, name, 1600), keyFor(existing.merchant_id, existing.id, name, 400)]
+    // Only keys nexus-api will serve. A product id of another shape (the
+    // seeded catalogue's `iphone-18-pro`) would store a photo nobody can load.
+    if (!isPhotoKey(keys[0])) return json({ error: "This product's photos are not managed in the console." }, 409)
     const meta = { httpMetadata: { contentType: 'image/webp' } }
-    await Promise.all([env.MEDIA.put(keys[0], largeBytes, meta), env.MEDIA.put(keys[1], thumbBytes, meta)])
+    const cleanUp = () =>
+      env.MEDIA.delete(keys).catch((err) => console.error('orphaned photo objects', { keys, err }))
 
-    const media = mediaFor(env.MEDIA_BASE, existing.merchant_id, existing.id, [...names, name])
-    const row = await repo.products.setMedia(existing.id, media, existing.media)
+    let row: ProductRow | null
+    try {
+      await Promise.all([env.MEDIA.put(keys[0], largeBytes, meta), env.MEDIA.put(keys[1], thumbBytes, meta)])
+      const media = mediaFor(env.MEDIA_BASE, existing.merchant_id, existing.id, [...names, name])
+      row = await repo.products.setMedia(existing.id, media, existing.media)
+    } catch (err) {
+      // The objects go in first, so any failure after that takes them back out.
+      await cleanUp()
+      throw err
+    }
     if (!row) {
-      // Lost a race with another change to this product's photos. The objects
-      // were written first, so take them back out rather than orphan them.
-      await env.MEDIA.delete(keys)
+      // Lost a race with another change to this product's photos.
+      await cleanUp()
       return json({ error: 'The photos changed while this one uploaded. Reload and try again.' }, 409)
     }
     return json(product(row), 201)

@@ -11,6 +11,7 @@ import {
   makeMainPhoto,
   deletePhoto,
   isError,
+  asProduct,
   type Product,
   type ProductStatus,
   type SpecRow,
@@ -40,9 +41,13 @@ const saving = ref(false)
 const MAX_PHOTOS = 6
 const gallery = computed(() => product.value?.media.gallery ?? [])
 /** One line per photo being resized or uploaded, so a failure names its file. */
-const uploads = ref<{ file: string; state: string; failed: boolean }[]>([])
+const uploads = ref<{ key: number; file: string; state: string; failed: boolean }[]>([])
+let nextKey = 0
 const photoError = ref<string | null>(null)
-const busy = computed(() => uploads.value.some((u) => !u.failed && u.state !== 'Done'))
+const acting = ref(false)
+// A reorder or delete while an upload is landing would make that upload lose
+// its conflict check, so every photo control waits for the others.
+const busy = computed(() => acting.value || uploads.value.some((u) => !u.failed && u.state !== 'Done'))
 
 function load(p: Product) {
   product.value = p
@@ -78,7 +83,7 @@ async function submit() {
   }
   saving.value = true
   try {
-    const { body } = await updateProduct(props.id, {
+    const { body: raw } = await updateProduct(props.id, {
       title: title.value,
       priceMinor,
       stockCount,
@@ -87,6 +92,7 @@ async function submit() {
       specsSummary: highlights.value,
       specs: specs.value,
     })
+    const body = asProduct(raw)
     if (isError(body)) {
       error.value = body.error
     } else {
@@ -110,14 +116,14 @@ async function addPhotos(event: Event) {
 
   // One at a time: the worker refuses a change made while another is landing.
   for (const file of files.slice(0, room)) {
-    uploads.value.push({ file: file.name, state: 'Resizing…', failed: false })
+    uploads.value.push({ key: nextKey++, file: file.name, state: 'Resizing…', failed: false })
     // The reactive proxy, not the literal just pushed: mutating the literal
     // would change the data without re-rendering the line.
     const line = uploads.value[uploads.value.length - 1]!
     try {
       const [large, thumb] = await Promise.all([toWebp(file, 1600), toWebp(file, 400)])
       line.state = 'Uploading…'
-      const { body } = await uploadPhoto(props.id, large, thumb)
+      const body = asProduct((await uploadPhoto(props.id, large, thumb)).body)
       if (isError(body)) throw new Error(body.error)
       product.value = body
       line.state = 'Done'
@@ -130,11 +136,18 @@ async function addPhotos(event: Event) {
 }
 
 async function photoAction(url: string, action: 'main' | 'delete') {
+  if (busy.value) return
   photoError.value = null
-  const name = photoName(url)
-  const { body } = action === 'main' ? await makeMainPhoto(props.id, name) : await deletePhoto(props.id, name)
-  if (isError(body)) photoError.value = body.error
-  else product.value = body
+  acting.value = true
+  try {
+    const name = photoName(url)
+    const res = action === 'main' ? await makeMainPhoto(props.id, name) : await deletePhoto(props.id, name)
+    const body = asProduct(res.body)
+    if (isError(body)) photoError.value = body.error
+    else product.value = body
+  } finally {
+    acting.value = false
+  }
 }
 </script>
 
@@ -161,10 +174,10 @@ async function photoAction(url: string, action: 'main' | 'delete') {
           <li v-for="(url, i) in gallery" :key="url" class="flex flex-col gap-2">
             <img :src="thumbOf(url)" :alt="`Photo ${i + 1}`" class="aspect-square w-full rounded bg-white object-contain" />
             <span v-if="i === 0" class="text-xs font-semibold text-accent">Main photo</span>
-            <button v-else class="text-left text-xs text-text-secondary underline" type="button" @click="photoAction(url, 'main')">
+            <button v-else class="text-left text-xs text-text-secondary underline disabled:opacity-50" type="button" :disabled="busy" @click="photoAction(url, 'main')">
               Make main
             </button>
-            <button class="text-left text-xs text-accent-amber underline" type="button" @click="photoAction(url, 'delete')">
+            <button class="text-left text-xs text-accent-amber underline disabled:opacity-50" type="button" :disabled="busy" @click="photoAction(url, 'delete')">
               Delete
             </button>
           </li>
@@ -172,7 +185,7 @@ async function photoAction(url: string, action: 'main' | 'delete') {
         <p v-else class="text-sm text-text-secondary">No photos yet. A product needs at least one to be published.</p>
 
         <ul v-if="uploads.length" class="flex flex-col gap-1 text-sm">
-          <li v-for="u in uploads" :key="u.file" :class="u.failed ? 'text-accent-amber' : 'text-text-secondary'">
+          <li v-for="u in uploads" :key="u.key" :class="u.failed ? 'text-accent-amber' : 'text-text-secondary'">
             {{ u.file }}: {{ u.state }}
           </li>
         </ul>

@@ -19,6 +19,14 @@ export type ErrorBody = { error: string }
 /** True for any response the worker refused, whatever it was trying to do. */
 export const isError = (body: object): body is ErrorBody => 'error' in body
 
+/**
+ * A product, or the refusal to show in its place. `call` turns a non-JSON
+ * answer (an edge 502 page) into {}, which is neither — and a page that took
+ * {} for a product would throw reading its gallery.
+ */
+export const asProduct = (body: Product | ErrorBody): Product | ErrorBody =>
+  isError(body) || 'id' in body ? body : { error: 'Something went wrong. Reload and try again.' }
+
 async function call<T>(path: string, init?: RequestInit): Promise<{ status: number; body: T }> {
   const res = await fetch(path, {
     ...init,

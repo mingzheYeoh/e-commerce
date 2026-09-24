@@ -218,8 +218,11 @@ function build(env: TenancyEnv, scope: Scope): Repository {
 
         const productId = id('prd')
         await env.ORDERS.prepare(
-          `INSERT INTO products (id, merchant_id, sku, title, brand, category, price_minor, currency, status)
-           VALUES (?,?,?,?,?,?,?,?,'draft')`,
+          // display_order after everything already there: the default of 0
+          // would tie with the curated first product, and the created_at DESC
+          // tiebreak would then put every new listing at the top of the shop.
+          `INSERT INTO products (id, merchant_id, sku, title, brand, category, price_minor, currency, status, display_order)
+           VALUES (?,?,?,?,?,?,?,?,'draft', (SELECT COALESCE(MAX(display_order), -1) + 1 FROM products))`,
         )
           .bind(
             productId,

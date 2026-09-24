@@ -6,7 +6,7 @@
  * for two fixed sizes. The worker re-checks the result (bytes, size), so
  * nothing here is a security boundary.
  */
-export async function toWebp(file: File, maxWidth: number): Promise<Blob> {
+export async function toWebp(file: File, maxSide: number): Promise<Blob> {
   let bitmap: ImageBitmap
   try {
     bitmap = await createImageBitmap(file)
@@ -14,7 +14,8 @@ export async function toWebp(file: File, maxWidth: number): Promise<Blob> {
     // HEIC from an iPhone is the usual cause: most browsers cannot decode it.
     throw new Error(`${file.name} could not be read. Use a JPG, PNG or WebP photo.`)
   }
-  const scale = Math.min(1, maxWidth / bitmap.width)
+  // The longer side, so a tall screenshot shrinks as much as a wide photo.
+  const scale = Math.min(1, maxSide / Math.max(bitmap.width, bitmap.height))
   const canvas = document.createElement('canvas')
   canvas.width = Math.round(bitmap.width * scale)
   canvas.height = Math.round(bitmap.height * scale)
