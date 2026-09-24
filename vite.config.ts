@@ -36,6 +36,6 @@ export default defineConfig({
     environment: 'jsdom',
     // The worker's order validation is money code and gets tested here too,
     // rather than in a second runner nobody remembers to run.
-    include: ['src/**/*.spec.ts', 'worker/src/**/*.spec.ts'],
+    include: ['src/**/*.spec.ts', 'worker/src/**/*.spec.ts', 'console/src/**/*.spec.ts'],
   },
 })

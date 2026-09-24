@@ -54,7 +54,7 @@ async function markBreached(password: string, count = 50_000) {
   breached.set(await sha1Suffix(password), count)
 }
 
-function captureSends(url: string, init?: RequestInit): Response {
+function captureSends(_url: string, init?: RequestInit): Response {
   const parsed = JSON.parse(String(init?.body)) as { to: string[]; subject: string; text: string }
   sent.push({ to: parsed.to[0], subject: parsed.subject, text: parsed.text })
   return new Response('{}', { status: 200 })
@@ -1162,10 +1162,26 @@ describe('the nightly sweep', () => {
       )
       .run(past)
 
+    raw
+      .prepare(
+        `INSERT INTO staff (id, email, scope, merchant_id, role, password_hash, password_salt, iterations, kdf_rounds)
+         VALUES ('stf_a', 'a@nexus.test', 'platform', NULL, 'admin', 'h', 's', 1, 1)`,
+      )
+      .run()
+    const future = new Date(Date.now() + 3600_000).toISOString()
+    raw
+      .prepare(
+        `INSERT INTO staff_sessions (token_hash, staff_id, expires_at, totp_pending)
+         VALUES ('stale', 'stf_a', ?, 1), ('live', 'stf_a', ?, 0)`,
+      )
+      .run(past, future)
+
     const purged = await purgeExpired(env)
 
     expect(purged.sessions).toBe(1)
     expect(purged.tokens).toBe(1)
+    expect(purged.staffSessions).toBe(1)
+    expect(raw.prepare(`SELECT token_hash FROM staff_sessions`).all()).toEqual([{ token_hash: 'live' }])
     expect(sessions(), 'the live session survives').toHaveLength(1)
     expect(tokens().every((t) => t.token_hash !== 'old')).toBe(true)
   })

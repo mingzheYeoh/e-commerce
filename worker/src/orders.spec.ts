@@ -60,8 +60,6 @@ const payload = (over: Partial<OrderPayload> = {}): OrderPayload => ({
   ...over,
 })
 
-type Row = Record<string, unknown>
-
 describe('placeOrder', () => {
   it('stores an order and returns the total it computed itself', async () => {
     const { db, rows } = seeded()

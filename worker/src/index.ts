@@ -350,8 +350,10 @@ export default {
   async scheduled(_event: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
     ctx.waitUntil(
       purgeExpired(env)
-        .then(({ sessions, tokens }) =>
-          console.log(`purged ${sessions} expired sessions and ${tokens} expired tokens`),
+        .then(({ sessions, tokens, staffSessions }) =>
+          console.log(
+            `purged ${sessions} expired sessions, ${tokens} expired tokens and ${staffSessions} staff sessions`,
+          ),
         )
         .catch((err) => console.error('purge failed', err)),
     )

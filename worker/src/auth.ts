@@ -47,6 +47,21 @@ import {
   newRecoveryCodes,
   normaliseRecoveryCode,
 } from './totp'
+import {
+  toB64,
+  fromB64,
+  PBKDF2_ITERATIONS,
+  KDF_ROUNDS,
+  derive,
+  sameBytes,
+  sha256,
+  randomB64,
+  randomToken,
+  nowIso,
+  inSeconds,
+  isPast,
+  backoffSeconds,
+} from './credentials'
 
 /** Cloudflare's rate limiting binding. Absent in tests and local dev. */
 export interface RateLimiterBinding {
@@ -75,92 +90,8 @@ const SIGNUP_PER_MINUTE = 5
 
 /* --------------------------------------------------------------- primitives */
 
-const encoder = new TextEncoder()
-
-const toB64 = (bytes: Uint8Array): string => btoa(String.fromCharCode(...bytes))
-const fromB64 = (text: string): Uint8Array => Uint8Array.from(atob(text), (c) => c.charCodeAt(0))
-
-/** URL-safe, because these travel in a link people click out of an email. */
-const toB64Url = (bytes: Uint8Array): string =>
-  toB64(bytes).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
-
-/**
- * PBKDF2-HMAC-SHA256, at the highest iteration count this runtime allows.
- *
- * Not bcrypt or argon2: neither exists in the Workers runtime, and shipping a
- * WASM build of one to hash a demo store's passwords is a larger risk surface
- * than the thing it protects. PBKDF2 is the strongest primitive available here
- * natively, which makes the work factor the only real dial.
- *
- * Workers refuses outright above 100,000 in a single call —
- * `NotSupportedError: Pbkdf2 failed: iteration counts above 100000 are not
- * supported` — which on its own is below OWASP's figure for this algorithm.
- * There is no configuration for it; it is the platform's ceiling.
- */
-const PBKDF2_ITERATIONS = 100_000
-
 /** What the runtime will accept in one call. Above this, `deriveBits` throws. */
 export const MAX_PBKDF2_ITERATIONS = 100_000
-
-/**
- * Passes of PBKDF2, chained — which is the way past that ceiling.
- *
- * Each pass takes the previous pass's output as its input, so six of them is
- * 600,000 iterations of work an attacker has to repeat for every single guess.
- * That is OWASP's current figure, reached without a WASM KDF. Measured at
- * 139ms against a 30-second CPU budget, so the headroom is in the hundreds of
- * rounds rather than the ones.
- *
- * Stored per user rather than assumed, which is what lets it be raised again:
- * a row hashed at an older setting still verifies, and is re-hashed at the
- * current one the next time its owner signs in — nobody is locked out by a
- * change they did not ask for.
- */
-const KDF_ROUNDS = 6
-
-async function derive(password: string, salt: Uint8Array, rounds: number): Promise<Uint8Array> {
-  // One round, with the password itself as the input, reproduces exactly what a
-  // single PBKDF2 call used to produce. That is why every row written before
-  // this still verifies against `kdf_rounds = 1`.
-  let material = encoder.encode(password) as Uint8Array
-  for (let i = 0; i < Math.max(1, rounds); i++) {
-    const key = await crypto.subtle.importKey('raw', material, 'PBKDF2', false, ['deriveBits'])
-    material = new Uint8Array(
-      await crypto.subtle.deriveBits(
-        { name: 'PBKDF2', hash: 'SHA-256', salt, iterations: PBKDF2_ITERATIONS },
-        key,
-        256,
-      ),
-    )
-  }
-  return material
-}
-
-/**
- * Comparison that takes the same time whatever the answer.
- *
- * `a === b` on secrets leaks their contents one byte at a time to anyone
- * willing to measure, and the measurement is not exotic.
- */
-function sameBytes(a: Uint8Array, b: Uint8Array): boolean {
-  if (a.length !== b.length) return false
-  let diff = 0
-  for (let i = 0; i < a.length; i++) diff |= a[i] ^ b[i]
-  return diff === 0
-}
-
-async function sha256(text: string): Promise<string> {
-  const digest = await crypto.subtle.digest('SHA-256', encoder.encode(text))
-  return toB64(new Uint8Array(digest))
-}
-
-const randomB64 = (bytes: number): string => toB64(crypto.getRandomValues(new Uint8Array(bytes)))
-const randomToken = (): string => toB64Url(crypto.getRandomValues(new Uint8Array(32)))
-
-const nowIso = () => new Date().toISOString()
-const inSeconds = (s: number) => new Date(Date.now() + s * 1000).toISOString()
-const isPast = (iso: string | null | undefined) =>
-  Boolean(iso) && new Date(iso as string).getTime() < Date.now()
 
 /* ------------------------------------------------------------------ cookies */
 
@@ -216,6 +147,9 @@ async function withinLimit(limiter: RateLimiterBinding | undefined, key: string)
   }
 }
 
+/** The bindings `guard` reads, so a worker without mail or origins can call it. */
+export type IpDefences = Pick<AuthEnv, 'LOGIN_LIMITER' | 'SIGNUP_LIMITER' | 'IP_THROTTLE'>
+
 /**
  * Both throttles, cheap one first.
  *
@@ -224,9 +158,14 @@ async function withinLimit(limiter: RateLimiterBinding | undefined, key: string)
  * therefore the one whose count can be trusted — measured, not assumed:
  * twenty-five parallel requests against a 5-per-minute platform limit produced
  * one refusal, because each isolate was keeping its own tally.
+ *
+ * Exported for the console worker, whose staff sign-in has the same exposure:
+ * per-account backoff cannot see guesses spread across many accounts. Each
+ * worker binds its own limiters and Durable Object namespace, so staff and
+ * shoppers never share a budget even though the keys look alike.
  */
-async function guard(
-  env: AuthEnv,
+export async function guard(
+  env: IpDefences,
   request: Request,
   kind: 'login' | 'signup',
 ): Promise<{ status: 429; body: { error: string }; retryAfter: number } | null> {
@@ -248,27 +187,6 @@ async function guard(
     return { status: 429, body: { error: message }, retryAfter: verdict.retryAfter }
   }
   return null
-}
-
-/**
- * Per-account backoff, on top of the per-IP limit.
- *
- * These catch different things. The IP limit stops one machine working through
- * a password list; it never sees a botnet spreading one account's guesses over
- * a thousand addresses. This does, because it counts against the account.
- *
- * Deliberately a backoff and not a lockout: a permanent lock turns "guess
- * wrong five times" into a way to deny a real customer their account. The wait
- * doubles and caps, and clears the moment a correct password arrives.
- */
-const LOCK_AFTER_FAILURES = 5
-const BACKOFF_BASE_SECONDS = 60
-const BACKOFF_MAX_SECONDS = 900
-
-function backoffSeconds(failures: number): number {
-  if (failures < LOCK_AFTER_FAILURES) return 0
-  const doublings = failures - LOCK_AFTER_FAILURES
-  return Math.min(BACKOFF_BASE_SECONDS * 2 ** doublings, BACKOFF_MAX_SECONDS)
 }
 
 /* -------------------------------------------------------------------- types */
@@ -986,15 +904,21 @@ export async function resetPassword(env: AuthEnv, body: unknown): Promise<AuthRe
  * inside its own lifetime, "already used" is a more useful answer than
  * "never existed", and they cost nothing for an hour.
  */
-export async function purgeExpired(env: AuthEnv): Promise<{ sessions: number; tokens: number }> {
+export async function purgeExpired(
+  env: AuthEnv,
+): Promise<{ sessions: number; tokens: number; staffSessions: number }> {
   const now = nowIso()
-  const [sessions, tokens] = await env.ORDERS.batch([
+  // Staff sessions live in the same database; the console worker has no cron
+  // of its own, so this is the one sweep for both.
+  const [sessions, tokens, staff] = await env.ORDERS.batch([
     env.ORDERS.prepare(`DELETE FROM sessions WHERE expires_at < ?1`).bind(now),
     env.ORDERS.prepare(`DELETE FROM email_tokens WHERE expires_at < ?1`).bind(now),
+    env.ORDERS.prepare(`DELETE FROM staff_sessions WHERE expires_at < ?1`).bind(now),
   ])
   return {
     sessions: sessions.meta?.changes ?? 0,
     tokens: tokens.meta?.changes ?? 0,
+    staffSessions: staff.meta?.changes ?? 0,
   }
 }
 

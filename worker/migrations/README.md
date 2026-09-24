@@ -43,6 +43,7 @@ Verified against `sqlite_master` on 2026-09-21.
 | `0008` seed catalogue | ❌ | ✅ |
 | `0009` order lines product id | ❌ | ✅ applied 2026-09-21 |
 | `0010` display order | ❌ | ✅ applied 2026-09-21, rebuilt 2026-09-22 |
+| `0011` staff sessions | ❌ | ✅ applied 2026-09-22 |
 
 Production currently holds six tables: `orders`, `order_lines`, and the four
 from `0006`. It has never had `users`, `sessions`, `email_tokens` or
@@ -96,6 +97,21 @@ staging by the whole accounts phase, not broken by it.
    rule exists to prevent and the one it does not cover, because no query
    errors — the table is there, it is just empty. Print
    `SELECT COUNT(*) FROM products` before deploying: 45 is right, 0 means stop.
+
+6. **`0011` has to land before this branch's `nexus-api`, not only before the
+   console.** The nightly sweep deletes expired `sessions`, `email_tokens` and
+   `staff_sessions` in one batch, and a batch is one transaction: against a
+   database without `staff_sessions` the whole sweep fails, customer tables
+   included. Nothing surfaces it except `purge failed` in the worker's logs.
+
+## Known drift
+
+**Staging's `staff_sessions.totp_pending` still has `DEFAULT 0`.** `0011`
+dropped the default after staging had run it, so a production database that
+runs `0011` fresh gets no default and an INSERT that forgets the column fails.
+It changes no behaviour today: the only INSERT, in `staff-auth.ts`, names the
+column and writes `1`. This is the same wrong-way-round drift as the two
+rebuilds below. It is recorded here rather than rebuilt because nothing reaches it.
 
 ## Done, kept for the record
 

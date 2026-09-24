@@ -59,7 +59,8 @@ export interface Repository {
   }
 }
 
-const id = (prefix: string) =>
+/** Exported so staff-auth mints `mch_`/`stf_` the one way this worker mints ids. */
+export const id = (prefix: string) =>
   `${prefix}_${[...crypto.getRandomValues(new Uint8Array(12))]
     .map((b) => b.toString(36).padStart(2, '0'))
     .join('')
@@ -191,6 +192,12 @@ function build(env: TenancyEnv, scope: Scope): Repository {
         )
           .bind(scope.merchantId)
           .first<{ settlement_currency: string }>()
+        // This branch is unreachable through the module's public entry points
+        // (scopedTo and platformWide); scopedTo verifies the merchant exists before
+        // handing out a Repository. The guard tests existence, not status, and would
+        // only catch a merchant row deleted after vending. No DELETE FROM merchants
+        // path exists in this codebase today, but the guard remains for developers
+        // who might add one.
         if (!merchant) {
           throw new Error('cannot price a product for a merchant that does not exist')
         }
@@ -345,13 +352,41 @@ function build(env: TenancyEnv, scope: Scope): Repository {
 /**
  * A merchant's own data, and nothing else.
  *
+ * Async because it verifies the merchant is active before handing anything
+ * back. `merchants.status` had a CHECK from the first migration and no reader
+ * until staff could sign in — a dormant constraint whose default answer, once
+ * the question became reachable, was "yes, go ahead".
+ *
+ * The check lives here rather than in a route so that a route added later gets
+ * it without its author knowing the rule exists.
+ *
+ * A Repository vended while the merchant was active remains valid even after
+ * the merchant is suspended—the check is at the door, not on each operation.
+ * Callers must obtain a fresh Repository per request and never cache it across
+ * requests. The per-request SELECT is the authorization itself, not overhead
+ * to optimize away.
+ *
  * @param merchantId MUST come from the staff session row, never a request
  * body. This does not verify staffId belongs to merchantId — the pair is
  * trusted as given, and until branded ids land this comment is the whole
  * defence against a caller that supplies its own.
  */
-export const scopedTo = (env: TenancyEnv, merchantId: string, staffId: string): Repository =>
-  build(env, { kind: 'merchant', merchantId, staffId })
+export const scopedTo = async (
+  env: TenancyEnv,
+  merchantId: string,
+  staffId: string,
+): Promise<Repository> => {
+  const row = await env.ORDERS.prepare(`SELECT status FROM merchants WHERE id = ?`)
+    .bind(merchantId)
+    .first<{ status: string }>()
+  if (row?.status !== 'active') {
+    // One message for "no such merchant" and for "suspended": the caller's
+    // only sensible response to both is the same, and a distinction here
+    // would eventually be surfaced as one.
+    throw new Error(`merchant ${merchantId} is not active`)
+  }
+  return build(env, { kind: 'merchant', merchantId, staffId })
+}
 
 /**
  * Everything, for platform staff.
@@ -359,7 +394,7 @@ export const scopedTo = (env: TenancyEnv, merchantId: string, staffId: string): 
  * A separate named door rather than a boolean argument, so that reading a call
  * site tells you which one it is without following a variable.
  */
-export const platformWide = (env: TenancyEnv, staffId: string): Repository =>
+export const platformWide = async (env: TenancyEnv, staffId: string): Promise<Repository> =>
   build(env, { kind: 'platform', staffId })
 
 /**
