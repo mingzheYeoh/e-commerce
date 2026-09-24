@@ -359,7 +359,7 @@ why the signature change costs nothing today and would not later."
 - Consumes: `credentials.ts` (Task 2), `tooCommon` from `worker/src/pwned.ts`.
 - Produces:
   - `registerMerchant(env, body): Promise<StaffResult>` — creates `merchants(status='pending')` and `staff(scope='merchant', role='owner')`
-  - `approveMerchant(env, staffId, merchantId): Promise<StaffResult>` — platform only; flips status to `active`
+  - `approveMerchant(env, staffId, merchantId, slug): Promise<StaffResult>` — platform only; assigns the storefront address and flips status to `active`
   - `type StaffResult = { status: number; body: Record<string, unknown> }`
 - Task 5 and Task 6 consume both.
 
@@ -771,7 +771,9 @@ const db = await scopedTo(env, session.merchantId!, session.staffId)
 - **Call `scopedTo` fresh on every request. Never cache a `Repository`, never hang one off a session.** Its active-merchant check runs once, when the repository is vended — proven by suspending a merchant after `scopedTo` returned and successfully calling `.products.create()` on the stale object. A repository held across requests keeps working for a merchant who has since been suspended, which silently reopens the hole Task 3 exists to close. The per-request `SELECT status FROM merchants` is not overhead to optimise away; it is the authorisation.
 
 - Patching a product that belongs to someone else is a **404, not a 403**. The repository returns nothing for it, and "this exists but is not yours" tells a stranger the id is real.
-- **`approveMerchant(env, staffId, merchantId)` cannot check that the caller is platform staff.** Its `staffId` argument is an unverified claim — the same trust `scopedTo` places in its `merchantId`, and documented in the function the same way. The platform routes must therefore refuse anything whose session `scope` is not `'platform'` **before** calling it. A merchant staffer reaching `/api/platform/merchants/:id/approve` and approving their own pending application is the concrete failure, and nothing below the route will stop it.
+- **Registration does not accept a slug; approval does.** An applicant-chosen slug leaks whether an email is registered through the side effect rather than the answer: a successful registration consumes a globally unique, publicly probeable value, so two probes with one throwaway slug read the difference. Registration mints `pending_<random>`; the approve route takes the real storefront address in its body (`{ slug }`) and must reject one that is malformed or already taken. A 409 to an authorised platform admin leaks nothing — they can already see every merchant.
+
+- **`approveMerchant(env, staffId, merchantId, slug)` cannot check that the caller is platform staff.** Its `staffId` argument is an unverified claim — the same trust `scopedTo` places in its `merchantId`, and documented in the function the same way. The platform routes must therefore refuse anything whose session `scope` is not `'platform'` **before** calling it. A merchant staffer reaching `/api/platform/merchants/:id/approve` and approving their own pending application is the concrete failure, and nothing below the route will stop it.
 
 - The create body type has **no `merchantId` field**. That is what makes the fourth test pass without a check.
 - The top-level catch returns a generic 500 and logs the error, matching `index.ts`.
