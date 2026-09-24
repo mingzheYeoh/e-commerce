@@ -55,3 +55,50 @@ export const totpConfirm = (code: string) =>
     method: 'POST',
     body: JSON.stringify({ code }),
   })
+
+export type ProductStatus = 'draft' | 'published' | 'archived'
+
+export type Product = {
+  id: string
+  merchantId: string
+  sku: string
+  title: string
+  brand: string
+  category: string
+  priceMinor: number
+  currency: string
+  status: ProductStatus
+  stockCount: number
+}
+
+export const listProducts = () => call<{ products: Product[] } | ErrorBody>('/api/merchant/products')
+
+/** Create takes only what a new listing needs; stock and status start at the
+ * worker's own defaults — set them on the edit page the caller lands on next. */
+export const createProduct = (input: {
+  sku: string
+  title: string
+  brand: string
+  category: string
+  priceMinor: number
+}) => call<Product | ErrorBody>('/api/merchant/products', { method: 'POST', body: JSON.stringify(input) })
+
+export const updateProduct = (
+  id: string,
+  patch: Partial<{ title: string; priceMinor: number; stockCount: number; status: ProductStatus }>,
+) =>
+  call<Product | ErrorBody>(`/api/merchant/products/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(patch),
+  })
+
+export type PendingMerchant = { id: string; name: string; createdAt: string; email: string }
+
+export const pendingMerchants = () =>
+  call<{ merchants: PendingMerchant[] } | ErrorBody>('/api/platform/merchants')
+
+export const approveMerchant = (id: string, slug: string) =>
+  call<{ id: string; status: string; slug: string } | ErrorBody>(`/api/platform/merchants/${id}/approve`, {
+    method: 'POST',
+    body: JSON.stringify({ slug }),
+  })
