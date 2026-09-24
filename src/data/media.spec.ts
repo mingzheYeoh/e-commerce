@@ -21,8 +21,13 @@ const asset = (url: string) => path.join(process.cwd(), 'public', url.replace(/^
 
 describe('catalogue media', () => {
   it('has the hero image and thumbnail for every product', () => {
+    // An absolute URL is a merchant upload served by nexus-api, checked by the
+    // console when it was uploaded; this test guards the asset pipeline's files.
+    const local = (url: string) => !/^https?:\/\//.test(url)
     const missing = products.flatMap((p) =>
-      [p.media.heroImage, p.media.thumb].filter((url) => !existsSync(asset(url))).map((url) => `${p.id}: ${url}`),
+      [p.media.heroImage, p.media.thumb]
+        .filter((url) => local(url) && !existsSync(asset(url)))
+        .map((url) => `${p.id}: ${url}`),
     )
     expect(missing).toEqual([])
   })

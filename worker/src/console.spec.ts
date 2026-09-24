@@ -1,3 +1,6 @@
+// @vitest-environment node
+// Node, not the repo-wide jsdom: jsdom replaces FormData and File with its own,
+// which the Request a worker receives cannot read, so an upload hangs.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import worker from './console'
 import { registerMerchant } from './staff-auth'
@@ -6,25 +9,42 @@ import { derive, toB64, KDF_ROUNDS, PBKDF2_ITERATIONS } from './credentials'
 import type { RateLimiterBinding } from './auth'
 import type { MemoryD1 } from '../test/d1-memory'
 import { stubPwned, env, good, activeMerchant, cookieOf } from '../test/staff-fixtures'
+import { memoryR2, webpBytes, type MemoryR2 } from '../test/r2-memory'
 
+const BASE = 'https://api.test/media/u/'
+let r2: MemoryR2
 beforeEach(stubPwned)
+beforeEach(() => {
+  r2 = memoryR2()
+})
 afterEach(() => vi.unstubAllGlobals())
 
 type Extra = { LOGIN_LIMITER?: RateLimiterBinding; SIGNUP_LIMITER?: RateLimiterBinding }
 
-function call(
+async function call(
   db: D1Database,
   method: string,
   path: string,
   opts: {
     cookie?: string
     body?: unknown
+    form?: FormData
     headers?: Record<string, string>
     extra?: Extra
     noOrigin?: boolean
   } = {},
 ) {
   const headers: Record<string, string> = { ...opts.headers }
+  let form: ArrayBuffer | undefined
+  if (opts.form) {
+    // As a browser sends it: a multipart body with its boundary and length.
+    // A Request built straight from FormData carries no content-length, and
+    // the upload route refuses a body it cannot size.
+    const encoded = new Response(opts.form)
+    form = await encoded.arrayBuffer()
+    headers['content-type'] = encoded.headers.get('content-type')!
+    headers['content-length'] = String(form.byteLength)
+  }
   if (opts.cookie) headers.Cookie = opts.cookie
   if (opts.body !== undefined) headers['Content-Type'] = 'application/json'
   // Every other test wants the console's own writes to work; a request that
@@ -34,9 +54,9 @@ function call(
     new Request(`https://console.test${path}`, {
       method,
       headers,
-      body: opts.body === undefined ? undefined : JSON.stringify(opts.body),
+      body: form ?? (opts.body === undefined ? undefined : JSON.stringify(opts.body)),
     }),
-    { ...env(db), ...opts.extra },
+    { ...env(db), MEDIA: r2.bucket, MEDIA_BASE: BASE, ...opts.extra },
   )
 }
 
@@ -102,11 +122,23 @@ function seedProduct(raw: MemoryD1['raw'], merchantId: string, productId: string
     .run(productId, merchantId, `sku-${productId}`, productId)
 }
 
-/** What the storefront needs before it can render a card. The console cannot set it yet. */
+/** Everything publishing asks for except the price: a photo and three highlights. */
 function withPhotos(raw: MemoryD1['raw'], productId: string) {
   raw
-    .prepare(`UPDATE products SET media = ? WHERE id = ?`)
-    .run(JSON.stringify({ heroImage: '/h.jpg', thumb: '/t.jpg', gallery: ['/g.jpg'] }), productId)
+    .prepare(`UPDATE products SET media = ?, specs_summary = ? WHERE id = ?`)
+    .run(JSON.stringify({ heroImage: '/h.jpg', thumb: '/t.jpg', gallery: ['/g.jpg'] }), '["a","b","c"]', productId)
+}
+
+/** One photo, as the console's browser code sends it. */
+function photoForm(large = webpBytes(), thumb = webpBytes()): FormData {
+  const form = new FormData()
+  form.append('large', new File([large], 'p.webp', { type: 'image/webp' }))
+  form.append('thumb', new File([thumb], 't.webp', { type: 'image/webp' }))
+  return form
+}
+
+async function upload(db: D1Database, cookie: string, productId: string, form = photoForm()) {
+  return call(db, 'POST', `/api/merchant/products/${productId}/photos`, { cookie, form })
 }
 
 /** A second, pending application, which is what the approve route exists for. */
@@ -310,6 +342,18 @@ describe('the console worker: what may go on sale', () => {
     expect(raw.prepare(`SELECT price_minor FROM products WHERE id = 'mine'`).get()).toEqual({ price_minor: 1000 })
   })
 
+  it('files a new product after every existing one, not ahead of the curated first', async () => {
+    const { db, raw, cookie, merchantId } = await activeSession()
+    seedProduct(raw, merchantId, 'prd_old')
+    raw.prepare(`UPDATE products SET display_order = 44 WHERE id = 'prd_old'`).run()
+    const res = await call(db, 'POST', '/api/merchant/products', {
+      cookie,
+      body: { sku: 'NEW-1', title: 'New', brand: 'B', category: 'audio', priceMinor: 100 },
+    })
+    const { id } = (await res.json()) as { id: string }
+    expect(raw.prepare(`SELECT display_order FROM products WHERE id = ?`).get(id)).toEqual({ display_order: 45 })
+  })
+
   it('refuses a category the storefront does not have', async () => {
     const { db, cookie } = await activeSession()
     const res = await call(db, 'POST', '/api/merchant/products', {
@@ -326,6 +370,168 @@ describe('the console worker: what may go on sale', () => {
     const res = await call(db, 'PATCH', '/api/merchant/products/mine', { cookie, body: {} })
     expect(res.status).toBe(400)
     expect(raw.prepare(`SELECT COUNT(*) AS n FROM audit_log`).get()).toEqual(before)
+  })
+})
+
+describe('the console worker: product photos', () => {
+  it('stores both sizes under the merchant and product, and derives every URL itself', async () => {
+    const { db, raw, cookie, merchantId } = await activeSession()
+    seedProduct(raw, merchantId, 'prd_mine')
+    const res = await upload(db, cookie, 'prd_mine')
+    expect(res.status).toBe(201)
+    const { media } = (await res.json()) as { media: { heroImage: string; thumb: string; gallery: string[] } }
+
+    const prefix = `${BASE}products/${merchantId}/prd_mine/`
+    expect(media.heroImage.startsWith(prefix) && media.heroImage.endsWith('-1600.webp')).toBe(true)
+    expect(media.thumb).toBe(media.heroImage.replace('-1600.webp', '-400.webp'))
+    expect(media.gallery).toEqual([media.heroImage])
+    expect([...r2.objects.keys()].sort()).toEqual(
+      [media.heroImage, media.thumb].map((u) => u.slice(BASE.length)).sort(),
+    )
+    expect([...r2.objects.values()].every((o) => o.contentType === 'image/webp')).toBe(true)
+  })
+
+  it('refuses bytes that are not webp, whatever the file claims, and stores nothing', async () => {
+    const { db, raw, cookie, merchantId } = await activeSession()
+    seedProduct(raw, merchantId, 'prd_mine')
+    const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0, 0, 0, 0, 0, 0, 0, 0])
+    const res = await upload(db, cookie, 'prd_mine', photoForm(png))
+    expect(res.status).toBe(415)
+    expect(r2.objects.size).toBe(0)
+  })
+
+  it('refuses a photo over the size cap, and a seventh photo', async () => {
+    const { db, raw, cookie, merchantId } = await activeSession()
+    seedProduct(raw, merchantId, 'prd_mine')
+    expect((await upload(db, cookie, 'prd_mine', photoForm(webpBytes(1_500_000)))).status).toBe(413)
+
+    for (let i = 0; i < 6; i++) expect((await upload(db, cookie, 'prd_mine')).status).toBe(201)
+    expect((await upload(db, cookie, 'prd_mine')).status).toBe(409)
+    expect(r2.objects.size).toBe(12)
+  })
+
+  it("cannot upload to, reorder or delete another merchant's photos: 404, and storage untouched", async () => {
+    const { db, raw, cookie } = await activeSession()
+    seedProduct(raw, 'mch_other', 'prd_theirs')
+    expect((await upload(db, cookie, 'prd_theirs')).status).toBe(404)
+    expect((await call(db, 'DELETE', '/api/merchant/products/prd_theirs/photos/ph_x', { cookie })).status).toBe(404)
+    expect((await call(db, 'POST', '/api/merchant/products/prd_theirs/photos/ph_x/main', { cookie })).status).toBe(404)
+    expect(r2.objects.size).toBe(0)
+  })
+
+  it('makes a photo the main one, and deletes one along with its stored objects', async () => {
+    const { db, raw, cookie, merchantId } = await activeSession()
+    seedProduct(raw, merchantId, 'prd_mine')
+    await upload(db, cookie, 'prd_mine')
+    const second = (await (await upload(db, cookie, 'prd_mine')).json()) as { media: { gallery: string[] } }
+    const [first, next] = second.media.gallery
+    const nameOf = (url: string) => url.split('/').pop()!.replace('-1600.webp', '')
+
+    const main = await call(db, 'POST', `/api/merchant/products/prd_mine/photos/${nameOf(next)}/main`, { cookie })
+    expect(((await main.json()) as { media: { gallery: string[] } }).media.gallery).toEqual([next, first])
+
+    const del = await call(db, 'DELETE', `/api/merchant/products/prd_mine/photos/${nameOf(first)}`, { cookie })
+    expect(((await del.json()) as { media: { gallery: string[] } }).media.gallery).toEqual([next])
+    expect([...r2.objects.keys()].some((k) => k.includes(nameOf(first)))).toBe(false)
+    expect(r2.objects.size).toBe(2)
+  })
+
+  it('will not delete the last photo of a product that is on sale', async () => {
+    const { db, raw, cookie, merchantId } = await activeSession()
+    seedProduct(raw, merchantId, 'prd_mine')
+    const up = (await (await upload(db, cookie, 'prd_mine')).json()) as { media: { gallery: string[] } }
+    raw.prepare(`UPDATE products SET status = 'published' WHERE id = 'prd_mine'`).run()
+    const name = up.media.gallery[0].split('/').pop()!.replace('-1600.webp', '')
+    expect((await call(db, 'DELETE', `/api/merchant/products/prd_mine/photos/${name}`, { cookie })).status).toBe(409)
+    expect(r2.objects.size).toBe(2)
+  })
+
+  it("refuses to store a photo nexus-api would never serve, for an id of another shape", async () => {
+    const { db, raw, cookie, merchantId } = await activeSession()
+    seedProduct(raw, merchantId, 'iphone-18-pro')
+    expect((await upload(db, cookie, 'iphone-18-pro')).status).toBe(409)
+    expect(r2.objects.size).toBe(0)
+  })
+
+  it('refuses a body it cannot size before reading it', async () => {
+    const { db, raw, cookie, merchantId } = await activeSession()
+    seedProduct(raw, merchantId, 'prd_mine')
+    const res = await call(db, 'POST', '/api/merchant/products/prd_mine/photos', {
+      cookie,
+      headers: { 'content-type': 'multipart/form-data; boundary=x' },
+      body: '',
+    })
+    expect(res.status).toBe(413)
+  })
+
+  it('takes its objects back out when it loses a race with another photo change', async () => {
+    const { db, raw, cookie, merchantId } = await activeSession()
+    seedProduct(raw, merchantId, 'prd_mine')
+    // Another upload lands between this one's read and its conditional write.
+    const put = r2.bucket.put.bind(r2.bucket)
+    r2.bucket.put = (async (...args: Parameters<R2Bucket['put']>) => {
+      raw.prepare(`UPDATE products SET media = '{"gallery":[]}' WHERE id = 'prd_mine'`).run()
+      return put(...args)
+    }) as R2Bucket['put']
+    const res = await upload(db, cookie, 'prd_mine')
+    expect(res.status).toBe(409)
+    expect(r2.objects.size).toBe(0)
+  })
+
+  it('never takes media from a request body', async () => {
+    const { db, raw, cookie, merchantId } = await activeSession()
+    seedProduct(raw, merchantId, 'prd_mine')
+    await call(db, 'PATCH', '/api/merchant/products/prd_mine', {
+      cookie,
+      body: { title: 'Renamed', media: { heroImage: 'https://evil.test/x.webp', thumb: 'x', gallery: ['x'] } },
+    })
+    expect(raw.prepare(`SELECT title, media FROM products WHERE id = 'prd_mine'`).get()).toEqual({
+      title: 'Renamed',
+      media: '{}',
+    })
+  })
+
+  it('names everything publishing still needs, then publishes once it has it', async () => {
+    const { db, raw, cookie, merchantId } = await activeSession()
+    seedProduct(raw, merchantId, 'prd_mine')
+    const refused = await call(db, 'PATCH', '/api/merchant/products/prd_mine', { cookie, body: { status: 'published' } })
+    expect(refused.status).toBe(409)
+    expect(((await refused.json()) as { error: string }).error).toBe(
+      'Before publishing, add at least one photo, 3 more highlights.',
+    )
+
+    await upload(db, cookie, 'prd_mine')
+    const ok = await call(db, 'PATCH', '/api/merchant/products/prd_mine', {
+      cookie,
+      body: { status: 'published', specsSummary: ['40-hour battery', 'Adaptive ANC', ' '], category: 'audio' },
+    })
+    expect(ok.status).toBe(409) // the blank box is dropped, so still one short
+
+    const done = await call(db, 'PATCH', '/api/merchant/products/prd_mine', {
+      cookie,
+      body: {
+        status: 'published',
+        category: 'audio',
+        specsSummary: ['40-hour battery', 'Adaptive ANC', 'USB-C fast charge'],
+        specs: [{ label: 'Weight', value: '250 g' }, { label: '', value: '' }],
+      },
+    })
+    expect(done.status).toBe(200)
+    expect(await done.json()).toMatchObject({
+      status: 'published',
+      category: 'audio',
+      specs: [{ label: 'Weight', value: '250 g' }],
+    })
+  })
+
+  it('refuses a specification row with a name but no value', async () => {
+    const { db, raw, cookie, merchantId } = await activeSession()
+    seedProduct(raw, merchantId, 'prd_mine')
+    const res = await call(db, 'PATCH', '/api/merchant/products/prd_mine', {
+      cookie,
+      body: { specs: [{ label: 'Weight', value: '' }] },
+    })
+    expect(res.status).toBe(400)
   })
 })
 

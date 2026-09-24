@@ -19,6 +19,14 @@ export type ErrorBody = { error: string }
 /** True for any response the worker refused, whatever it was trying to do. */
 export const isError = (body: object): body is ErrorBody => 'error' in body
 
+/**
+ * A product, or the refusal to show in its place. `call` turns a non-JSON
+ * answer (an edge 502 page) into {}, which is neither — and a page that took
+ * {} for a product would throw reading its gallery.
+ */
+export const asProduct = (body: Product | ErrorBody): Product | ErrorBody =>
+  isError(body) || 'id' in body ? body : { error: 'Something went wrong. Reload and try again.' }
+
 async function call<T>(path: string, init?: RequestInit): Promise<{ status: number; body: T }> {
   const res = await fetch(path, {
     ...init,
@@ -69,7 +77,13 @@ export type Product = {
   currency: string
   status: ProductStatus
   stockCount: number
+  specsSummary: string[]
+  specs: SpecRow[]
+  /** Empty until the first photo; every URL in it was minted by the worker. */
+  media: { heroImage?: string; hoverImage?: string; thumb?: string; gallery?: string[] }
 }
+
+export type SpecRow = { label: string; value: string }
 
 export const listProducts = () => call<{ products: Product[] } | ErrorBody>('/api/merchant/products')
 
@@ -85,12 +99,40 @@ export const createProduct = (input: {
 
 export const updateProduct = (
   id: string,
-  patch: Partial<{ title: string; priceMinor: number; stockCount: number; status: ProductStatus }>,
+  patch: Partial<{
+    title: string
+    priceMinor: number
+    stockCount: number
+    status: ProductStatus
+    category: string
+    specsSummary: string[]
+    specs: SpecRow[]
+  }>,
 ) =>
   call<Product | ErrorBody>(`/api/merchant/products/${id}`, {
     method: 'PATCH',
     body: JSON.stringify(patch),
   })
+
+/**
+ * One photo, already resized by the browser. Not through `call`: a FormData
+ * body needs the browser to write its own multipart content-type, boundary
+ * included, and `call` would overwrite it with JSON's.
+ */
+export async function uploadPhoto(id: string, large: Blob, thumb: Blob) {
+  const form = new FormData()
+  form.append('large', large, 'large.webp')
+  form.append('thumb', thumb, 'thumb.webp')
+  const res = await fetch(`/api/merchant/products/${id}/photos`, { method: 'POST', body: form })
+  const body = (await res.json().catch(() => ({ error: `Upload failed (${res.status}).` }))) as Product | ErrorBody
+  return { status: res.status, body }
+}
+
+export const makeMainPhoto = (id: string, name: string) =>
+  call<Product | ErrorBody>(`/api/merchant/products/${id}/photos/${name}/main`, { method: 'POST' })
+
+export const deletePhoto = (id: string, name: string) =>
+  call<Product | ErrorBody>(`/api/merchant/products/${id}/photos/${name}`, { method: 'DELETE' })
 
 export type PendingMerchant = { id: string; name: string; createdAt: string; email: string }
 

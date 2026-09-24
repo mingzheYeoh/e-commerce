@@ -11,6 +11,7 @@ import { facts, queryOrError } from './graph'
 import { converse } from './agent'
 import { placeOrder, getOrder, type OrdersEnv } from './orders'
 import { publishedProducts } from './catalogue'
+import { isPhotoKey } from './photos'
 
 /*
  * Re-exported because Cloudflare resolves a Durable Object class by name from
@@ -42,6 +43,8 @@ import {
 
 export interface Env extends RagEnv, OrdersEnv, AuthEnv {
   ALLOWED_ORIGIN?: string
+  /** Product photos the merchant console uploaded. Written only by nexus-console. */
+  MEDIA?: R2Bucket
 }
 
 /**
@@ -137,6 +140,24 @@ export default {
     const url = new URL(request.url)
 
     try {
+      /* Merchant product photos. Only keys the console mints are served, so the
+         bucket cannot be listed or probed through this route. The names are
+         random and never reused, which is what makes a year's cache safe. */
+      if (url.pathname.startsWith('/media/u/') && request.method === 'GET') {
+        const key = url.pathname.slice('/media/u/'.length)
+        const object = isPhotoKey(key) && env.MEDIA ? await env.MEDIA.get(key) : null
+        if (!object) return new Response('not found', { status: 404 })
+        return new Response(object.body, {
+          headers: {
+            'content-type': 'image/webp',
+            'cache-control': 'public, max-age=31536000, immutable',
+            // Only the first twelve bytes were checked at upload.
+            'x-content-type-options': 'nosniff',
+            etag: object.httpEtag,
+          },
+        })
+      }
+
       /* Grounded question answering over the catalogue. */
       if (url.pathname === '/api/ask' && request.method === 'POST') {
         const { question } = (await request.json()) as { question?: string }

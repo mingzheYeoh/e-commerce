@@ -413,6 +413,7 @@ const CASES: Record<string, unknown[]> = {
     { sku: 'SWEEP-1', title: 'Sweep', brand: 'APPLE', category: 'phones', priceMinor: 1 },
   ],
   'products.update': ['LEAK_p_b', { title: 'Sweep' }],
+  'products.setMedia': ['LEAK_p_b', '{"gallery":[]}', '{}'],
 }
 
 const call = (repo: Repository, dotted: string, args: unknown[]) => {
@@ -446,6 +447,14 @@ describe('isolation', () => {
 
     const theirs = rows('products').find((p) => p.id === 'LEAK_p_b')!
     expect(theirs.title).toBe('LEAK_TITLE')
+  })
+
+  it('does not let a media write reach across the boundary', async () => {
+    const { env, rows } = await twoTenants()
+    const before = rows('products').find((p) => p.id === 'LEAK_p_b')!.media
+    const res = await (await scopedTo(env, 'mch_a', 'stf_1')).products.setMedia('LEAK_p_b', '{"x":1}', before as string)
+    expect(res).toBeNull()
+    expect(rows('products').find((p) => p.id === 'LEAK_p_b')!.media).toBe(before)
   })
 })
 
