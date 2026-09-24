@@ -45,8 +45,11 @@ async function resolve(env: OrdersEnv, ids: string[]) {
   if (!ids.length) return new Map<string, ProductRow>()
   const marks = ids.map(() => '?').join(',')
   const { results } = await env.ORDERS.prepare(
-    `SELECT id, merchant_id, sku, title, price_minor, colorways
-       FROM products WHERE status = 'published' AND id IN (${marks})`,
+    // A suspended merchant's product is not for sale even if a basket, or a
+    // cached copy of the catalogue, still holds it.
+    `SELECT p.id, p.merchant_id, p.sku, p.title, p.price_minor, p.colorways
+       FROM products p JOIN merchants m ON m.id = p.merchant_id
+      WHERE p.status = 'published' AND m.status = 'active' AND p.id IN (${marks})`,
   )
     .bind(...ids)
     .all<ProductRow>()

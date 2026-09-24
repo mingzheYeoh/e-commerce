@@ -70,7 +70,13 @@ export async function publishedProducts(env: { ORDERS: D1Database }): Promise<Ca
     // share a created_at and ordering by that alone hands back the catalogue
     // alphabetically by id - a visibly different shop page. See
     // migrations/0010-display-order.sql.
-    `SELECT * FROM products WHERE status = 'published' ORDER BY display_order, created_at DESC, id`,
+    //
+    // Joined to merchants because a suspended merchant's products leave the
+    // storefront (schema.sql, on merchants.status). p.* rather than *: the
+    // join would otherwise bring merchants.id and friends into every row.
+    `SELECT p.* FROM products p JOIN merchants m ON m.id = p.merchant_id
+      WHERE p.status = 'published' AND m.status = 'active'
+      ORDER BY p.display_order, p.created_at DESC, p.id`,
   ).all<Row>()
 
   return (results ?? []).map((r) => ({
