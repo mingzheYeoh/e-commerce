@@ -38,9 +38,9 @@ A walk through the whole seller-side loop, in order:
 4. **Manage a catalogue.** Add a product, then set its price and stock.
    Publishing is refused for now, on purpose: the console cannot upload photos
    yet, and the storefront cannot render a product without them. The
-   storefront is also a build-time snapshot of the catalogue, so a published
-   product would show up only after the next storefront build, not the moment
-   you publish it.
+   storefront paints from a build-time snapshot of the catalogue and then reads
+   the live one once per page load (`GET /api/products`, cached for 30 seconds),
+   so a published product shows up on the next refresh, not the next build.
 
 Payments are simulated with Stripe's published test card numbers, not a real
 gateway — see [`src/lib/payment.ts`](src/lib/payment.ts) — and nothing here
