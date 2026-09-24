@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { catalogueSettled, findProduct } from './catalog'
+import { catalogueStatus, findProduct } from './catalog'
 import type { CategoryId, Product } from '@/types'
 
 /**
@@ -60,10 +60,11 @@ export function validIds(ids: unknown[]): string[] {
     if (out.includes(raw)) continue
     const product = findProduct(raw)
     if (!product) {
-      // Before the live catalogue answers, an unknown id may be a product newer
-      // than the build-time snapshot. Hold it; main.ts re-validates once the
-      // catalogue settles, and `items` shows only what resolves meanwhile.
-      if (!catalogueSettled.value) out.push(raw)
+      // Until the live catalogue has answered, an unknown id may be a product
+      // newer than the build-time snapshot. Hold it; main.ts re-validates when
+      // live data arrives (never on a failed fetch, which proves nothing), and
+      // `items` shows only what resolves meanwhile.
+      if (catalogueStatus.value !== 'live') out.push(raw)
       if (out.length === MAX_COMPARE) break
       continue
     }

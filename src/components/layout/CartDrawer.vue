@@ -143,7 +143,7 @@ const progress = computed(() =>
                   </div>
 
                   <div class="flex items-center gap-3">
-                    <span class="nums text-sm font-medium">
+                    <span v-if="line.available" class="nums text-sm font-medium">
                       {{ format(line.unitPriceCents * line.qty) }}
                     </span>
                     <button
@@ -159,6 +159,9 @@ const progress = computed(() =>
 
                 <p v-if="!line.available" class="mt-1.5 text-xs text-accent-amber">
                   No longer available. Remove it to check out.
+                </p>
+                <p v-else-if="line.limited" class="mt-1.5 text-xs text-accent-amber">
+                  Only {{ line.stockCount }} left, so your quantity was lowered.
                 </p>
                 <p v-else-if="line.qty >= line.stockCount" class="mt-1.5 text-xs text-accent-amber">
                   Maximum available quantity

@@ -5,7 +5,7 @@ import VideoBackdrop from '@/components/fx/VideoBackdrop.vue'
 // The curated pick is named by the build-time file; what it costs and how many
 // are left come from the live catalogue, like everywhere else.
 import { featuredDrop } from '@/data/products'
-import { catalogueSettled, findProduct } from '@/stores/catalog'
+import { catalogueStatus, findProduct } from '@/stores/catalog'
 import { brandName } from '@/data/brands'
 import { useCartStore } from '@/stores/cart'
 import { useCurrency } from '@/composables/useCurrency'
@@ -15,7 +15,7 @@ const { format } = useCurrency()
 
 /** Hidden once the live catalogue says the pick is no longer published. */
 const drop = computed(
-  () => findProduct(featuredDrop.id) ?? (catalogueSettled.value ? undefined : featuredDrop),
+  () => findProduct(featuredDrop.id) ?? (catalogueStatus.value === 'live' ? undefined : featuredDrop),
 )
 
 const assurances = [

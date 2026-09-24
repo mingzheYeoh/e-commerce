@@ -32,8 +32,10 @@ createApp(App).use(pinia).use(router).mount('#app')
 // After mount, so first paint comes from the build-time snapshot and never
 // waits on the network. Once per page load; every consumer reads the result.
 // The comparison may have held ids the snapshot did not know; with the live
-// list in hand, anything still unknown is gone and is dropped.
-void refreshCatalogue().then(() => {
+// list in hand, anything still unknown is gone and is dropped. A failed fetch
+// proves nothing about them, so they are kept.
+void refreshCatalogue().then((live) => {
+  if (!live) return
   const compare = useCompareStore()
   compare.setFromIds(compare.ids)
 })

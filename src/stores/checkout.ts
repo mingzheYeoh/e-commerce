@@ -5,7 +5,7 @@ import { totalCents, type OrderTotals, type ShipMethod } from '@/lib/money'
 import { findCountry, validSubdivision, validPostal, validPhone } from '@/lib/regions'
 import { methodAvailable, defaultMethodFor } from '@/lib/shipping'
 import { saveOrder, fetchOrder } from '@/lib/api'
-import { catalogue } from './catalog'
+import { catalogue, catalogueReady } from './catalog'
 import { useUiStore } from './ui'
 
 /**
@@ -186,6 +186,12 @@ export const useCheckoutStore = defineStore('checkout', {
     async place(): Promise<{ ok: true; id: string } | { ok: false }> {
       const cart = useCartStore()
       this.error = ''
+      // Price and availability are checked against the live list, not a
+      // snapshot it is about to replace. `placing` covers the wait so the pay
+      // button cannot fire a second order while the fetch is in flight.
+      this.placing = true
+      await catalogueReady()
+      this.placing = false
 
       if (!cart.items.length) {
         this.error = 'Your cart is empty.'
@@ -221,7 +227,7 @@ export const useCheckoutStore = defineStore('checkout', {
         address: { ...this.address },
         method: this.method,
         // The live-priced lines, so the receipt shows what the server charges.
-        lines: cart.lines.map(({ available: _, ...line }) => line),
+        lines: cart.lines.map(({ available: _a, limited: _l, ...line }) => line),
         totals: this.totals,
         paymentCode: result.code,
       }

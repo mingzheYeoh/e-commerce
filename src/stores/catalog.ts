@@ -28,11 +28,17 @@ export type Sort = 'default' | 'priceDesc' | 'priceAsc'
 export const catalogue = shallowRef<Product[]>(snapshot)
 
 /**
- * True once the live fetch has answered or failed. Until then an id missing
- * from the snapshot may simply be newer than the build, so the product page
- * waits on this instead of answering 404.
+ * Where the list came from.
+ *
+ * - `pending`: still the snapshot, fetch in flight. An id the snapshot lacks
+ *   may be newer than the build, so nothing unknown is treated as gone yet.
+ * - `live`: the API answered. An unknown id really is unpublished.
+ * - `failed`: still the snapshot, and it will stay so for this page load. An
+ *   unknown id is unknowable, not gone: nothing is dropped or 404ed on its
+ *   account.
  */
-export const catalogueSettled = shallowRef(false)
+export type CatalogueStatus = 'pending' | 'live' | 'failed'
+export const catalogueStatus = shallowRef<CatalogueStatus>('pending')
 
 const byId = computed(() => new Map(catalogue.value.map((p) => [p.id, p])))
 
@@ -63,26 +69,40 @@ function toProduct(cp: CatalogueProduct): Product {
     reviewCount: cp.reviewCount,
     specsSummary: cp.specsSummary ?? [],
     specs: cp.specs ?? [],
-    media: cp.media,
+    media: { ...cp.media, gallery: cp.media.gallery ?? [] },
     colorways: cp.colorways ?? [],
   }
 }
 
+let refreshing: Promise<boolean> | null = null
+
 /**
- * Replaces the snapshot with the live catalogue. Called once, from main.ts,
- * after mount - so it never blocks first paint and it is one GET per page load,
- * not one per component.
+ * Replaces the snapshot with the live catalogue, and says whether it did.
+ * Called once, from main.ts, after mount - so it never blocks first paint and
+ * it is one GET per page load, not one per component.
  *
  * A failure - offline, timeout, an empty body - leaves the snapshot in place. A
  * shop that empties itself because one request failed is worse than one still
  * showing a price from the last deploy. Order is never touched: the API already
  * orders by display_order.
  */
-export async function refreshCatalogue(): Promise<void> {
-  const list = await fetchCatalogue()
-  if (list?.length) catalogue.value = list.map(toProduct)
-  catalogueSettled.value = true
+export function refreshCatalogue(): Promise<boolean> {
+  refreshing = (async () => {
+    const list = await fetchCatalogue()
+    const live = Boolean(list?.length)
+    if (live) catalogue.value = list!.map(toProduct)
+    catalogueStatus.value = live ? 'live' : 'failed'
+    return live
+  })()
+  return refreshing
 }
+
+/**
+ * Resolves once the page load's fetch has settled (at once if none started).
+ * Checkout awaits it so an order is never placed against the snapshot while
+ * the live list is a moment away.
+ */
+export const catalogueReady = (): Promise<unknown> => refreshing ?? Promise.resolve()
 
 /* ---------------------------------------------------------------- the store */
 

@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import type { Product } from '@/types'
-import { catalogue, catalogueSettled, findProduct } from './catalog'
+import { catalogue, catalogueStatus, findProduct } from './catalog'
 
 export interface CartLine {
   /**
@@ -36,19 +36,27 @@ export interface CartLine {
 }
 
 /**
- * What identifies a line. Two finishes of one product are two lines, so the
- * product alone cannot address them — and a sku does not name a product.
- */
-/**
- * A stored line joined to the live catalogue. `available` is false once the
- * product is no longer published (unpublished, archived, merchant suspended) or
- * is sold out: the line stays in the bag so the shopper can see what happened,
- * but it cannot be checked out - the order endpoint would refuse it anyway.
+ * A stored line joined to the live catalogue.
+ *
+ * `available` is false once the product is no longer published (unpublished,
+ * archived, merchant suspended) or is sold out. The line stays in the bag so
+ * the shopper can see what happened, but checkout refuses it. The order
+ * endpoint refuses an unpublished product too; it does NOT check stock, so a
+ * sold-out line is stopped here or nowhere.
+ *
+ * `qty` is the stored quantity clamped to live stock, and `limited` says the
+ * clamp bit. Bag, subtotal and the posted order all use this `qty`, so they
+ * cannot disagree about how many are being bought.
  */
 export interface CartView extends CartLine {
   available: boolean
+  limited: boolean
 }
 
+/**
+ * What identifies a line. Two finishes of one product are two lines, so the
+ * product alone cannot address them — and a sku does not name a product.
+ */
 export const lineKey = (line: Pick<CartLine, 'productId' | 'finish'>) =>
   line.finish ? `${line.productId}|${line.finish}` : line.productId
 
@@ -109,20 +117,26 @@ export const useCartStore = defineStore('cart', {
   }),
 
   getters: {
-    count: (state) => state.items.reduce((total, line) => total + line.qty, 0),
+    /** Units in the bag, as the bag shows them (clamped to live stock). */
+    count(): number {
+      return this.lines.reduce((total, line) => total + line.qty, 0)
+    },
 
     /**
      * What the bag renders and what checkout orders: each line with the live
      * price, stock, title and image of its product.
      *
-     * A product missing from the list before the live fetch has settled may
-     * just be newer than the build-time snapshot, so its stored line stands in
-     * until the catalogue has answered.
+     * A product missing from the list is gone only once the live catalogue
+     * has answered. Before that - or when the fetch failed - it may just be
+     * newer than the build-time snapshot, so its stored line stands in and the
+     * server, which re-prices every line, has the final word.
      */
     lines: (state): CartView[] =>
       state.items.map((line) => {
         const p = findProduct(line.productId)
-        if (!p) return { ...line, available: !catalogueSettled.value }
+        if (!p) return { ...line, available: catalogueStatus.value !== 'live', limited: false }
+        // A sold-out line keeps its quantity: it is unavailable, not zero.
+        const qty = p.stockCount > 0 ? Math.min(line.qty, p.stockCount) : line.qty
         return {
           ...line,
           title: p.title,
@@ -130,6 +144,8 @@ export const useCartStore = defineStore('cart', {
           thumb: p.media.thumb,
           unitPriceCents: p.priceMinor,
           stockCount: p.stockCount,
+          qty,
+          limited: qty < line.qty,
           available: p.inStock && p.stockCount > 0,
         }
       }),

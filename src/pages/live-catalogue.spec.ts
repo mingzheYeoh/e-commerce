@@ -5,7 +5,7 @@ import { createMemoryHistory, createRouter } from 'vue-router'
 import ProductCard from '@/components/commerce/ProductCard.vue'
 import ProductPage from './ProductPage.vue'
 import ShopPage from './ShopPage.vue'
-import { catalogue, catalogueSettled, findProduct, refreshCatalogue } from '@/stores/catalog'
+import { catalogue, catalogueStatus, findProduct, refreshCatalogue } from '@/stores/catalog'
 import { useCartStore } from '@/stores/cart'
 import { hybridSearch } from '@/lib/semantic'
 import { products } from '@/data/products'
@@ -52,7 +52,7 @@ const serve = (list: CatalogueProduct[]) =>
 beforeEach(() => setActivePinia(createPinia()))
 afterEach(() => {
   catalogue.value = products
-  catalogueSettled.value = false
+  catalogueStatus.value = 'pending'
   vi.unstubAllGlobals()
 })
 
@@ -110,11 +110,43 @@ describe('the product page for an id the snapshot does not have', () => {
     expect(wrapper.find(`img[src="${PHOTO}-1600.webp"]`).exists()).toBe(true)
   })
 
-  it('answers 404 once the live catalogue has settled without it', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('offline')))
+  it('answers 404 once the live catalogue has answered without it', async () => {
+    serve(products.slice(0, 3).map(({ inStock: _, ...p }) => ({ ...p, merchantId: 'm', badge: p.badge ?? null })))
     await refreshCatalogue()
     const wrapper = await mountWith(ProductPage, { id: consoleProduct.id })
     expect(wrapper.text()).toContain('404')
+  })
+
+  it('says it could not load, rather than 404, when the fetch failed', async () => {
+    // A failed fetch proves nothing about an id the snapshot lacks.
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('offline')))
+    await refreshCatalogue()
+    const wrapper = await mountWith(ProductPage, { id: consoleProduct.id })
+    expect(wrapper.text()).toContain("couldn't load this product")
+    expect(wrapper.text()).not.toContain('404')
+  })
+})
+
+describe('moving between product pages', () => {
+  it('does not carry a finish from one product to the next, or break on none', async () => {
+    const multi = products.find((p) => p.colorways.length >= 2)!
+    serve([consoleProduct, ...[multi].map(({ inStock: _, ...p }) => ({ ...p, merchantId: 'm', badge: p.badge ?? null }))])
+    await refreshCatalogue()
+
+    const wrapper = await mountWith(ProductPage, { id: consoleProduct.id })
+    expect(wrapper.text()).not.toContain('Finish:')
+
+    // Same page component, new id - as a router link between products does.
+    await wrapper.setProps({ id: multi.id } as never)
+    await flushPromises()
+    expect(wrapper.text()).toContain(`Finish: ${multi.colorways[0].name}`)
+
+    // And back again: the second product's choice must not linger.
+    await wrapper.find(`button[aria-label="Select ${multi.colorways[1].name}"]`).trigger('click')
+    expect(wrapper.text()).toContain(`Finish: ${multi.colorways[1].name}`)
+    await wrapper.setProps({ id: consoleProduct.id } as never)
+    await wrapper.setProps({ id: multi.id } as never)
+    expect(wrapper.text()).toContain(`Finish: ${multi.colorways[0].name}`)
   })
 })
 

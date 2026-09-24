@@ -64,6 +64,9 @@ const toFreeShipping = computed(() => {
                   No longer available. Remove it to check out.
                 </p>
                 <p v-else class="nums mt-1 text-sm text-text-secondary">{{ format(line.unitPriceCents) }} each</p>
+                <p v-if="line.available && line.limited" class="mt-1 text-xs text-accent-amber">
+                  Only {{ line.stockCount }} left, so your quantity was lowered.
+                </p>
               </div>
 
               <div class="flex shrink-0 items-center gap-1 rounded border border-border-hairline">
@@ -87,8 +90,9 @@ const toFreeShipping = computed(() => {
                 </button>
               </div>
 
+              <!-- No total for an unavailable line: its stored price is not a price. -->
               <span class="nums w-24 shrink-0 text-right font-medium">
-                {{ format(line.unitPriceCents * line.qty) }}
+                <template v-if="line.available">{{ format(line.unitPriceCents * line.qty) }}</template>
               </span>
 
               <button
