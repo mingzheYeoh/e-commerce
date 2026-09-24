@@ -139,6 +139,82 @@ export type PendingMerchant = { id: string; name: string; createdAt: string; ema
 export const pendingMerchants = () =>
   call<{ merchants: PendingMerchant[] } | ErrorBody>('/api/platform/merchants')
 
+/** One currency's amount. Totals are lists of these: currencies are never added together. */
+export type Amount = { currency: string; minor: number }
+
+export type Overview = {
+  revenue: { today: Amount[]; week: Amount[]; month: Amount[] }
+  orders: { today: number; week: number; month: number }
+  trend: { day: string; revenue: Amount[] }[]
+  top: { productId: string; title: string; currency: string; minor: number; qty: number }[]
+  lowStock: { id: string; title: string; stockCount: number }[]
+  products: { draft: number; published: number; archived: number }
+}
+
+export type OrderSummary = { id: string; placedAt: string; method: string; status: string; items: number; totals: Amount[] }
+
+export type OrderDetail = {
+  id: string
+  placedAt: string
+  method: string
+  status: string
+  shipTo: { name: string; line1: string; line2: string; city: string; state: string; postal: string; country: string }
+  lines: { productId: string; sku: string; title: string; finish: string | null; qty: number; unitMinor: number; currency: string }[]
+  totals: Amount[]
+}
+
+export type MerchantStatus = 'pending' | 'active' | 'suspended'
+
+export type MerchantSummary = {
+  id: string
+  name: string
+  slug: string
+  status: MerchantStatus
+  createdAt: string
+  productCount: number
+  /** Last 30 days. */
+  revenue: Amount[]
+}
+
+export type AuditEntry = {
+  id: string
+  at: string
+  actorId: string
+  actorEmail: string | null
+  actorScope: string
+  merchantId: string | null
+  merchantName: string | null
+  action: string
+  subject: string | null
+}
+
+export const merchantOverview = () => call<Overview | ErrorBody>('/api/merchant/overview')
+
+export const listOrders = (range: { from?: string; to?: string }) => {
+  const q = new URLSearchParams(Object.entries(range).filter(([, v]) => v) as [string, string][])
+  return call<{ from: string; to: string; orders: OrderSummary[] } | ErrorBody>(`/api/merchant/orders?${q}`)
+}
+
+export const getOrder = (id: string) => call<OrderDetail | ErrorBody>(`/api/merchant/orders/${encodeURIComponent(id)}`)
+
+export const platformOverview = () =>
+  call<{ overview: Overview; merchants: MerchantSummary[] } | ErrorBody>('/api/platform/overview')
+
+export const allMerchants = () => call<{ merchants: MerchantSummary[] } | ErrorBody>('/api/platform/merchants/all')
+
+export const setMerchantStatus = (id: string, action: 'suspend' | 'restore') =>
+  call<{ merchant_id: string; status: MerchantStatus } | ErrorBody>(`/api/platform/merchants/${id}/${action}`, {
+    method: 'POST',
+  })
+
+export const auditLog = (merchantId: string | null, page: number) => {
+  const q = new URLSearchParams({ page: String(page) })
+  if (merchantId) q.set('merchant', merchantId)
+  return call<{ merchantId: string | null; page: number; hasMore: boolean; entries: AuditEntry[] } | ErrorBody>(
+    `/api/platform/audit?${q}`,
+  )
+}
+
 export const approveMerchant = (id: string, slug: string) =>
   call<{ id: string; status: string; slug: string } | ErrorBody>(`/api/platform/merchants/${id}/approve`, {
     method: 'POST',

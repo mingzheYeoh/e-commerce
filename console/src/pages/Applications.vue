@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { onMounted, reactive, ref } from 'vue'
-import AppHeader from '../components/AppHeader.vue'
 import { pendingMerchants, approveMerchant, isError, type PendingMerchant } from '../api'
 
 const merchants = ref<PendingMerchant[]>([])
@@ -45,9 +44,8 @@ async function approve(id: string) {
 </script>
 
 <template>
-  <div class="mx-auto max-w-3xl px-6 py-10">
-    <AppHeader />
-    <h1 class="mb-6 text-lg font-semibold text-text-primary">Pending applications</h1>
+  <div class="max-w-3xl">
+    <h1 class="mb-6 font-display text-xl font-bold text-text-primary">Pending applications</h1>
 
     <p v-if="loading" class="text-text-secondary">Loading…</p>
     <p v-else-if="loadError" class="text-sm text-accent-amber">{{ loadError }}</p>

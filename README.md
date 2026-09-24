@@ -32,7 +32,10 @@ A walk through the whole seller-side loop, in order:
 2. **Approve.** Sign in to the console as the seeded platform admin (there is
    no self-registration for platform staff — see `scripts/seed-platform-admin.mjs`),
    enrol TOTP if this is its first sign-in, then approve the application on
-   `/applications` with a storefront address (a slug).
+   `/platform/applications` with a storefront address (a slug). The same
+   account sees platform-wide sales on `/platform`, can suspend or restore any
+   merchant on `/platform/merchants`, and reads the audit log on
+   `/platform/audit`.
 3. **Sign in as the merchant.** TOTP enrolment is mandatory here too — an
    authenticator app is required, there is no way to skip it.
 4. **Manage a catalogue.** Add a product, then set its price and stock.
@@ -279,6 +282,15 @@ scope, merchantId }` — so a handler that wants to touch merchant or platform
 data has no argument to call with until the type says the session is active.
 The dangerous state is not rejected, it is unrepresentable.
 
+The dashboard figures follow the same rule. A merchant's orders, revenue and
+top products are filtered on `order_lines.merchant_id` inside `scopedTo`, so an
+order two merchants sold into shows each of them only their own lines and their
+own sum — never the other seller's goods or the order total. Suspending and
+restoring a merchant, and reading the audit log, exist only on the repository
+`platformWide` returns; a merchant's repository has no such methods to call.
+Totals are lists of `{ currency, minor }`: order lines take their currency from
+the product they were priced from, and two currencies are never added together.
+
 ## Asset pipeline
 
 `scripts/fetch-assets.mjs` downloads real, licensed photography into
@@ -358,8 +370,9 @@ rather than trusted from the request. What is genuinely still missing:
   their password has no self-serve way back in; a customer does.
 - **Merchant staff beyond the owner.** One login per merchant; no inviting a
   teammate.
-- **Orders in the console.** A merchant manages products there; order history
-  is not yet surfaced on that side.
+- **Fulfilment in the console.** A merchant sees their own lines of every paid
+  order and where to ship them, but cannot mark anything shipped: orders have a
+  payment status and no fulfilment status yet.
 - **A route-layer isolation sweep and both timing residuals** noted in the
   registration code's own comments — known, deferred, not silently ignored.
 
