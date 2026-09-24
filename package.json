@@ -6,9 +6,10 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "build:console": "vite build --config vite.console.config.ts",
     "preview": "vite preview",
     "test": "vitest run",
-    "typecheck": "vue-tsc --noEmit && tsc --noEmit -p worker/tsconfig.json",
+    "typecheck": "vue-tsc --noEmit && vue-tsc --noEmit -p console/tsconfig.json && tsc --noEmit -p worker/tsconfig.json",
     "assets": "node scripts/fetch-assets.mjs",
     "build:embeddings": "node scripts/build-embeddings.mjs",
     "build:catalog": "node scripts/build-catalog.mjs",
@@ -22,10 +23,12 @@
   },
   "dependencies": {
     "@huggingface/transformers": "^4.3.0",
+    "@types/qrcode": "^1.5.6",
     "gsap": "^3.12.5",
     "lenis": "^1.1.18",
     "lucide-vue-next": "^0.460.0",
     "pinia": "^2.2.6",
+    "qrcode": "^1.5.4",
     "vue": "^3.5.13",
     "vue-router": "^4.6.4"
   },
