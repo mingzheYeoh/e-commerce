@@ -31,10 +31,31 @@ describe('redirectFor', () => {
       scope: 'merchant',
       merchant: { name: 'Acme', slug: 'acme', status: 'active' },
     }
-    for (const allowed of ['/overview', '/products', '/products/new', '/products/abc123', '/orders', '/orders/NX-4K2P9']) {
+    for (const allowed of [
+      '/overview',
+      '/products',
+      '/products/new',
+      '/products/abc123',
+      '/orders',
+      '/orders/NX-4K2P9',
+      '/reports',
+      '/inventory',
+      '/finance',
+    ]) {
       expect(redirectFor(session, allowed), allowed).toBeNull()
     }
-    for (const elsewhere of ['/', '/applications', '/platform', '/platform/merchants', '/signin', '/enrol', '/productsx', '/ordersheet']) {
+    for (const elsewhere of [
+      '/',
+      '/applications',
+      '/platform',
+      '/platform/merchants',
+      '/signin',
+      '/enrol',
+      '/productsx',
+      '/ordersheet',
+      '/reportsx',
+      '/financial',
+    ]) {
       expect(redirectFor(session, elsewhere), elsewhere).toBe('/overview')
     }
   })
@@ -44,7 +65,7 @@ describe('redirectFor', () => {
     for (const allowed of ['/platform', '/platform/merchants', '/platform/applications', '/platform/audit']) {
       expect(redirectFor(session, allowed), allowed).toBeNull()
     }
-    for (const elsewhere of ['/', '/overview', '/products', '/orders/x', '/verify', '/platformx']) {
+    for (const elsewhere of ['/', '/overview', '/products', '/orders/x', '/reports', '/inventory', '/finance', '/verify', '/platformx']) {
       expect(redirectFor(session, elsewhere), elsewhere).toBe('/platform')
     }
   })
