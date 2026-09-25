@@ -241,8 +241,16 @@ export interface OrderPart {
  * at all: a timeout or a network failure, where the order may or may not have
  * landed.
  */
+type StoredTotals = { subtotal: number; shipping: number; tax: number; total: number }
+
 export type SaveResult =
-  | { ok: true }
+  | {
+      ok: true
+      /** What the server charged. */
+      totals?: StoredTotals
+      /** The id was already stored: this describes that order, placed earlier. */
+      existing?: boolean
+    }
   | { ok: false; reason: 'refused'; status: number; error: string; duplicate: boolean }
   | { ok: false; reason: 'unreachable' }
 
@@ -264,7 +272,10 @@ export async function saveOrder(order: OrderRequest): Promise<SaveResult> {
       credentials: 'include',
       signal: AbortSignal.timeout(SAVE_TIMEOUT_MS),
     })
-    if (res.ok) return { ok: true }
+    if (res.ok) {
+      const data = (await res.json().catch(() => ({}))) as { totals?: StoredTotals; existing?: boolean }
+      return { ok: true, totals: data.totals, existing: data.existing === true }
+    }
     const data = (await res.json().catch(() => ({}))) as { error?: string; code?: string }
     return { ok: false, reason: 'refused', status: res.status, error: data.error ?? '', duplicate: data.code === 'duplicate' }
   } catch {

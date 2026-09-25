@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import { useCheckoutStore } from './checkout'
 import { useCartStore } from './cart'
+import { useUiStore } from './ui'
 import { products } from '@/data/products'
 import { saveOrder, fetchOrder, type RemoteOrder, type SaveResult } from '@/lib/api'
 
@@ -36,7 +37,7 @@ describe('checkout store', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     localStorage.clear()
-    mockSave.mockClear()
+    mockSave.mockReset()
     mockSave.mockResolvedValue({ ok: true })
     mockFetch.mockReset()
     mockFetch.mockResolvedValue(null)
@@ -160,7 +161,7 @@ describe('orders beyond this browser', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     localStorage.clear()
-    mockSave.mockClear()
+    mockSave.mockReset()
     mockSave.mockResolvedValue({ ok: true })
     mockFetch.mockReset()
     mockFetch.mockResolvedValue(null)
@@ -260,6 +261,60 @@ describe('orders beyond this browser', () => {
     const [first, second] = mockSave.mock.calls.map((c) => c[0].id)
     expect(second).toBe(first)
     expect(cart.count).toBe(0)
+  })
+
+  it('takes the stored order as the answer to a retry, receipt at the totals the server charged', async () => {
+    // The first attempt landed but its answer was lost; the retry is told so.
+    mockSave.mockResolvedValueOnce({ ok: false, reason: 'unreachable' })
+    const cart = useCartStore()
+    const checkout = useCheckoutStore()
+    cart.add(inStock())
+    fill(checkout)
+    checkout.card.number = '4242 4242 4242 4242'
+    await checkout.place()
+
+    const stored = { subtotal: 100000, shipping: 0, tax: 0, total: 100000 }
+    mockSave.mockResolvedValueOnce({ ok: true, existing: true, totals: stored })
+    const res = await checkout.place()
+    expect(res.ok).toBe(true)
+    expect(checkout.findOrder((res as { id: string }).id)!.totals).toEqual(stored)
+    expect(cart.count).toBe(0)
+  })
+
+  it('does not take a stored order as its own when it never sent that id before', async () => {
+    mockSave.mockResolvedValueOnce({ ok: true, existing: true, totals: { subtotal: 1, shipping: 0, tax: 0, total: 1 } })
+    const cart = useCartStore()
+    const checkout = useCheckoutStore()
+    cart.add(inStock())
+    fill(checkout)
+    checkout.card.number = '4242 4242 4242 4242'
+    expect((await checkout.place()).ok).toBe(false)
+    expect(cart.count).toBe(1)
+    expect(checkout.orders).toEqual([])
+  })
+
+  it('reuses the order id after a reload, and when only the display currency changed', async () => {
+    mockSave.mockResolvedValue({ ok: false, reason: 'unreachable' })
+    const first = useCheckoutStore()
+    useCartStore().add(inStock())
+    fill(first)
+    first.card.number = '4242 4242 4242 4242'
+    await first.place()
+
+    // A reload: fresh stores, the cart and the attempt read back from storage.
+    setActivePinia(createPinia())
+    useUiStore().currency = 'MYR'
+    useCartStore().add(inStock())
+    const again = useCheckoutStore()
+    fill(again)
+    again.card.number = '4242 4242 4242 4242'
+    mockSave.mockResolvedValueOnce({ ok: true })
+    const placed = await again.place()
+    expect(placed.ok, again.error).toBe(true)
+    const [a, b] = mockSave.mock.calls.map((c) => c[0].id)
+    expect(b).toBe(a)
+    // Cleared once it succeeded: the next checkout is a new order.
+    expect(localStorage.getItem('nexus:checkout-attempt')).toBe('null')
   })
 
   it('does not take "already exists" as success for an id this checkout never sent before', async () => {
