@@ -38,11 +38,11 @@ const ranking = computed(() =>
   <p v-if="error" class="text-sm text-accent-amber">{{ error }}</p>
   <p v-else-if="!overview" class="text-text-secondary">Loading…</p>
   <div v-else class="flex flex-col gap-6">
-    <p class="-mt-4 text-xs text-text-muted">Sales are merchandise on paid orders, excluding shipping and tax. Days are UTC.</p>
+    <p class="-mt-4 text-xs text-text-muted">Net sales: merchandise on paid orders less refunds, excluding shipping and tax. Gross is before refunds. Days are UTC.</p>
 
     <section class="grid grid-cols-1 gap-3 xs:grid-cols-2 lg:grid-cols-4">
-      <StatCard label="Last 7 days" :value="formatAmounts(overview.revenue.week, 'No sales')" :sub="`${overview.orders.week} orders`" />
-      <StatCard label="Last 30 days" :value="formatAmounts(overview.revenue.month, 'No sales')" :sub="`${overview.orders.month} orders`" />
+      <StatCard label="Net, last 7 days" :value="formatAmounts(overview.revenue.week, 'No sales')" :sub="`${overview.orders.week} orders · ${formatAmounts(overview.gross.week)} gross`" />
+      <StatCard label="Net, last 30 days" :value="formatAmounts(overview.revenue.month, 'No sales')" :sub="`${overview.orders.month} orders · ${formatAmounts(overview.gross.month)} gross`" />
       <router-link to="/platform/applications" class="block rounded-card transition-colors hover:ring-1 hover:ring-border-strong">
         <StatCard label="Pending applications" :value="String(count('pending'))" sub="Review applications" />
       </router-link>
@@ -52,7 +52,7 @@ const ranking = computed(() =>
     </section>
 
     <section class="card p-4 md:p-6">
-      <h2 class="mb-4 text-sm font-semibold text-text-primary">Daily sales, last 30 days</h2>
+      <h2 class="mb-4 text-sm font-semibold text-text-primary">Daily net sales, last 30 days</h2>
       <p v-if="series.length === 0" class="text-sm text-text-secondary">No sales in the last 30 days.</p>
       <div v-else class="flex flex-col gap-8">
         <SalesChart v-for="s in series" :key="s.currency" :days="s.days" :currency="s.currency" />
@@ -60,7 +60,7 @@ const ranking = computed(() =>
     </section>
 
     <section class="card p-4 md:p-6">
-      <h2 class="mb-4 text-sm font-semibold text-text-primary">Merchants by sales, last 30 days</h2>
+      <h2 class="mb-4 text-sm font-semibold text-text-primary">Merchants by net sales, last 30 days</h2>
       <p v-if="ranking.length === 0" class="text-sm text-text-secondary">No merchant has sold anything in the last 30 days.</p>
       <div v-else class="flex flex-col gap-5">
         <div v-for="g in ranking" :key="g.currency">

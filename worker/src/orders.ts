@@ -1,10 +1,10 @@
 /**
  * Order persistence in D1.
  *
- * The browser already wrote a receipt to localStorage before this is called, so
- * nothing here is on the critical path of a purchase — its job is to make an
- * order exist somewhere other than the device that placed it, which is what
- * lets /order/NX-4K2P9 open on a phone the shopper did not check out on.
+ * This is the purchase: the checkout waits for it, and writes a receipt and
+ * empties the cart only once it answers 200. It is what takes units out of
+ * stock, so a refusal here (409, sold out) has to reach the shopper rather than
+ * be papered over by a receipt already written.
  *
  * Prices and totals are NOT taken from the request. Each line is priced from
  * the catalogue row it names and the arithmetic is the storefront's own module,
@@ -31,6 +31,9 @@ interface ProductRow {
   title: string
   price_minor: number
   colorways: string
+  stock_count: number
+  /** The merchant's rate now, frozen onto the line it prices. */
+  commission_bps: number
 }
 
 /**
@@ -47,13 +50,33 @@ async function resolve(env: OrdersEnv, ids: string[]) {
   const { results } = await env.ORDERS.prepare(
     // A suspended merchant's product is not for sale even if a basket, or a
     // cached copy of the catalogue, still holds it.
-    `SELECT p.id, p.merchant_id, p.sku, p.title, p.price_minor, p.colorways
+    `SELECT p.id, p.merchant_id, p.sku, p.title, p.price_minor, p.colorways, p.stock_count, m.commission_bps
        FROM products p JOIN merchants m ON m.id = p.merchant_id
       WHERE p.status = 'published' AND m.status = 'active' AND p.id IN (${marks})`,
   )
     .bind(...ids)
     .all<ProductRow>()
   return new Map((results ?? []).map((r) => [r.id, r]))
+}
+
+/**
+ * The first product the order wants more of than is in stock, as a refusal
+ * naming it, or null. Units are summed per product, because two finishes of
+ * one product are two lines drawing on one stock count.
+ */
+function shortOf(catalogue: Map<string, ProductRow>, lines: { productId: string; qty: number }[]): string | null {
+  const wanted = new Map<string, number>()
+  for (const l of lines) wanted.set(l.productId, (wanted.get(l.productId) ?? 0) + l.qty)
+  for (const [productId, qty] of wanted) {
+    const p = catalogue.get(productId)
+    if (!p) return 'Some items are no longer available.'
+    if (qty > p.stock_count) {
+      return p.stock_count > 0
+        ? `Only ${p.stock_count} of "${p.title}" left in stock. Lower the quantity to continue.`
+        : `"${p.title}" is sold out. Remove it from your cart to continue.`
+    }
+  }
+  return null
 }
 
 /** The finishes a product is actually sold in. Malformed JSON offers none. */
@@ -89,8 +112,17 @@ export interface OrderPayload {
 }
 
 export type PlaceResult =
-  | { status: 200; body: { id: string; total: number } }
-  | { status: 400 | 409 | 503; body: { error: string } }
+  | {
+      status: 200
+      body: {
+        id: string
+        total: number
+        totals: { subtotal: number; shipping: number; tax: number; total: number }
+        /** This id was already stored: the answer describes that order, not this request. */
+        existing?: true
+      }
+    }
+  | { status: 400 | 409 | 503; body: { error: string; code?: 'duplicate' } }
 
 const str = (v: unknown, max = 200): string | null =>
   typeof v === 'string' && v.trim() && v.trim().length <= max ? v.trim() : null
@@ -118,6 +150,37 @@ export async function placeOrder(
   // The same alphabet the client draws from. A free-form id would let a caller
   // choose one that looks like someone else's.
   if (!id || !/^NX-[A-HJ-NP-Z2-9]{5}$/.test(id)) return { status: 400, body: { error: 'bad order id' } }
+
+  /*
+   * An id already stored is answered first, before any stock or catalogue
+   * check. A retry of an order that landed while its answer was lost would
+   * otherwise be judged afresh — and refused as sold out by the very units it
+   * took — telling the shopper a paid order failed, and sending them to pay
+   * again. The answer carries the stored totals, so the receipt shows what the
+   * server charged. Whether this id is the caller's own retry or a collision
+   * with somebody else's order is the checkout's to decide (it knows whether
+   * it sent this id before). The stored totals go back only to a request
+   * carrying the same email the order was placed with — a real retry resends
+   * the same form, and anyone else guessing ids learns only that one is taken.
+   */
+  const stored = await env.ORDERS.prepare(
+    `SELECT email, subtotal_cents, shipping_cents, tax_cents, total_cents FROM orders WHERE id = ?1`,
+  )
+    .bind(id)
+    .first<{ email: string; subtotal_cents: number; shipping_cents: number; tax_cents: number; total_cents: number }>()
+  if (stored) {
+    const sent = typeof p.address?.email === 'string' ? p.address.email.trim().toLowerCase() : ''
+    if (sent !== stored.email.trim().toLowerCase()) {
+      return { status: 409, body: { error: 'That order id is already taken.', code: 'duplicate' } }
+    }
+    const totals = {
+      subtotal: stored.subtotal_cents,
+      shipping: stored.shipping_cents,
+      tax: stored.tax_cents,
+      total: stored.total_cents,
+    }
+    return { status: 200, body: { id, total: totals.total, totals, existing: true } }
+  }
 
   // Whether this method exists at all. Whether it runs to *this* address is
   // checked below, once the country is known.
@@ -210,6 +273,7 @@ export async function placeOrder(
   const lines: {
     productId: string
     merchantId: string
+    commissionBps: number
     sku: string
     title: string
     qty: number
@@ -245,6 +309,7 @@ export async function placeOrder(
     lines.push({
       productId,
       merchantId: product.merchant_id,
+      commissionBps: product.commission_bps,
       sku: product.sku,
       title: product.title,
       qty: qty as number,
@@ -263,6 +328,25 @@ export async function placeOrder(
 
   // Currency is a display choice; the ledger is in USD cents either way.
   const currency = str(p.currency, 3) ?? 'USD'
+
+  /*
+   * A paid order takes its units out of stock and opens one fulfilment part
+   * per merchant, in the same batch as the order itself: all of it lands, or
+   * none of it. A declined attempt is stored for the record and touches
+   * neither — nothing was sold.
+   *
+   * Stock is checked here first so the refusal can name the product, and then
+   * again by the stock_count CHECK (>= 0) on the UPDATE below, which is the
+   * check that holds against a second checkout racing this one: the UPDATE
+   * that would go negative aborts the batch.
+   */
+  const paid = paymentCode === 'succeeded'
+  if (paid) {
+    const short = shortOf(catalogue, lines)
+    if (short) return { status: 409, body: { error: short } }
+  }
+  // [productId, qty] per line; the UPDATE sums them per product itself.
+  const units = JSON.stringify(lines.map((l) => [l.productId, l.qty]))
 
   try {
     await env.ORDERS.batch([
@@ -294,22 +378,52 @@ export async function placeOrder(
       ),
       ...lines.map((l) =>
         env.ORDERS.prepare(
+          // commission_bps is the platform's rate at the moment of sale, so a
+          // later change to the merchant's rate never re-prices this line.
           `INSERT INTO order_lines (order_id, product_id, merchant_id, sku, title, qty,
-                                    unit_price_cents, variant)
-           VALUES (?1,?2,?3,?4,?5,?6,?7,?8)`,
-        ).bind(id, l.productId, l.merchantId, l.sku, l.title, l.qty, l.unit, l.finish),
+                                    unit_price_cents, variant, commission_bps)
+           VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9)`,
+        ).bind(id, l.productId, l.merchantId, l.sku, l.title, l.qty, l.unit, l.finish, l.commissionBps),
       ),
+      // One statement whatever the line count: D1 counts statements per
+      // invocation, and a statement per product would double what a big
+      // basket costs.
+      ...(paid
+        ? [
+            env.ORDERS.prepare(
+              `UPDATE products
+                  SET stock_count = stock_count - (SELECT SUM(json_extract(value, '$[1]')) FROM json_each(?1)
+                                                    WHERE json_extract(value, '$[0]') = products.id),
+                      updated_at = datetime('now')
+                WHERE id IN (SELECT json_extract(value, '$[0]') FROM json_each(?1))`,
+            ).bind(units),
+            env.ORDERS.prepare(
+              // stock_taken = 1: these units came out of stock just above, so
+              // cancelling this part puts them back (a backfilled part never did).
+              `INSERT INTO order_fulfilments (order_id, merchant_id, stock_taken)
+               SELECT DISTINCT order_id, merchant_id, 1 FROM order_lines WHERE order_id = ?1`,
+            ).bind(id),
+          ]
+        : []),
     ])
   } catch (err) {
     const message = String(err)
-    // A repeated id is a retry or a double-click, not a server fault, and the
-    // caller already holds a receipt for it.
-    if (/UNIQUE|PRIMARY KEY/i.test(message)) return { status: 409, body: { error: 'order already exists' } }
+    // A repeated id is a retry or a double-click, not a server fault. The
+    // `code` lets the storefront tell it from running out of stock.
+    if (/UNIQUE|PRIMARY KEY/i.test(message)) {
+      return { status: 409, body: { error: 'order already exists', code: 'duplicate' } }
+    }
+    // Stock ran out between the check above and the write: another checkout
+    // got there first. Read again to say which product.
+    if (/CHECK constraint failed/i.test(message) && /stock_count/i.test(message)) {
+      const short = shortOf(await resolve(env, [...new Set(lines.map((l) => l.productId))]), lines)
+      return { status: 409, body: { error: short ?? 'Some items just sold out. Review your cart to continue.' } }
+    }
     console.error('order insert failed', err)
     return { status: 503, body: { error: 'could not store order' } }
   }
 
-  return { status: 200, body: { id, total: totals.total } }
+  return { status: 200, body: { id, total: totals.total, totals } }
 }
 
 export interface StoredOrder {
@@ -331,6 +445,71 @@ export interface StoredOrder {
   totals: { subtotal: number; shipping: number; tax: number; total: number }
   paymentCode: string
   lines: { sku: string; title: string; qty: number; unitPriceCents: number; finish?: string }[]
+  /** Delivery and refunds, per seller. Only ever present for the account that placed the order. */
+  parts?: OrderPart[]
+}
+
+/** One seller's part of an order, as its buyer sees it. */
+export interface OrderPart {
+  seller: string
+  status: string
+  carrier: string | null
+  tracking: string | null
+  shippedAt: string | null
+  deliveredAt: string | null
+  /** The lines this seller ships. */
+  items: { sku: string; title: string; qty: number; finish?: string }[]
+  /** Refunded on those lines, one amount per currency. */
+  refunded: { currency: string; minor: number }[]
+}
+
+/** Every seller's part of one order, with what each shipped and refunded. */
+async function partsOf(env: OrdersEnv, orderId: string): Promise<OrderPart[]> {
+  const [parts, lines, refunds] = await Promise.all([
+    env.ORDERS.prepare(
+      `SELECT f.merchant_id, COALESCE(m.name, '') AS seller, f.status, f.carrier, f.tracking,
+              f.shipped_at, f.delivered_at
+         FROM order_fulfilments f LEFT JOIN merchants m ON m.id = f.merchant_id
+        WHERE f.order_id = ?1 ORDER BY f.merchant_id`,
+    )
+      .bind(orderId)
+      .all<{
+        merchant_id: string
+        seller: string
+        status: string
+        carrier: string | null
+        tracking: string | null
+        shipped_at: string | null
+        delivered_at: string | null
+      }>(),
+    env.ORDERS.prepare(
+      `SELECT merchant_id, sku, title, qty, variant FROM order_lines WHERE order_id = ?1 ORDER BY title, variant`,
+    )
+      .bind(orderId)
+      .all<{ merchant_id: string; sku: string; title: string; qty: number; variant: string }>(),
+    env.ORDERS.prepare(
+      `SELECT r.merchant_id, COALESCE(p.currency, 'XXX') AS currency, SUM(r.amount_minor) AS minor
+         FROM refunds r LEFT JOIN products p ON p.id = r.product_id
+        WHERE r.order_id = ?1
+        GROUP BY r.merchant_id, COALESCE(p.currency, 'XXX') ORDER BY currency`,
+    )
+      .bind(orderId)
+      .all<{ merchant_id: string; currency: string; minor: number }>(),
+  ])
+  return (parts.results ?? []).map((f) => ({
+    seller: f.seller,
+    status: f.status,
+    carrier: f.carrier,
+    tracking: f.tracking,
+    shippedAt: f.shipped_at,
+    deliveredAt: f.delivered_at,
+    items: (lines.results ?? [])
+      .filter((l) => l.merchant_id === f.merchant_id)
+      .map((l) => ({ sku: l.sku, title: l.title, qty: l.qty, finish: l.variant || undefined })),
+    refunded: (refunds.results ?? [])
+      .filter((r) => r.merchant_id === f.merchant_id)
+      .map(({ currency, minor }) => ({ currency, minor })),
+  }))
 }
 
 /**
@@ -339,8 +518,14 @@ export interface StoredOrder {
  * The email is masked. An order id is short enough to read over the phone,
  * which is the same thing as saying it is short enough to guess, and a receipt
  * link should not hand a stranger a working address book entry.
+ *
+ * For the same reason, delivery (carrier, tracking number) and refunds are
+ * added only when `userId` — from the session cookie, never the request — is
+ * the account the order was filed to. Anyone else holding the id reads exactly
+ * what they always could, and a guest order, which no account owns, never
+ * carries them.
  */
-export async function getOrder(env: OrdersEnv, id: string): Promise<StoredOrder | null> {
+export async function getOrder(env: OrdersEnv, id: string, userId: string | null = null): Promise<StoredOrder | null> {
   if (!/^NX-[A-HJ-NP-Z2-9]{5}$/.test(id)) return null
 
   const row = await env.ORDERS.prepare(`SELECT * FROM orders WHERE id = ?1`).bind(id).first<{
@@ -362,8 +547,14 @@ export async function getOrder(env: OrdersEnv, id: string): Promise<StoredOrder 
     tax_cents: number
     total_cents: number
     payment_status: string
+    user_id: string | null
   }>()
   if (!row) return null
+  const owner = userId !== null && row.user_id === userId
+  // Anyone holding the id can open the receipt, and ids are short enough to
+  // guess, so only the account that placed it sees where it is going. Others
+  // get the first name and the town — enough for a shared link to make sense.
+  const street = (v: string | null) => (owner ? (v ?? '') : '')
 
   const { results } = await env.ORDERS.prepare(
     `SELECT sku, title, qty, unit_price_cents, variant FROM order_lines WHERE order_id = ?1`,
@@ -376,14 +567,14 @@ export async function getOrder(env: OrdersEnv, id: string): Promise<StoredOrder 
     placedAt: row.created_at,
     email: maskEmail(row.email),
     address: {
-      name: row.ship_name,
-      phone: row.ship_phone ?? '',
+      name: owner ? row.ship_name : (row.ship_name.split(/\s+/)[0] ?? ''),
+      phone: street(row.ship_phone),
       country: row.ship_country ?? 'US',
-      line1: row.ship_line1,
-      line2: row.ship_line2 ?? '',
+      line1: street(row.ship_line1),
+      line2: street(row.ship_line2),
       city: row.ship_city,
       state: row.ship_state,
-      postal: row.ship_postal,
+      postal: street(row.ship_postal),
     },
     method: row.method,
     currency: row.currency,
@@ -403,6 +594,7 @@ export async function getOrder(env: OrdersEnv, id: string): Promise<StoredOrder 
       // what the rest of the app means by it.
       finish: l.variant || undefined,
     })),
+    ...(owner ? { parts: await partsOf(env, id) } : {}),
   }
 }
 

@@ -163,6 +163,11 @@ const MERCHANT_ROUTES = [
   ['GET', '/api/merchant/overview'],
   ['GET', '/api/merchant/orders'],
   ['GET', '/api/merchant/orders/o1'],
+  ['POST', '/api/merchant/orders/o1/ship'],
+  ['POST', '/api/merchant/orders/o1/deliver'],
+  ['POST', '/api/merchant/orders/o1/cancel'],
+  ['POST', '/api/merchant/orders/o1/refunds'],
+  ['GET', '/api/merchant/balance'],
 ] as const
 
 const PLATFORM_ROUTES = [
@@ -173,6 +178,12 @@ const PLATFORM_ROUTES = [
   ['POST', '/api/platform/merchants/mch_x/suspend'],
   ['POST', '/api/platform/merchants/mch_x/restore'],
   ['GET', '/api/platform/audit'],
+  ['GET', '/api/platform/orders/o1'],
+  ['POST', '/api/platform/orders/o1/refunds'],
+  ['POST', '/api/platform/merchants/mch_x/commission'],
+  ['POST', '/api/platform/merchants/mch_x/payouts'],
+  ['GET', '/api/platform/balances'],
+  ['POST', '/api/platform/orders/o1/parts/mch_x/cancel'],
 ] as const
 
 describe('the console worker: who may reach what', () => {
@@ -932,6 +943,215 @@ describe('the console worker: merchant orders and overview', () => {
   })
 })
 
+describe('the console worker: fulfilment and refunds', () => {
+  /** sharedOrders, with the parts checkout opens, and stock to put units back into. */
+  async function orders() {
+    const s = await activeSession()
+    sharedOrders(s.raw, s.merchantId)
+    s.raw
+      .prepare(`INSERT INTO order_fulfilments (order_id, merchant_id, stock_taken) VALUES ('o_shared', ?, 1), ('o_shared', 'mch_other', 1), ('o_theirs', 'mch_other', 1)`)
+      .run(s.merchantId)
+    s.raw.prepare(`UPDATE products SET stock_count = 5`).run()
+    const post = (path: string, body: unknown = {}) => call(s.db, 'POST', path, { cookie: s.cookie, body })
+    const get = async (path: string) => (await call(s.db, 'GET', path, { cookie: s.cookie })).json() as Promise<Record<string, unknown>>
+    return { ...s, post, get }
+  }
+
+  it('ships its part with a carrier and tracking number, then delivers it', async () => {
+    const s = await orders()
+    expect((await s.post('/api/merchant/orders/o_shared/ship', { carrier: 'UPS' })).status, 'no tracking').toBe(400)
+    expect((await s.post('/api/merchant/orders/o_shared/ship', { carrier: 'UPS', tracking: 'x'.repeat(61) })).status).toBe(400)
+
+    const shipped = await s.post('/api/merchant/orders/o_shared/ship', { carrier: 'UPS', tracking: '1Z999AA1' })
+    expect(shipped.status).toBe(200)
+    expect(await shipped.json()).toMatchObject({ status: 'shipped', carrier: 'UPS', tracking: '1Z999AA1' })
+
+    const detail = await s.get('/api/merchant/orders/o_shared')
+    expect(detail.fulfilment).toEqual([expect.objectContaining({ merchantId: s.merchantId, status: 'shipped', carrier: 'UPS' })])
+    const list = (await s.get('/api/merchant/orders')) as { orders: { id: string; fulfilment: string[] }[] }
+    expect(list.orders.find((o) => o.id === 'o_shared')!.fulfilment).toEqual(['shipped'])
+
+    expect((await s.post('/api/merchant/orders/o_shared/deliver')).status).toBe(200)
+    expect(s.raw.prepare(`SELECT status FROM order_fulfilments WHERE merchant_id = ?`).get(s.merchantId)).toEqual({ status: 'delivered' })
+  })
+
+  it('answers a transition the state machine does not allow with 409 and says why', async () => {
+    const s = await orders()
+    const early = await s.post('/api/merchant/orders/o_shared/deliver')
+    expect(early.status).toBe(409)
+    expect(await early.json()).toEqual({ error: 'Only a shipped order can be marked delivered; this one is pending.' })
+    await s.post('/api/merchant/orders/o_shared/ship', { carrier: 'UPS', tracking: '1Z' })
+    expect((await s.post('/api/merchant/orders/o_shared/cancel')).status).toBe(409)
+    expect((await s.post('/api/merchant/orders/o_shared/ship', { carrier: 'UPS', tracking: '1Z' })).status).toBe(409)
+  })
+
+  it('cancels a pending part: its units go back on the shelf and its lines are refunded', async () => {
+    const s = await orders()
+    const res = await s.post('/api/merchant/orders/o_shared/cancel')
+    expect(res.status).toBe(200)
+    expect(await res.json()).toMatchObject({ status: 'cancelled' })
+    // Only this merchant's units and money: prd_theirs is untouched.
+    expect(s.raw.prepare(`SELECT id, stock_count FROM products ORDER BY id`).all()).toEqual([
+      { id: 'prd_mine', stock_count: 7 },
+      { id: 'prd_theirs', stock_count: 5 },
+    ])
+    const detail = (await s.get('/api/merchant/orders/o_shared')) as { lines: { refundedQty: number; refundedMinor: number }[] }
+    expect(detail.lines).toEqual([expect.objectContaining({ refundedQty: 2, refundedMinor: 2000 })])
+  })
+
+  it('refunds a line within what was paid, and refuses more', async () => {
+    const s = await orders()
+    const line = { productId: 'prd_mine', finish: null, reason: 'Arrived scratched' }
+    expect((await s.post('/api/merchant/orders/o_shared/refunds', { ...line, qty: 0 })).status, 'nothing to refund').toBe(400)
+    expect((await s.post('/api/merchant/orders/o_shared/refunds', { ...line, qty: 1, reason: '' })).status, 'no reason').toBe(400)
+    expect((await s.post('/api/merchant/orders/o_shared/refunds', { ...line, qty: 1.5 })).status).toBe(400)
+
+    const one = await s.post('/api/merchant/orders/o_shared/refunds', { ...line, qty: 1 })
+    expect(one.status).toBe(201)
+    expect(await one.json()).toMatchObject({ qty: 1, amountMinor: 1000, currency: 'USD', finish: null })
+    const over = await s.post('/api/merchant/orders/o_shared/refunds', { ...line, qty: 0, amountMinor: 1001 })
+    expect(over.status).toBe(409)
+    expect(await over.json()).toEqual({ error: 'Only 10.00 USD is left to refund on this line.' })
+    expect((await s.post('/api/merchant/orders/o_shared/refunds', { ...line, qty: 0, amountMinor: 1000 })).status).toBe(201)
+  })
+
+  it("answers every write to another merchant's order or line with 404, and changes nothing", async () => {
+    const s = await orders()
+    const attempts: [string, unknown][] = [
+      ['/api/merchant/orders/o_theirs/ship', { carrier: 'UPS', tracking: '1Z' }],
+      ['/api/merchant/orders/o_theirs/deliver', {}],
+      ['/api/merchant/orders/o_theirs/cancel', {}],
+      ['/api/merchant/orders/o_theirs/refunds', { productId: 'prd_theirs', qty: 1, reason: 'x' }],
+      // The shared order is theirs too, line by line.
+      ['/api/merchant/orders/o_shared/refunds', { productId: 'prd_theirs', qty: 1, reason: 'x' }],
+      ['/api/merchant/orders/o_nothing/ship', { carrier: 'UPS', tracking: '1Z' }],
+    ]
+    for (const [path, body] of attempts) {
+      const res = await s.post(path, body)
+      expect(res.status, path).toBe(404)
+      expect(await res.json(), path).toEqual({ error: 'not found' })
+    }
+    expect(s.raw.prepare(`SELECT DISTINCT status FROM order_fulfilments`).all()).toEqual([{ status: 'pending' }])
+    expect(s.raw.prepare(`SELECT COUNT(*) AS n FROM refunds`).get()).toEqual({ n: 0 })
+    expect(s.raw.prepare(`SELECT COUNT(*) AS n FROM audit_log WHERE actor_scope = 'merchant'`).get()).toEqual({ n: 0 })
+  })
+
+  it('refuses each new write without the console as its origin', async () => {
+    const s = await orders()
+    for (const path of ['ship', 'deliver', 'cancel', 'refunds'].map((v) => `/api/merchant/orders/o_shared/${v}`)) {
+      const res = await call(s.db, 'POST', path, { cookie: s.cookie, noOrigin: true, body: {} })
+      expect(res.status, path).toBe(403)
+    }
+    expect(s.raw.prepare(`SELECT DISTINCT status FROM order_fulfilments`).all()).toEqual([{ status: 'pending' }])
+  })
+
+  it("shows the merchant its own balance and no one else's", async () => {
+    const s = await orders()
+    await s.post('/api/merchant/orders/o_shared/refunds', { productId: 'prd_mine', qty: 1, reason: 'x' })
+    // Gross 2000, refunded 1000, 8% of 1000 is 80.
+    expect(await s.get('/api/merchant/balance')).toEqual({
+      balances: [
+        {
+          merchantId: s.merchantId,
+          currency: 'USD',
+          currentBps: 800,
+          gross: 2000,
+          refunds: 1000,
+          commission: 80,
+          payouts: 0,
+          available: 920,
+          owes: false,
+        },
+      ],
+    })
+  })
+})
+
+describe('the console worker: platform orders and money', () => {
+  async function platformWithOrders() {
+    const mem = await activeMerchant()
+    sharedOrders(mem.raw, mem.merchantId)
+    mem.raw
+      .prepare(`INSERT INTO order_fulfilments (order_id, merchant_id) VALUES ('o_shared', ?), ('o_shared', 'mch_other')`)
+      .run(mem.merchantId)
+    const cookie = await platformSession(mem)
+    const post = (path: string, body: unknown = {}) => call(mem.db, 'POST', path, { cookie, body })
+    const get = (path: string) => call(mem.db, 'GET', path, { cookie })
+    return { ...mem, cookie, post, get }
+  }
+
+  it("reads any order with every seller's part, and audits the read against each", async () => {
+    const p = await platformWithOrders()
+    const res = await p.get('/api/platform/orders/o_shared')
+    expect(res.status).toBe(200)
+    expect(res.headers.get('cache-control')).toBe('no-store')
+    const body = (await res.json()) as { fulfilment: { merchantId: string }[]; lines: { merchantId: string }[] }
+    expect(body.fulfilment.map((f) => f.merchantId).sort()).toEqual([p.merchantId, 'mch_other'].sort())
+    expect(body.lines).toHaveLength(2)
+    expect((await p.get('/api/platform/orders/o_nothing')).status).toBe(404)
+    expect(
+      p.raw.prepare(`SELECT merchant_id FROM audit_log WHERE action = 'orders.get' AND subject = 'o_shared' ORDER BY merchant_id`).all(),
+    ).toEqual([p.merchantId, 'mch_other'].sort().map((merchant_id) => ({ merchant_id })))
+  })
+
+  it("refunds any seller's line under the same cap", async () => {
+    const p = await platformWithOrders()
+    const line = { productId: 'prd_theirs', reason: 'Lost in transit' }
+    expect((await p.post('/api/platform/orders/o_shared/refunds', { ...line, qty: 1 })).status).toBe(201)
+    expect((await p.post('/api/platform/orders/o_shared/refunds', { ...line, qty: 0, amountMinor: 1 })).status).toBe(409)
+    expect((await p.post('/api/platform/orders/o_nothing/refunds', { ...line, qty: 1 })).status).toBe(404)
+    expect(p.raw.prepare(`SELECT merchant_id, actor_scope, amount_minor FROM refunds`).all()).toEqual([
+      { merchant_id: 'mch_other', actor_scope: 'platform', amount_minor: 1000 },
+    ])
+  })
+
+  it("cancels a merchant's pending part on its behalf, and answers the wrong part with 404", async () => {
+    const p = await platformWithOrders()
+    const res = await p.post(`/api/platform/orders/o_shared/parts/${p.merchantId}/cancel`)
+    expect(res.status).toBe(200)
+    expect(await res.json()).toMatchObject({ merchantId: p.merchantId, status: 'cancelled' })
+    expect((await p.post(`/api/platform/orders/o_shared/parts/${p.merchantId}/cancel`)).status, 'twice').toBe(409)
+    expect((await p.post('/api/platform/orders/o_theirs/parts/mch_nope/cancel')).status).toBe(404)
+    expect(p.raw.prepare(`SELECT status FROM order_fulfilments WHERE merchant_id = 'mch_other'`).get()).toEqual({ status: 'pending' })
+  })
+
+  it('answers a refund of nothing and a payout in XXX with 400, not 500', async () => {
+    const p = await platformWithOrders()
+    p.raw.prepare(`UPDATE order_lines SET unit_price_cents = 0 WHERE product_id = 'prd_theirs'`).run()
+    const free = await p.post('/api/platform/orders/o_shared/refunds', { productId: 'prd_theirs', qty: 1, reason: 'x' })
+    expect(free.status).toBe(400)
+    const xxx = await p.post(`/api/platform/merchants/${p.merchantId}/payouts`, { currency: 'XXX', amountMinor: 1, reference: 'x' })
+    expect(xxx.status).toBe(400)
+  })
+
+  it('sets commission, records payouts up to the available balance, and reports every balance', async () => {
+    const p = await platformWithOrders()
+    expect((await p.post(`/api/platform/merchants/${p.merchantId}/commission`, { commissionBps: 10_001 })).status).toBe(400)
+    expect((await p.post('/api/platform/merchants/mch_nope/commission', { commissionBps: 500 })).status).toBe(404)
+    const set = await p.post(`/api/platform/merchants/${p.merchantId}/commission`, { commissionBps: 1000 })
+    expect(await set.json()).toEqual({ merchantId: p.merchantId, commissionBps: 1000 })
+
+    // Both lines were sold at the default 8% before the change: 160 commission,
+    // 1840 available. The new 10% prices only sales from now on.
+    const pay = (amountMinor: unknown, currency = 'USD') =>
+      p.post(`/api/platform/merchants/${p.merchantId}/payouts`, { currency, amountMinor, reference: 'Sept' })
+    expect((await pay(0)).status).toBe(400)
+    expect((await pay(100, 'usd')).status).toBe(400)
+    const refused = await pay(1841)
+    expect(refused.status).toBe(409)
+    expect(((await refused.json()) as { error: string }).error).toMatch(/available USD balance/)
+    expect((await pay(1840)).status).toBe(201)
+    expect((await p.post('/api/platform/merchants/mch_nope/payouts', { currency: 'USD', amountMinor: 1, reference: 'x' })).status).toBe(404)
+
+    const { balances } = (await (await p.get('/api/platform/balances')).json()) as {
+      balances: { merchantId: string; available: number; commission: number; payouts: number }[]
+    }
+    expect(balances.find((b) => b.merchantId === p.merchantId)).toMatchObject({ currentBps: 1000, commission: 160, payouts: 1840, available: 0, owes: false })
+    // mch_other: 2000 gross at the default 8%.
+    expect(balances.find((b) => b.merchantId === 'mch_other')).toMatchObject({ commission: 160, available: 1840 })
+  })
+})
+
 describe('the console worker: platform merchant management', () => {
   it('suspends a merchant, which takes its products off the storefront and out of checkout, then restores it', async () => {
     const mem = await activeMerchant()
@@ -999,8 +1219,9 @@ describe('the console worker: platform merchant management', () => {
     expect(overview.status).toBe(200)
     const body = (await overview.json()) as { overview: Record<string, unknown>; merchants: unknown[] }
     expect(body).toMatchObject({ overview: { orders: { month: 0 } }, merchants: expect.any(Array) })
-    // The page shows neither, so the platform response carries neither.
-    expect(Object.keys(body.overview).sort()).toEqual(['orders', 'products', 'revenue', 'trend'])
+    // The page shows neither top products nor low stock, so the platform
+    // response carries neither. Revenue is net; gross rides beside it.
+    expect(Object.keys(body.overview).sort()).toEqual(['gross', 'orders', 'products', 'revenue', 'trend'])
 
     const audit = (await (await call(mem.db, 'GET', `/api/platform/audit?merchant=${mem.merchantId}`, { cookie })).json()) as {
       entries: { merchantId: string; action: string }[]

@@ -31,7 +31,15 @@ import {
   scopedTo,
   platformWide,
   utcDay,
+  Conflict,
+  Invalid,
   type AuditPage,
+  type Balance,
+  type Fulfilment,
+  type NewPayout,
+  type NewRefund,
+  type Payout,
+  type Refund,
   type MerchantSummary,
   type NewProduct,
   type Overview,
@@ -164,6 +172,49 @@ const orderSummary = (o: OrderSummary) => ({
   status: o.payment_status,
   items: o.items,
   totals: o.totals,
+  fulfilment: o.fulfilment,
+})
+
+const fulfilmentOut = (f: Fulfilment) => ({
+  merchantId: f.merchant_id,
+  status: f.status,
+  carrier: f.carrier,
+  tracking: f.tracking,
+  shippedAt: f.shipped_at,
+  deliveredAt: f.delivered_at,
+  updatedAt: f.updated_at,
+})
+
+const refundOut = (r: Refund) => ({
+  id: r.id,
+  orderId: r.order_id,
+  productId: r.product_id,
+  finish: r.variant || null,
+  qty: r.qty,
+  amountMinor: r.amount_minor,
+  currency: r.currency,
+  reason: r.reason,
+})
+
+const balanceOut = (b: Balance) => ({
+  merchantId: b.merchant_id,
+  currency: b.currency,
+  currentBps: b.current_bps,
+  gross: b.gross,
+  refunds: b.refunds,
+  commission: b.commission,
+  payouts: b.payouts,
+  available: b.available,
+  // A negative balance is money the merchant owes the platform, said outright.
+  owes: b.owes,
+})
+
+const payoutOut = (p: Payout) => ({
+  id: p.id,
+  merchantId: p.merchant_id,
+  currency: p.currency,
+  amountMinor: p.amount_minor,
+  reference: p.reference,
 })
 
 const orderDetail = (o: OrderDetail) => ({
@@ -182,14 +233,18 @@ const orderDetail = (o: OrderDetail) => ({
   },
   lines: o.lines.map((l) => ({
     productId: l.product_id,
+    merchantId: l.merchant_id,
     sku: l.sku,
     title: l.title,
     finish: l.variant || null,
     qty: l.qty,
     unitMinor: l.unit_price_cents,
     currency: l.currency,
+    refundedQty: l.refunded_qty,
+    refundedMinor: l.refunded_minor,
   })),
   totals: o.totals,
+  fulfilment: o.fulfilment.map(fulfilmentOut),
 })
 
 const overviewOut = (o: Overview) => ({
@@ -199,7 +254,13 @@ const overviewOut = (o: Overview) => ({
 })
 
 /** The platform page shows neither top products nor low stock, so neither is sent. */
-const platformOverviewOut = ({ revenue, orders, trend, products }: Overview) => ({ revenue, orders, trend, products })
+const platformOverviewOut = ({ revenue, gross, orders, trend, products }: Overview) => ({
+  revenue,
+  gross,
+  orders,
+  trend,
+  products,
+})
 
 const merchantOut = (m: MerchantSummary) => ({
   id: m.merchant_id,
@@ -337,6 +398,54 @@ function productPatch(body: unknown): ProductPatch | string {
   return patch
 }
 
+/* ------------------------------------------------------- fulfilment, money */
+
+/**
+ * A refund as a request may state it. The line is named by product and finish
+ * (the order line's key); the merchant is never taken from the body — the
+ * repository finds the line through the session's scope, or not at all.
+ */
+function newRefund(body: unknown): NewRefund | string {
+  const p = fields(body)
+  const productId = text(p.productId, 64)
+  const variant = p.finish === undefined || p.finish === null || p.finish === '' ? '' : text(p.finish, 60)
+  const qty = p.qty === undefined ? 0 : whole(p.qty)
+  const amountMinor = p.amountMinor === undefined ? undefined : whole(p.amountMinor)
+  const reason = text(p.reason, 200)
+  if (!productId || variant === null) return 'Name the line to refund by productId and finish.'
+  if (qty === null || qty > 99) return 'qty is a whole number of units, 0 to 99.'
+  if (amountMinor === null || amountMinor === 0) return 'amountMinor is a whole number of minor units, more than zero.'
+  if (qty === 0 && amountMinor === undefined) return 'A refund is for at least one unit, or states an amount.'
+  if (!reason) return 'Give a reason, 200 characters at most.'
+  return { productId, variant, qty, amountMinor, reason }
+}
+
+function newPayout(body: unknown): NewPayout | string {
+  const p = fields(body)
+  const currency = typeof p.currency === 'string' && /^[A-Z]{3}$/.test(p.currency) ? p.currency : null
+  const amountMinor = whole(p.amountMinor)
+  const reference = text(p.reference, 120)
+  if (!currency || currency === 'XXX') return 'currency is a three-letter code, such as USD.'
+  if (!amountMinor) return 'amountMinor is a whole number of minor units, more than zero.'
+  if (!reference) return 'Give the period or reference this payout covers, 120 characters at most.'
+  return { currency, amountMinor, reference }
+}
+
+/**
+ * A repository write's answer as a response: null is 404 (not this scope's,
+ * the same as not there at all), a Conflict is 409 with its own message.
+ */
+async function outcome<T>(write: () => Promise<T | null>, out: (v: T) => unknown, status = 200): Promise<Response> {
+  try {
+    const value = await write()
+    return value === null ? json({ error: 'not found' }, 404) : json(out(value), status)
+  } catch (err) {
+    if (err instanceof Conflict) return json({ error: err.message }, 409)
+    if (err instanceof Invalid) return json({ error: err.message }, 400)
+    throw err
+  }
+}
+
 const parse = <T>(s: string, fallback: T): T => {
   try {
     return (JSON.parse(s) as T) ?? fallback
@@ -388,7 +497,13 @@ const PHOTO = /^\/api\/merchant\/products\/([^/]+)\/photos\/([^/]+)$/
 const PHOTO_MAIN = /^\/api\/merchant\/products\/([^/]+)\/photos\/([^/]+)\/main$/
 const APPROVE = /^\/api\/platform\/merchants\/([^/]+)\/approve$/
 const ORDER = /^\/api\/merchant\/orders\/([^/]+)$/
+const ORDER_ACTION = /^\/api\/merchant\/orders\/([^/]+)\/(ship|deliver|cancel|refunds)$/
 const TRANSITION = /^\/api\/platform\/merchants\/([^/]+)\/(suspend|restore)$/
+const PLATFORM_ORDER = /^\/api\/platform\/orders\/([^/]+)$/
+const PLATFORM_REFUND = /^\/api\/platform\/orders\/([^/]+)\/refunds$/
+const COMMISSION = /^\/api\/platform\/merchants\/([^/]+)\/commission$/
+const PAYOUTS = /^\/api\/platform\/merchants\/([^/]+)\/payouts$/
+const PART_CANCEL = /^\/api\/platform\/orders\/([^/]+)\/parts\/([^/]+)\/cancel$/
 
 async function route(request: Request, env: ConsoleEnv, url: URL, ctx: ExecutionContext): Promise<Response> {
   const path = url.pathname
@@ -609,7 +724,92 @@ async function route(request: Request, env: ConsoleEnv, url: URL, ctx: Execution
     return order ? json(orderDetail(order), 200, PRIVATE) : json({ error: 'not found' }, 404)
   }
 
+  /* The merchant's own part of an order: ship, deliver, cancel, refund a line.
+     Another merchant's order is a 404 from the repository, like the read. */
+  const orderAction = path.match(ORDER_ACTION)
+  if (orderAction && method === 'POST') {
+    const repo = await merchantRepo(env, request)
+    if (repo instanceof Response) return repo
+    const [, target, verb] = orderAction
+    const body = fields(await readBody(request))
+    if (verb === 'ship') {
+      const carrier = text(body.carrier, 60)
+      const tracking = text(body.tracking, 60)
+      if (!carrier || !tracking) {
+        return json({ error: 'A shipment needs a carrier and a tracking number, 60 characters each at most.' }, 400)
+      }
+      return outcome(() => repo.fulfilment.ship(target, { carrier, tracking }), fulfilmentOut)
+    }
+    if (verb === 'deliver') return outcome(() => repo.fulfilment.deliver(target), fulfilmentOut)
+    if (verb === 'cancel') return outcome(() => repo.fulfilment.cancel(target), fulfilmentOut)
+    const input = newRefund(body)
+    if (typeof input === 'string') return json({ error: input }, 400)
+    return outcome(() => repo.refunds.create(target, input), refundOut, 201)
+  }
+
+  if (path === '/api/merchant/balance' && method === 'GET') {
+    const repo = await merchantRepo(env, request)
+    if (repo instanceof Response) return repo
+    return json({ balances: (await repo.finance.balance()).map(balanceOut) }, 200, PRIVATE)
+  }
+
   /* ------------------------------------------------------------ platform */
+
+  /* Any order, every merchant's part of it. Audited against each merchant
+     whose lines it read, by the repository wrapper. */
+  const platformOrder = path.match(PLATFORM_ORDER)?.[1]
+  if (platformOrder && method === 'GET') {
+    const repo = await platformRepo(env, request)
+    if (repo instanceof Response) return repo
+    const order = await repo.orders.get(platformOrder)
+    return order ? json(orderDetail(order), 200, PRIVATE) : json({ error: 'not found' }, 404)
+  }
+
+  const platformRefund = path.match(PLATFORM_REFUND)?.[1]
+  if (platformRefund && method === 'POST') {
+    const repo = await platformRepo(env, request)
+    if (repo instanceof Response) return repo
+    const input = newRefund(await readBody(request))
+    if (typeof input === 'string') return json({ error: input }, 400)
+    return outcome(() => repo.refunds.create(platformRefund, input), refundOut, 201)
+  }
+
+  /* One merchant's pending part, cancelled by the platform: for a suspended
+     merchant whose own staff can no longer reach the console. */
+  const partCancel = path.match(PART_CANCEL)
+  if (partCancel && method === 'POST') {
+    const repo = await platformRepo(env, request)
+    if (repo instanceof Response) return repo
+    const [, target, merchantId] = partCancel
+    return outcome(() => repo.parts.cancel(target, merchantId), fulfilmentOut)
+  }
+
+  const commissionFor = path.match(COMMISSION)?.[1]
+  if (commissionFor && method === 'POST') {
+    const repo = await platformRepo(env, request)
+    if (repo instanceof Response) return repo
+    const bps = whole(fields(await readBody(request)).commissionBps)
+    if (bps === null || bps > 10_000) return json({ error: 'commissionBps is a whole number from 0 to 10000.' }, 400)
+    return outcome(
+      () => repo.merchants.setCommission(commissionFor, bps),
+      (c) => ({ merchantId: c.merchant_id, commissionBps: c.commission_bps }),
+    )
+  }
+
+  const payoutFor = path.match(PAYOUTS)?.[1]
+  if (payoutFor && method === 'POST') {
+    const repo = await platformRepo(env, request)
+    if (repo instanceof Response) return repo
+    const input = newPayout(await readBody(request))
+    if (typeof input === 'string') return json({ error: input }, 400)
+    return outcome(() => repo.payouts.create(payoutFor, input), payoutOut, 201)
+  }
+
+  if (path === '/api/platform/balances' && method === 'GET') {
+    const repo = await platformRepo(env, request)
+    if (repo instanceof Response) return repo
+    return json({ balances: (await repo.finance.balance()).map(balanceOut) }, 200, PRIVATE)
+  }
 
   if (path === '/api/platform/overview' && method === 'GET') {
     const repo = await platformRepo(env, request)

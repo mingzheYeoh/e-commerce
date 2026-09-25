@@ -17,6 +17,9 @@ export default {
         'accent-hover': '#409CFF',
         'accent-green': '#30D158',
         'accent-amber': '#FF9F0A',
+        // iOS system red. Already named by the storefront's error and declined
+        // states, which rendered uncoloured until it was defined.
+        'accent-red': '#FF453A',
         'text-primary': '#F5F5F7',
         'text-secondary': '#A1A1A6',
         'text-muted': '#6E6E73',

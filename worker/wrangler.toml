@@ -53,6 +53,13 @@ name = "SIGNUP_LIMITER"
 namespace_id = "1002"
 simple = { limit = 5, period = 60 }
 
+# Placing orders. Payment is simulated, so an order is as real as its caller
+# says; this is what keeps a script from draining stock and inflating balances.
+[[ratelimits]]
+name = "ORDER_LIMITER"
+namespace_id = "1005"
+simple = { limit = 10, period = 60 }
+
 # The counter that can be trusted. Cloudflare's own limiter above is per-isolate
 # and best-effort — twenty-five parallel sign-ups against a 5-per-minute limit
 # produced one refusal — so it is the pre-filter and this is the limit.
@@ -137,6 +144,11 @@ simple = { limit = 10, period = 60 }
 name = "SIGNUP_LIMITER"
 namespace_id = "2002"
 simple = { limit = 5, period = 60 }
+
+[[env.staging.ratelimits]]
+name = "ORDER_LIMITER"
+namespace_id = "2005"
+simple = { limit = 10, period = 60 }
 
 [[env.staging.durable_objects.bindings]]
 name = "IP_THROTTLE"
