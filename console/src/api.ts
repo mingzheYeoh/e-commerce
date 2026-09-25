@@ -242,6 +242,21 @@ export type AuditEntry = {
 
 export const merchantOverview = () => call<Overview | ErrorBody>('/api/merchant/overview')
 
+/** One currency's settlement position, in minor units. `owes`: available is negative. */
+export type Balance = {
+  merchantId: string
+  currency: string
+  currentBps: number
+  gross: number
+  refunds: number
+  commission: number
+  payouts: number
+  available: number
+  owes: boolean
+}
+
+export const merchantBalance = () => call<{ balances: Balance[] } | ErrorBody>('/api/merchant/balance')
+
 /** Only the filled-in values, so an empty field means "no filter" rather than "". */
 const query = (params: Record<string, string | number | null | undefined>) =>
   new URLSearchParams(
@@ -308,22 +323,6 @@ export type InventoryItem = {
 }
 
 export const inventory = () => call<{ lowStockAt: number; products: InventoryItem[] } | ErrorBody>('/api/merchant/inventory')
-
-export type Balance = {
-  merchantId: string
-  currency: string
-  /** The merchant's rate now: what the next sale is charged. */
-  currentBps: number
-  gross: number
-  refunds: number
-  commission: number
-  payouts: number
-  available: number
-  /** available < 0: money owed to the platform, a refund after a payout most often. */
-  owes: boolean
-}
-
-export const balances = () => call<{ balances: Balance[] } | ErrorBody>('/api/merchant/balance')
 
 export type LedgerEntry = {
   currency: string

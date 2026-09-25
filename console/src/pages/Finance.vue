@@ -5,7 +5,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { Download } from 'lucide-vue-next'
 import {
-  balances,
+  merchantBalance,
   ledger,
   payouts,
   isError,
@@ -31,7 +31,7 @@ const stmtLoading = ref(true)
 const oops = 'Something went wrong. Reload and try again.'
 
 onMounted(async () => {
-  const [b, p] = await Promise.all([balances(), payouts()])
+  const [b, p] = await Promise.all([merchantBalance(), payouts()])
   if (isError(b.body)) error.value = b.body.error
   else if ('balances' in b.body) current.value = b.body.balances
   else error.value = oops
