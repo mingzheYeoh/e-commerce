@@ -24,6 +24,7 @@ import type { ProductRow } from './tenancy'
 export interface IndexEnv {
   AI: Ai
   VECTORIZE: VectorizeIndex
+  ORDERS: D1Database
 }
 
 /**
@@ -41,14 +42,14 @@ function metadataFor(row: ProductRow) {
 // embedded the offline set, truncates. The longest seeded passage is ~620
 // characters (~200 tokens), so this only cuts a spec table far longer than any
 // in the catalogue — and metadata.text, what the model reads, keeps all of it.
-const EMBED_CHARS = 1200
+const EMBED_CHARS = 1800
 
 /**
  * Brings the index in line with one product write, given the row either side
  * of it: an upsert when it goes on sale or something the passage is made of
  * changes, a delete when it comes off sale, and nothing for a draft.
  *
- * ponytail: two saves racing on one product can land their upserts out of
+ * ponytail: two saves racing on one product can still land their upserts out of
  * order, leaving the older text indexed until the next edit. Re-reading the
  * row before the upsert is the fix if merchants ever edit concurrently.
  */
@@ -63,6 +64,15 @@ export async function reindex(env: IndexEnv, before: ProductRow, after: ProductR
       if (was && JSON.stringify(metadata) === JSON.stringify(metadataFor(before))) return
       const values = await embedOne(env, metadata.text.slice(0, EMBED_CHARS))
       if (!values) throw new Error('the embedding came back as an async job')
+      // The embed takes ~100ms; an unpublish saved meanwhile has already sent
+      // its delete. Ask the row, not the request, whether it is still on sale.
+      const now = await env.ORDERS.prepare(`SELECT status FROM products WHERE id = ?1`)
+        .bind(after.id)
+        .first<{ status: string }>()
+      if (now?.status !== 'published') {
+        await env.VECTORIZE.deleteByIds([after.id])
+        return
+      }
       await env.VECTORIZE.upsert([{ id: after.id, values, metadata }])
     } else if (was) {
       await env.VECTORIZE.deleteByIds([after.id])

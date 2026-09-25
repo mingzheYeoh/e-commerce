@@ -231,8 +231,16 @@ const auditOut = (a: AuditPage) => ({
 
 /* ------------------------------------------------------------- products io */
 
+/**
+ * Merchant text as it will be stored: whitespace collapsed and square brackets
+ * turned round. These fields reach the AI's context, where a passage header is
+ * `[id] title` on its own line — a newline and a bracket inside a spec value
+ * could otherwise forge another merchant's product entry next to the real ones.
+ */
+const clean = (v: string) => v.replace(/\s+/g, ' ').replace(/\[/g, '(').replace(/\]/g, ')').trim()
+
 const text = (v: unknown, max: number): string | null =>
-  typeof v === 'string' && v.trim() && v.trim().length <= max ? v.trim() : null
+  typeof v === 'string' && clean(v) && clean(v).length <= max ? clean(v) : null
 
 /** A whole, non-negative number: what price_minor and stock_count accept. */
 const whole = (v: unknown): number | null =>
@@ -306,8 +314,8 @@ function productPatch(body: unknown): ProductPatch | string {
     const lines: string[] = []
     for (const v of p.specsSummary) {
       if (typeof v !== 'string') return 'Highlights are text.'
-      if (v.trim().length > 60) return 'Each highlight is 60 characters or fewer.'
-      if (v.trim()) lines.push(v.trim())
+      if (clean(v).length > 60) return 'Each highlight is 60 characters or fewer.'
+      if (clean(v)) lines.push(clean(v))
     }
     patch.specsSummary = lines
   }
@@ -317,7 +325,7 @@ function productPatch(body: unknown): ProductPatch | string {
     for (const r of p.specs) {
       const { label, value } = fields(r)
       if (typeof label !== 'string' || typeof value !== 'string') return 'A specification row is a label and a value.'
-      const [l, v] = [label.trim(), value.trim()]
+      const [l, v] = [clean(label), clean(value)]
       if (!l && !v) continue
       if (!l || !v) return 'Every specification row needs both a name and a value.'
       if (l.length > 40 || v.length > 120) return 'Specification names are 40 characters and values 120 at most.'
