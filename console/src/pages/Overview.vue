@@ -18,6 +18,14 @@ onMounted(async () => {
 const series = computed(() => (data.value ? seriesByCurrency(data.value.trend) : []))
 const top = computed(() => (data.value ? groupByCurrency(data.value.top) : []))
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
+/** The order count, and the gross before refunds when refunds made the two differ. */
+const sub = (window: 'today' | 'week' | 'month') => {
+  const d = data.value!
+  const gross = formatAmounts(d.gross[window])
+  return gross === formatAmounts(d.revenue[window])
+    ? plural(d.orders[window], 'order')
+    : `${plural(d.orders[window], 'order')} · ${gross} gross`
+}
 </script>
 
 <template>
@@ -27,13 +35,14 @@ const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
   <p v-else-if="!data" class="text-text-secondary">Loading…</p>
   <div v-else class="flex flex-col gap-6">
     <p class="-mt-4 text-xs text-text-muted">
-      Sales are your lines on paid orders, excluding shipping and tax. Days are UTC.
+      Net sales: your lines on paid orders less what was refunded on them, excluding shipping and tax.
+      Gross is before refunds. Days are UTC.
     </p>
 
     <section class="grid grid-cols-1 gap-3 xs:grid-cols-2 lg:grid-cols-4">
-      <StatCard label="Today" :value="formatAmounts(data.revenue.today, 'No sales')" :sub="plural(data.orders.today, 'order')" />
-      <StatCard label="Last 7 days" :value="formatAmounts(data.revenue.week, 'No sales')" :sub="plural(data.orders.week, 'order')" />
-      <StatCard label="Last 30 days" :value="formatAmounts(data.revenue.month, 'No sales')" :sub="plural(data.orders.month, 'order')" />
+      <StatCard label="Net today" :value="formatAmounts(data.revenue.today, 'No sales')" :sub="sub('today')" />
+      <StatCard label="Net, last 7 days" :value="formatAmounts(data.revenue.week, 'No sales')" :sub="sub('week')" />
+      <StatCard label="Net, last 30 days" :value="formatAmounts(data.revenue.month, 'No sales')" :sub="sub('month')" />
       <StatCard
         label="Products"
         :value="`${data.products.published} live`"
@@ -42,7 +51,7 @@ const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
     </section>
 
     <section class="card p-4 md:p-6">
-      <h2 class="mb-4 text-sm font-semibold text-text-primary">Daily sales, last 30 days</h2>
+      <h2 class="mb-4 text-sm font-semibold text-text-primary">Daily net sales, last 30 days</h2>
       <p v-if="series.length === 0" class="text-sm text-text-secondary">No sales in the last 30 days.</p>
       <div v-else class="flex flex-col gap-8">
         <SalesChart v-for="s in series" :key="s.currency" :days="s.days" :currency="s.currency" />
@@ -51,7 +60,7 @@ const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
 
     <div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
       <section class="card p-4 md:p-6">
-        <h2 class="mb-4 text-sm font-semibold text-text-primary">Top products, last 30 days</h2>
+        <h2 class="mb-4 text-sm font-semibold text-text-primary">Top products by net sales, last 30 days</h2>
         <p v-if="data.top.length === 0" class="text-sm text-text-secondary">Nothing sold yet.</p>
         <div v-else class="flex flex-col gap-5">
           <!-- The worker ranks within each currency; so does the numbering here. -->

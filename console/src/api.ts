@@ -143,7 +143,10 @@ export const pendingMerchants = () =>
 export type Amount = { currency: string; minor: number }
 
 export type Overview = {
+  /** Net: goods on paid orders less their refunds. */
   revenue: { today: Amount[]; week: Amount[]; month: Amount[] }
+  /** The same windows before refunds. */
+  gross: { today: Amount[]; week: Amount[]; month: Amount[] }
   orders: { today: number; week: number; month: number }
   trend: { day: string; revenue: Amount[] }[]
   top: { productId: string; title: string; currency: string; minor: number; qty: number }[]
@@ -151,7 +154,41 @@ export type Overview = {
   products: { draft: number; published: number; archived: number }
 }
 
-export type OrderSummary = { id: string; placedAt: string; method: string; status: string; items: number; totals: Amount[] }
+export type FulfilmentStatus = 'pending' | 'shipped' | 'delivered' | 'cancelled'
+
+export type OrderSummary = {
+  id: string
+  placedAt: string
+  method: string
+  status: string
+  items: number
+  totals: Amount[]
+  /** Your part's fulfilment: one entry for a merchant. */
+  fulfilment: FulfilmentStatus[]
+}
+
+export type Fulfilment = {
+  merchantId: string
+  status: FulfilmentStatus
+  carrier: string | null
+  tracking: string | null
+  shippedAt: string | null
+  deliveredAt: string | null
+  updatedAt: string
+}
+
+export type OrderLine = {
+  productId: string
+  merchantId: string
+  sku: string
+  title: string
+  finish: string | null
+  qty: number
+  unitMinor: number
+  currency: string
+  refundedQty: number
+  refundedMinor: number
+}
 
 export type OrderDetail = {
   id: string
@@ -159,8 +196,21 @@ export type OrderDetail = {
   method: string
   status: string
   shipTo: { name: string; line1: string; line2: string; city: string; state: string; postal: string; country: string }
-  lines: { productId: string; sku: string; title: string; finish: string | null; qty: number; unitMinor: number; currency: string }[]
+  lines: OrderLine[]
+  /** Goods sold, before refunds. */
   totals: Amount[]
+  fulfilment: Fulfilment[]
+}
+
+export type Refund = {
+  id: string
+  orderId: string
+  productId: string
+  finish: string | null
+  qty: number
+  amountMinor: number
+  currency: string
+  reason: string
 }
 
 export type MerchantStatus = 'pending' | 'active' | 'suspended'
@@ -200,6 +250,25 @@ export const listOrders = (range: { from?: string; to?: string }) => {
 }
 
 export const getOrder = (id: string) => call<OrderDetail | ErrorBody>(`/api/merchant/orders/${encodeURIComponent(id)}`)
+
+const orderAction = <T>(id: string, action: 'ship' | 'deliver' | 'cancel' | 'refunds', body: unknown = {}) =>
+  call<T | ErrorBody>(`/api/merchant/orders/${encodeURIComponent(id)}/${action}`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+
+/** Your part of the order, and only yours: pending -> shipped -> delivered, or pending -> cancelled. */
+export const shipOrder = (id: string, carrier: string, tracking: string) =>
+  orderAction<Fulfilment>(id, 'ship', { carrier, tracking })
+export const deliverOrder = (id: string) => orderAction<Fulfilment>(id, 'deliver')
+/** Also restocks your lines and refunds them in full. */
+export const cancelOrder = (id: string) => orderAction<Fulfilment>(id, 'cancel')
+
+/** qty 0 with an amount is money only; an amount left out is qty × the unit price. */
+export const refundLine = (
+  id: string,
+  input: { productId: string; finish: string | null; qty: number; amountMinor?: number; reason: string },
+) => orderAction<Refund>(id, 'refunds', input)
 
 /** The platform overview carries no top products or low stock: its page shows neither. */
 export type PlatformOverview = Omit<Overview, 'top' | 'lowStock'>

@@ -2,7 +2,7 @@
 import { onMounted, ref } from 'vue'
 import { listOrders, isError, type OrderSummary } from '../api'
 import { formatAmounts } from '../money'
-import { METHOD, STATUS, placed } from '../orders'
+import { FULFILMENT, METHOD, placed } from '../orders'
 
 const orders = ref<OrderSummary[]>([])
 // The worker stops at 1000 orders and says so; a partial list must not pass for the whole range.
@@ -61,6 +61,7 @@ onMounted(load)
         </span>
         <span class="nums text-xs text-text-secondary">
           {{ placed(o.placedAt) }} UTC · {{ o.items }} item{{ o.items === 1 ? '' : 's' }} · {{ METHOD[o.method] ?? o.method }}
+          <template v-for="(f, i) in o.fulfilment" :key="i"> · {{ FULFILMENT[f]?.label ?? f }}</template>
         </span>
       </router-link>
     </li>
@@ -86,7 +87,14 @@ onMounted(load)
           <td class="nums px-4 py-3 text-text-secondary">{{ o.items }}</td>
           <td class="nums px-4 py-3 text-text-primary">{{ formatAmounts(o.totals) }}</td>
           <td class="px-4 py-3 text-text-secondary">{{ METHOD[o.method] ?? o.method }}</td>
-          <td class="px-4 py-3 text-text-secondary">{{ STATUS[o.status] ?? o.status }}</td>
+          <td class="px-4 py-3">
+            <span
+              v-for="(f, i) in o.fulfilment"
+              :key="i"
+              class="whitespace-nowrap rounded-full border px-2 py-0.5 text-xs"
+              :class="FULFILMENT[f]?.badge"
+            >{{ FULFILMENT[f]?.label ?? f }}</span>
+          </td>
         </tr>
       </tbody>
     </table>

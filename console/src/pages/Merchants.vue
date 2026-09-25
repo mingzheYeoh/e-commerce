@@ -68,7 +68,7 @@ const BADGE: Record<string, string> = {
       </div>
       <div class="nums text-sm text-text-secondary">{{ m.productCount }} product{{ m.productCount === 1 ? '' : 's' }}</div>
       <div class="nums min-w-[8rem] text-sm text-text-primary">
-        {{ formatAmounts(m.revenue) }} <span class="text-xs text-text-muted">30 days</span>
+        {{ formatAmounts(m.revenue) }} <span class="text-xs text-text-muted">net, 30 days</span>
       </div>
       <div class="ml-auto flex gap-2">
         <router-link :to="{ path: '/platform/audit', query: { merchant: m.id } }" class="btn-ghost px-3 py-1.5 text-xs">
