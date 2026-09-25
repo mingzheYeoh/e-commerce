@@ -87,6 +87,31 @@ export interface Repository {
   stats: {
     overview(): Promise<Overview>
   }
+  /**
+   * This merchant's own part of an order: pending → shipped → delivered, or
+   * pending → cancelled. Each is the status change and its audit row in one
+   * batch. Null when the order holds no line of this merchant's (the route's
+   * 404); Conflict for any other transition (409). Merchant scope only: the
+   * platform has no part of an order to ship, so it throws there, as
+   * products.create does.
+   */
+  fulfilment: {
+    ship(orderId: string, input: { carrier: string; tracking: string }): Promise<Fulfilment | null>
+    deliver(orderId: string): Promise<Fulfilment | null>
+    /** Also puts the part's units back in stock and refunds whatever of its lines is not yet refunded. */
+    cancel(orderId: string): Promise<Fulfilment | null>
+  }
+  refunds: {
+    /**
+     * Money back on one line of a paid order, within what was paid for it
+     * less every earlier refund. Null when the line is not in scope.
+     */
+    create(orderId: string, input: NewRefund): Promise<Refund | null>
+  }
+  finance: {
+    /** Per merchant and currency. A merchant sees its own rows; the platform every merchant's. */
+    balance(): Promise<Balance[]>
+  }
 }
 
 /**
@@ -104,6 +129,17 @@ export interface PlatformRepository extends Repository {
     suspend(id: string): Promise<{ merchant_id: string; status: 'suspended' }>
     /** suspended → active, the same way. Never pending → active: approval is its own flow. */
     restore(id: string): Promise<{ merchant_id: string; status: 'active' }>
+    /** The platform's cut, in basis points (0..10000), with its audit row. Null for no such merchant. */
+    setCommission(id: string, bps: number): Promise<{ merchant_id: string; commission_bps: number } | null>
+  }
+  payouts: {
+    /**
+     * Records a simulated payout. Refused (Conflict) when it is more than the
+     * merchant's available balance in that currency — checked by the same
+     * statement that inserts it, so two payouts racing cannot both pass.
+     * Null for no such merchant.
+     */
+    create(merchantId: string, input: NewPayout): Promise<Payout | null>
   }
   audit: {
     /**
@@ -139,7 +175,92 @@ export interface OrderSummary {
   totals: Amount[]
   /** Whose lines these are: the merchant itself, or on a platform read every merchant in the order. */
   merchant_ids: string[]
+  /** The in-scope parts' fulfilment, by merchant id: one entry for a merchant. */
+  fulfilment: FulfilmentStatus[]
 }
+
+export type FulfilmentStatus = 'pending' | 'shipped' | 'delivered' | 'cancelled'
+
+/** One merchant's part of one order. */
+export interface Fulfilment {
+  order_id: string
+  merchant_id: string
+  status: FulfilmentStatus
+  carrier: string | null
+  tracking: string | null
+  shipped_at: string | null
+  delivered_at: string | null
+  updated_at: string
+}
+
+export interface NewRefund {
+  productId: string
+  /** The line's finish; '' when none was offered. Part of the line key. */
+  variant: string
+  /** Units refunded, 0 for money only. */
+  qty: number
+  /** Minor units. Defaults to qty × the line's unit price. */
+  amountMinor?: number
+  reason: string
+}
+
+export interface Refund {
+  id: string
+  order_id: string
+  merchant_id: string
+  product_id: string
+  variant: string
+  qty: number
+  amount_minor: number
+  currency: string
+  reason: string
+}
+
+/**
+ * A merchant's money in one currency, integer minor units throughout.
+ *
+ *   commission = floor((gross − refunds) × commission_bps / 10000)
+ *   available  = gross − refunds − commission − payouts
+ *
+ * The floor is taken once, on the running net per merchant and currency — not
+ * per order or per line. Flooring per order would under-collect up to one minor
+ * unit per order and make the figure depend on how sales were split; flooring
+ * the total makes the balance a pure function of the ledger, and whatever
+ * fraction is dropped stays with the merchant. The current commission_bps is
+ * applied to all of history, so changing it re-prices past sales too.
+ */
+export interface Balance {
+  merchant_id: string
+  currency: string
+  commission_bps: number
+  gross: number
+  refunds: number
+  commission: number
+  payouts: number
+  available: number
+}
+
+export interface NewPayout {
+  currency: string
+  amountMinor: number
+  reference: string
+}
+
+export interface Payout {
+  id: string
+  merchant_id: string
+  currency: string
+  amount_minor: number
+  reference: string
+  created_by: string
+}
+
+/**
+ * A refused change the caller can act on: a transition the state machine does
+ * not allow, a refund over the cap, a payout over the balance. Routes answer it
+ * with 409 and its message.
+ */
+export class Conflict extends Error {}
 
 /**
  * What a seller needs to fulfil their lines: who, where, how fast. No email
@@ -167,15 +288,26 @@ export interface OrderDetail {
     qty: number
     unit_price_cents: number
     currency: string
+    refunded_qty: number
+    refunded_minor: number
   }[]
+  /** Goods sold, before refunds. */
   totals: Amount[]
   /** Whose lines were read, as on OrderSummary. */
   merchant_ids: string[]
+  /** The in-scope parts, one per merchant. */
+  fulfilment: Fulfilment[]
 }
 
 export interface Overview {
-  /** Calendar days in UTC: today, the last 7 including today, the last 30. */
+  /**
+   * Net sales: goods on paid orders less what was refunded on them, by the
+   * day the order was placed. Calendar days in UTC: today, the last 7
+   * including today, the last 30.
+   */
   revenue: { today: Amount[]; week: Amount[]; month: Amount[] }
+  /** The same windows before refunds. */
+  gross: { today: Amount[]; week: Amount[]; month: Amount[] }
   orders: { today: number; week: number; month: number }
   /** Exactly 30 entries, oldest first, a day with no sales included as empty. */
   trend: { day: string; revenue: Amount[] }[]
@@ -192,7 +324,7 @@ export interface MerchantSummary {
   status: string
   created_at: string
   product_count: number
-  /** Last 30 days. */
+  /** Net sales, last 30 days. */
   revenue: Amount[]
 }
 
@@ -272,7 +404,14 @@ function assertIntegerMinor(value: number, field: string): void {
 }
 
 /** Methods that only read. Everything else is a write, and every write is an event. */
-const READS = new Set(['products.list', 'products.get', 'orders.list', 'orders.get', 'stats.overview'])
+const READS = new Set([
+  'products.list',
+  'products.get',
+  'orders.list',
+  'orders.get',
+  'stats.overview',
+  'finance.balance',
+])
 
 /**
  * Writes that record their own audit row, in the same batch as the change,
@@ -280,7 +419,16 @@ const READS = new Set(['products.list', 'products.get', 'orders.list', 'orders.g
  * them, or each would be recorded twice. A method belongs here only if its
  * body writes the row itself; the test that pins this set says so too.
  */
-export const SELF_AUDITED = new Set(['merchants.suspend', 'merchants.restore'])
+export const SELF_AUDITED = new Set([
+  'merchants.suspend',
+  'merchants.restore',
+  'merchants.setCommission',
+  'fulfilment.ship',
+  'fulfilment.deliver',
+  'fulfilment.cancel',
+  'refunds.create',
+  'payouts.create',
+])
 
 /**
  * Whether this call is worth a row from the wrapper.
@@ -358,9 +506,10 @@ async function record(
  * changed. Making the two atomic would mean every write carrying its own
  * `env.ORDERS.batch([...])` so the row and the change land in one
  * transaction — done in each write method instead of here, which is
- * exactly the coverage this wrapper trades away. Suspend and restore do pay
- * that price (SELF_AUDITED): a merchant's status is the one write whose
- * missing row would matter most. `record`'s own failure is still not
+ * exactly the coverage this wrapper trades away. The writes in SELF_AUDITED
+ * pay that price — a merchant's status, an order's fulfilment, and anything
+ * that moves money — because those are the writes whose missing row would
+ * matter most. `record`'s own failure is still not
  * swallowed: see the catch below.
  *
  * One group at a time, named explicitly at the call site below, so that the
@@ -431,7 +580,8 @@ const wrapGroup = (env: TenancyEnv, scope: Scope, group: string, methods: object
 
 /*
  * Sales are order lines of paid orders. Revenue is merchandise: qty times the
- * frozen unit price. Shipping and tax belong to the order, not to any one
+ * frozen unit price, less what was refunded on the line (NET; GROSS is before
+ * refunds). Shipping and tax belong to the order, not to any one
  * merchant, so they are in nobody's revenue — the platform's included, which
  * keeps the platform figure the sum of the merchant figures.
  *
@@ -448,6 +598,83 @@ const SALES = `FROM order_lines l
   LEFT JOIN products p ON p.id = l.product_id`
 const CURRENCY = `COALESCE(p.currency, 'XXX')`
 const PAID = ['o.payment_status = ?', 'succeeded'] as const
+
+/**
+ * What has been refunded on line `l` so far. Correlated rather than joined,
+ * so each is a seek on refunds_line_idx instead of grouping every refund.
+ */
+const REFUNDED_QTY = `(SELECT COALESCE(SUM(r.qty), 0) FROM refunds r
+   WHERE r.order_id = l.order_id AND r.product_id = l.product_id AND r.variant = l.variant)`
+const REFUNDED_MINOR = `(SELECT COALESCE(SUM(r.amount_minor), 0) FROM refunds r
+   WHERE r.order_id = l.order_id AND r.product_id = l.product_id AND r.variant = l.variant)`
+/** A line's sales before refunds, and after. Every "revenue" figure is NET. */
+const GROSS = 'l.qty * l.unit_price_cents'
+const NET = `(${GROSS} - ${REFUNDED_MINOR})`
+
+/**
+ * Every in-scope merchant's balance per currency, as one SELECT; see Balance
+ * for the arithmetic. Shared by finance.balance and payouts.create, so the
+ * figure a payout is checked against is the figure the page shows.
+ *
+ * Commission is SQLite integer division of non-negative integers, which is the
+ * floor. Refunds and payouts take their currency the way lines do: refunds
+ * from the product row, payouts as recorded (they were checked against it).
+ */
+function balances(scope: Scope): { sql: string; args: unknown[] } {
+  const sold = where([PAID, tenant(scope, 'l.merchant_id')])
+  const back = where([tenant(scope, 'r.merchant_id')])
+  const paid = where([tenant(scope)])
+  return {
+    sql: `SELECT g.merchant_id, g.currency, m.commission_bps, g.minor AS gross,
+                 COALESCE(rf.minor, 0) AS refunds,
+                 ((g.minor - COALESCE(rf.minor, 0)) * m.commission_bps) / 10000 AS commission,
+                 COALESCE(po.minor, 0) AS payouts
+            FROM (SELECT l.merchant_id, ${CURRENCY} AS currency, SUM(${GROSS}) AS minor
+                    ${SALES}${sold.sql}
+                   GROUP BY l.merchant_id, ${CURRENCY}) g
+            JOIN merchants m ON m.id = g.merchant_id
+            LEFT JOIN (SELECT r.merchant_id, ${CURRENCY} AS currency, SUM(r.amount_minor) AS minor
+                         FROM refunds r LEFT JOIN products p ON p.id = r.product_id${back.sql}
+                        GROUP BY r.merchant_id, ${CURRENCY}) rf
+              ON rf.merchant_id = g.merchant_id AND rf.currency = g.currency
+            LEFT JOIN (SELECT merchant_id, currency, SUM(amount_minor) AS minor FROM payouts${paid.sql}
+                        GROUP BY merchant_id, currency) po
+              ON po.merchant_id = g.merchant_id AND po.currency = g.currency`,
+    args: [...sold.args, ...back.args, ...paid.args],
+  }
+}
+
+/**
+ * The refund cap, as the last statement of any batch that inserts a refund.
+ *
+ * If any line of the order now has more refunded than was paid for it (units
+ * or money), this inserts a row with qty -1, the qty CHECK fails, and D1 rolls
+ * the whole batch back — 0009's rollback guard. The checks before a batch give
+ * the refusal its message; this is the check that holds when two refunds race,
+ * because it reads the ledger inside the transaction that writes it.
+ */
+const refundCapGuard = (env: TenancyEnv, orderId: string) =>
+  env.ORDERS.prepare(
+    `INSERT INTO refunds (id, order_id, merchant_id, product_id, variant, qty, amount_minor,
+                          reason, actor_id, actor_scope)
+     SELECT 'rfd_cap_guard', l.order_id, l.merchant_id, l.product_id, l.variant, -1, 1,
+            'refund cap guard', 'guard', 'platform'
+       FROM order_lines l
+      WHERE l.order_id = ? AND (${REFUNDED_QTY} > l.qty OR ${REFUNDED_MINOR} > ${GROSS})`,
+  ).bind(orderId)
+
+/** What the guard's refusal looks like once D1 reports it. */
+const overCap = (err: unknown) => /CHECK constraint failed/.test(String(err)) && /qty >= 0/.test(String(err))
+
+/** The fulfilment state machine: each action's one legal `from` and its `to`. Anything else is a 409. */
+const MOVES = {
+  ship: ['pending', 'shipped'],
+  deliver: ['shipped', 'delivered'],
+  cancel: ['pending', 'cancelled'],
+} as const
+
+/** Two decimals, for a refusal message. Display only; nothing is computed from it. */
+const shown = (minor: number, currency: string) => `${(minor / 100).toFixed(2)} ${currency}`
 
 /**
  * A UTC calendar date `days` before today. created_at is SQLite's UTC
@@ -495,7 +722,7 @@ function platformOnly(env: TenancyEnv, staffId: string): Omit<PlatformRepository
               ORDER BY m.created_at DESC, m.id`,
           ).all<Omit<MerchantSummary, 'revenue'>>(),
           env.ORDERS.prepare(
-            `SELECT l.merchant_id, ${CURRENCY} AS currency, SUM(l.qty * l.unit_price_cents) AS minor
+            `SELECT l.merchant_id, ${CURRENCY} AS currency, SUM(${NET}) AS minor
                ${SALES}
               WHERE o.payment_status = ? AND o.created_at >= ?
               GROUP BY l.merchant_id, ${CURRENCY}
@@ -519,6 +746,67 @@ function platformOnly(env: TenancyEnv, staffId: string): Omit<PlatformRepository
       async restore(merchantId: string) {
         await transition(merchantId, 'suspended', 'active', 'merchants.restore')
         return { merchant_id: merchantId, status: 'active' as const }
+      },
+
+      async setCommission(merchantId: string, bps: number) {
+        if (!Number.isSafeInteger(bps) || bps < 0 || bps > 10_000) {
+          throw new RangeError(`commission_bps is a whole number from 0 to 10000, not ${String(bps)}`)
+        }
+        // The audit row first, so it can read the rate being replaced. Both
+        // select on the merchant existing, so for no such merchant neither
+        // writes; and they are one batch, so neither lands without the other.
+        const [, update] = await env.ORDERS.batch([
+          env.ORDERS.prepare(
+            `INSERT INTO audit_log (id, actor_id, actor_scope, merchant_id, action, subject, detail)
+             SELECT ?, ?, 'platform', id, 'merchants.setCommission', id,
+                    json_object('from', commission_bps, 'to', CAST(? AS INTEGER))
+               FROM merchants WHERE id = ?`,
+          ).bind(id('aud'), staffId, bps, merchantId),
+          env.ORDERS.prepare(`UPDATE merchants SET commission_bps = ? WHERE id = ?`).bind(bps, merchantId),
+        ])
+        return update.meta.changes === 1 ? { merchant_id: merchantId, commission_bps: bps } : null
+      },
+    },
+
+    payouts: {
+      async create(merchantId: string, input: NewPayout) {
+        assertIntegerMinor(input.amountMinor, 'amountMinor')
+        if (input.amountMinor <= 0) throw new RangeError('a payout is more than nothing')
+        // The balance of this one merchant: the same SELECT the page reads,
+        // with the merchant's own tenant clause.
+        const b = balances({ kind: 'merchant', merchantId, staffId })
+        const payoutId = id('pay')
+        const [insert] = await env.ORDERS.batch([
+          env.ORDERS.prepare(
+            `INSERT INTO payouts (id, merchant_id, currency, amount_minor, reference, created_by)
+             SELECT ?, b.merchant_id, b.currency, ?, ?, ?
+               FROM (${b.sql}) b
+              WHERE b.currency = ? AND b.gross - b.refunds - b.commission - b.payouts >= ?`,
+          ).bind(payoutId, input.amountMinor, input.reference, staffId, ...b.args, input.currency, input.amountMinor),
+          env.ORDERS.prepare(
+            `INSERT INTO audit_log (id, actor_id, actor_scope, merchant_id, action, subject, detail)
+             SELECT ?, ?, 'platform', ?, 'payouts.create', ?, ? WHERE changes() = 1`,
+          ).bind(
+            id('aud'),
+            staffId,
+            merchantId,
+            payoutId,
+            JSON.stringify({ currency: input.currency, amount_minor: input.amountMinor, reference: input.reference }),
+          ),
+        ])
+        if (insert.meta.changes !== 1) {
+          const exists = await env.ORDERS.prepare(`SELECT 1 AS one FROM merchants WHERE id = ?`).bind(merchantId).first()
+          if (!exists) return null
+          throw new Conflict(`That is more than this merchant's available ${input.currency} balance.`)
+        }
+        return {
+          id: payoutId,
+          merchant_id: merchantId,
+          currency: input.currency,
+          amount_minor: input.amountMinor,
+          reference: input.reference,
+          created_by: staffId,
+        }
       },
     },
 
@@ -588,6 +876,61 @@ function build(env: TenancyEnv, scope: Scope): Repository {
     return env.ORDERS.prepare(`SELECT * FROM products${w.sql}`)
       .bind(...w.args)
       .first<ProductRow>()
+  }
+
+  /**
+   * This merchant's part of a paid order, or null. The merchant id in the
+   * WHERE is the scope's, so another merchant's order reads as no order.
+   */
+  const part = async (orderId: string) => {
+    if (scope.kind !== 'merchant') {
+      throw new Error('only a merchant ships, delivers or cancels its own part of an order')
+    }
+    return env.ORDERS.prepare(
+      `SELECT f.* FROM order_fulfilments f JOIN orders o ON o.id = f.order_id
+        WHERE f.order_id = ? AND f.merchant_id = ? AND o.payment_status = ?`,
+    )
+      .bind(orderId, scope.merchantId, 'succeeded')
+      .first<Fulfilment>()
+  }
+
+  /**
+   * One step of the fulfilment state machine: the part's status change, its
+   * audit row, and whatever `after` adds, in one batch.
+   *
+   * The UPDATE matches only the `from` status, and the audit INSERT only if
+   * the UPDATE changed a row, so a transition that lost a race writes nothing
+   * at all. The status is also checked first, which is where a refusal gets a
+   * message worth showing.
+   */
+  const move = async (
+    orderId: string,
+    action: keyof typeof MOVES,
+    set = '',
+    setArgs: unknown[] = [],
+    detail: object | null = null,
+    after: (auditId: string, merchantId: string) => D1PreparedStatement[] = () => [],
+  ) => {
+    const row = await part(orderId)
+    if (!row) return null
+    const [from, to] = MOVES[action]
+    if (row.status !== from) {
+      throw new Conflict(`Only a ${from} order can be marked ${to}; this one is ${row.status}.`)
+    }
+    const auditId = id('aud')
+    const [update] = await env.ORDERS.batch([
+      env.ORDERS.prepare(
+        `UPDATE order_fulfilments SET status = ?${set}, updated_at = datetime('now')
+          WHERE order_id = ? AND merchant_id = ? AND status = ?`,
+      ).bind(to, ...setArgs, orderId, row.merchant_id, from),
+      env.ORDERS.prepare(
+        `INSERT INTO audit_log (id, actor_id, actor_scope, merchant_id, action, subject, detail)
+         SELECT ?, ?, 'merchant', ?, ?, ?, ? WHERE changes() = 1`,
+      ).bind(auditId, scope.staffId, row.merchant_id, `fulfilment.${action}`, orderId, detail && JSON.stringify(detail)),
+      ...after(auditId, row.merchant_id),
+    ])
+    if (update.meta.changes !== 1) throw new Conflict('This order changed in the meantime. Reload and try again.')
+    return part(orderId)
   }
 
   const raw: Repository = {
@@ -710,6 +1053,9 @@ function build(env: TenancyEnv, scope: Scope): Repository {
           tenant(scope, 'l.merchant_id'),
         ])
         const mine = where([tenant(scope, 'l.merchant_id')])
+        // The fulfilment of the in-scope parts, in a subquery of its own, so
+        // its tenant clause (when there is one) binds between the two above.
+        const parts = tenant(scope, 'f.merchant_id')
         // The cap counts ORDERS, in the CTE. A LIMIT on the grouped rows below
         // would count an order once per currency, and cut an order in half.
         // ponytail: capped, not paged — the date range is the pager. Real
@@ -722,8 +1068,12 @@ function build(env: TenancyEnv, scope: Scope): Repository {
               LIMIT ?
            )
            SELECT o.id, o.created_at, o.method, o.payment_status, ${CURRENCY} AS currency,
-                  SUM(l.qty) AS items, SUM(l.qty * l.unit_price_cents) AS minor,
-                  json_group_array(DISTINCT l.merchant_id) AS merchant_ids
+                  SUM(l.qty) AS items, SUM(${GROSS}) AS minor,
+                  json_group_array(DISTINCT l.merchant_id) AS merchant_ids,
+                  (SELECT json_group_array(status) FROM (
+                     SELECT f.status FROM order_fulfilments f
+                      WHERE f.order_id = o.id${parts ? ` AND ${parts[0]}` : ''}
+                      ORDER BY f.merchant_id)) AS fulfilment
              FROM picked
              JOIN orders o ON o.id = picked.id
              JOIN order_lines l ON l.order_id = o.id
@@ -731,11 +1081,14 @@ function build(env: TenancyEnv, scope: Scope): Repository {
             GROUP BY o.id, ${CURRENCY}
             ORDER BY o.created_at DESC, o.id DESC, ${CURRENCY}`,
         )
-          .bind(...picked.args, ORDER_CAP + 1, ...mine.args)
-          .all<Omit<OrderSummary, 'totals' | 'merchant_ids'> & Amount & { merchant_ids: string }>()
+          .bind(...picked.args, ORDER_CAP + 1, ...(parts ? [parts[1]] : []), ...mine.args)
+          .all<
+            Omit<OrderSummary, 'totals' | 'merchant_ids' | 'fulfilment'> &
+              Amount & { merchant_ids: string; fulfilment: string }
+          >()
 
         const orders = new Map<string, OrderSummary>()
-        for (const { currency, minor, items, merchant_ids, ...o } of results ?? []) {
+        for (const { currency, minor, items, merchant_ids, fulfilment, ...o } of results ?? []) {
           const ids = JSON.parse(merchant_ids) as string[]
           const seen = orders.get(o.id)
           if (seen) {
@@ -743,7 +1096,13 @@ function build(env: TenancyEnv, scope: Scope): Repository {
             seen.totals.push({ currency, minor })
             seen.merchant_ids = [...new Set([...seen.merchant_ids, ...ids])]
           } else {
-            orders.set(o.id, { ...o, items, totals: [{ currency, minor }], merchant_ids: ids })
+            orders.set(o.id, {
+              ...o,
+              items,
+              totals: [{ currency, minor }],
+              merchant_ids: ids,
+              fulfilment: JSON.parse(fulfilment) as FulfilmentStatus[],
+            })
           }
         }
         return [...orders.values()]
@@ -751,22 +1110,26 @@ function build(env: TenancyEnv, scope: Scope): Repository {
 
       async get(orderId: string) {
         const w = where([['l.order_id = ?', orderId], tenant(scope, 'l.merchant_id')])
-        const [lines, totals] = await Promise.all([
+        const f = where([['order_id = ?', orderId], tenant(scope)])
+        const [lines, totals, parts] = await Promise.all([
           env.ORDERS.prepare(
             `SELECT l.product_id, l.merchant_id, l.sku, l.title, l.variant, l.qty, l.unit_price_cents,
-                    ${CURRENCY} AS currency
+                    ${CURRENCY} AS currency, ${REFUNDED_QTY} AS refunded_qty, ${REFUNDED_MINOR} AS refunded_minor
                FROM order_lines l LEFT JOIN products p ON p.id = l.product_id${w.sql}
               ORDER BY l.title, l.variant`,
           )
             .bind(...w.args)
             .all<OrderDetail['lines'][number]>(),
           env.ORDERS.prepare(
-            `SELECT ${CURRENCY} AS currency, SUM(l.qty * l.unit_price_cents) AS minor
+            `SELECT ${CURRENCY} AS currency, SUM(${GROSS}) AS minor
                FROM order_lines l LEFT JOIN products p ON p.id = l.product_id${w.sql}
               GROUP BY ${CURRENCY} ORDER BY ${CURRENCY}`,
           )
             .bind(...w.args)
             .all<Amount>(),
+          env.ORDERS.prepare(`SELECT * FROM order_fulfilments${f.sql} ORDER BY merchant_id`)
+            .bind(...f.args)
+            .all<Fulfilment>(),
         ])
         // No line of theirs: not their order. Checked before the header is
         // even read, so another merchant's customer's address is never loaded.
@@ -778,14 +1141,161 @@ function build(env: TenancyEnv, scope: Scope): Repository {
              FROM orders WHERE id = ? AND payment_status = ?`,
         )
           .bind(orderId, 'succeeded')
-          .first<Omit<OrderDetail, 'lines' | 'totals' | 'merchant_ids'>>()
+          .first<Omit<OrderDetail, 'lines' | 'totals' | 'merchant_ids' | 'fulfilment'>>()
         if (!header) return null
         return {
           ...header,
           lines: lines.results,
           totals: amountsOf(totals.results ?? []),
           merchant_ids: [...new Set(lines.results.map((l) => l.merchant_id))],
+          fulfilment: parts.results ?? [],
         }
+      },
+    },
+
+    fulfilment: {
+      ship: (orderId: string, { carrier, tracking }: { carrier: string; tracking: string }) =>
+        move(orderId, 'ship', ', carrier = ?, tracking = ?, shipped_at = datetime(\'now\')', [carrier, tracking], {
+          carrier,
+          tracking,
+        }),
+      deliver: (orderId: string) => move(orderId, 'deliver', ", delivered_at = datetime('now')"),
+      cancel: (orderId: string) =>
+        move(orderId, 'cancel', '', [], null, (auditId, merchantId) => [
+          /*
+           * Both conditional on THIS call's audit row, which exists only if
+           * the status change above matched. Keyed on the row rather than on
+           * the status: a second cancel finds the part already cancelled, and
+           * must restock and refund nothing.
+           *
+           * Every unit goes back: a pending part never left the warehouse,
+           * whatever was refunded on it before.
+           */
+          env.ORDERS.prepare(
+            `UPDATE products
+                SET stock_count = stock_count + (SELECT SUM(l.qty) FROM order_lines l
+                                                  WHERE l.order_id = ? AND l.merchant_id = ? AND l.product_id = products.id),
+                    updated_at = datetime('now')
+              WHERE id IN (SELECT l.product_id FROM order_lines l WHERE l.order_id = ? AND l.merchant_id = ?)
+                AND EXISTS (SELECT 1 FROM audit_log WHERE id = ?)`,
+          ).bind(orderId, merchantId, orderId, merchantId, auditId),
+          // Whatever of each line is not refunded yet, in full. The ids are
+          // minted by SQLite, one per line, because the lines are only known
+          // inside this statement; they are opaque either way.
+          env.ORDERS.prepare(
+            `INSERT INTO refunds (id, order_id, merchant_id, product_id, variant, qty, amount_minor,
+                                  reason, actor_id, actor_scope)
+             SELECT 'rfd_' || lower(hex(randomblob(10))), l.order_id, l.merchant_id, l.product_id, l.variant,
+                    l.qty - ${REFUNDED_QTY}, ${NET}, 'Order cancelled', ?, 'merchant'
+               FROM order_lines l
+              WHERE l.order_id = ? AND l.merchant_id = ? AND ${NET} > 0
+                AND EXISTS (SELECT 1 FROM audit_log WHERE id = ?)`,
+          ).bind(scope.staffId, orderId, merchantId, auditId),
+          // Cannot fire (the remainder is computed in this same transaction),
+          // and there anyway, so no batch that writes a refund goes unguarded.
+          refundCapGuard(env, orderId),
+        ]),
+    },
+
+    refunds: {
+      async create(orderId: string, input: NewRefund) {
+        assertIntegerMinor(input.qty, 'qty')
+        if (input.amountMinor !== undefined) assertIntegerMinor(input.amountMinor, 'amountMinor')
+        const w = where([
+          ['l.order_id = ?', orderId],
+          ['l.product_id = ?', input.productId],
+          ['l.variant = ?', input.variant],
+          PAID,
+          tenant(scope, 'l.merchant_id'),
+        ])
+        const line = await env.ORDERS.prepare(
+          `SELECT l.merchant_id, l.qty, ${GROSS} AS paid, l.unit_price_cents, ${CURRENCY} AS currency,
+                  ${REFUNDED_QTY} AS refunded_qty, ${REFUNDED_MINOR} AS refunded_minor
+             ${SALES}${w.sql}`,
+        )
+          .bind(...w.args)
+          .first<{
+            merchant_id: string
+            qty: number
+            paid: number
+            unit_price_cents: number
+            currency: string
+            refunded_qty: number
+            refunded_minor: number
+          }>()
+        // Not a line of this scope's: the same answer as no such line.
+        if (!line) return null
+
+        const amount = input.amountMinor ?? input.qty * line.unit_price_cents
+        if (input.qty < 0 || amount <= 0) throw new RangeError('a refund is for some units or some money')
+        const [qtyLeft, minorLeft] = [line.qty - line.refunded_qty, line.paid - line.refunded_minor]
+        if (input.qty > qtyLeft) {
+          throw new Conflict(`Only ${qtyLeft} of ${line.qty} units on this line are left to refund.`)
+        }
+        if (amount > minorLeft) {
+          throw new Conflict(`Only ${shown(minorLeft, line.currency)} is left to refund on this line.`)
+        }
+
+        const refundId = id('rfd')
+        try {
+          await env.ORDERS.batch([
+            env.ORDERS.prepare(
+              `INSERT INTO refunds (id, order_id, merchant_id, product_id, variant, qty, amount_minor,
+                                    reason, actor_id, actor_scope)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            ).bind(
+              refundId,
+              orderId,
+              line.merchant_id,
+              input.productId,
+              input.variant,
+              input.qty,
+              amount,
+              input.reason,
+              scope.staffId,
+              scope.kind,
+            ),
+            env.ORDERS.prepare(
+              `INSERT INTO audit_log (id, actor_id, actor_scope, merchant_id, action, subject, detail)
+               VALUES (?, ?, ?, ?, 'refunds.create', ?, ?)`,
+            ).bind(
+              id('aud'),
+              scope.staffId,
+              scope.kind,
+              line.merchant_id,
+              orderId,
+              JSON.stringify({ refund_id: refundId, product_id: input.productId, variant: input.variant, qty: input.qty, amount_minor: amount, currency: line.currency }),
+            ),
+            refundCapGuard(env, orderId),
+          ])
+        } catch (err) {
+          // The checks above read a moment ago; the guard reads now.
+          if (overCap(err)) {
+            throw new Conflict('Another refund landed on this line in the meantime. Reload and try again.')
+          }
+          throw err
+        }
+        return {
+          id: refundId,
+          order_id: orderId,
+          merchant_id: line.merchant_id,
+          product_id: input.productId,
+          variant: input.variant,
+          qty: input.qty,
+          amount_minor: amount,
+          currency: line.currency,
+          reason: input.reason,
+        }
+      },
+    },
+
+    finance: {
+      async balance() {
+        const b = balances(scope)
+        const { results } = await env.ORDERS.prepare(`${b.sql} ORDER BY g.merchant_id, g.currency`)
+          .bind(...b.args)
+          .all<Omit<Balance, 'available'>>()
+        return (results ?? []).map((r) => ({ ...r, available: r.gross - r.refunds - r.commission - r.payouts }))
       },
     },
 
@@ -801,22 +1311,35 @@ function build(env: TenancyEnv, scope: Scope): Repository {
         const [daily, windows, counts, top, statuses, lowStock] = await Promise.all([
           env.ORDERS.prepare(
             `SELECT substr(o.created_at, 1, 10) AS day, ${CURRENCY} AS currency,
-                    SUM(l.qty * l.unit_price_cents) AS minor
+                    SUM(${NET}) AS minor
                ${SALES}${sales.sql}
               GROUP BY day, ${CURRENCY} ORDER BY day, ${CURRENCY}`,
           )
             .bind(...sales.args)
             .all<{ day: string } & Amount>(),
+          // Net and gross from one pass: the net is the gross less its refunds.
           env.ORDERS.prepare(
-            `SELECT ${CURRENCY} AS currency,
-                    SUM(CASE WHEN o.created_at >= ? THEN l.qty * l.unit_price_cents ELSE 0 END) AS today,
-                    SUM(CASE WHEN o.created_at >= ? THEN l.qty * l.unit_price_cents ELSE 0 END) AS week,
-                    SUM(l.qty * l.unit_price_cents) AS month
-               ${SALES}${sales.sql}
-              GROUP BY ${CURRENCY} ORDER BY ${CURRENCY}`,
+            `SELECT currency,
+                    SUM(CASE WHEN at >= ? THEN net ELSE 0 END) AS today,
+                    SUM(CASE WHEN at >= ? THEN net ELSE 0 END) AS week,
+                    SUM(net) AS month,
+                    SUM(CASE WHEN at >= ? THEN gross ELSE 0 END) AS gross_today,
+                    SUM(CASE WHEN at >= ? THEN gross ELSE 0 END) AS gross_week,
+                    SUM(gross) AS gross_month
+               FROM (SELECT o.created_at AS at, ${CURRENCY} AS currency, ${GROSS} AS gross, ${NET} AS net
+                       ${SALES}${sales.sql})
+              GROUP BY currency ORDER BY currency`,
           )
-            .bind(today, week, ...sales.args)
-            .all<{ currency: string; today: number; week: number; month: number }>(),
+            .bind(today, week, today, week, ...sales.args)
+            .all<{
+              currency: string
+              today: number
+              week: number
+              month: number
+              gross_today: number
+              gross_week: number
+              gross_month: number
+            }>(),
           // Distinct orders: one order with three of this merchant's lines is
           // one order, not three.
           env.ORDERS.prepare(
@@ -830,9 +1353,9 @@ function build(env: TenancyEnv, scope: Scope): Repository {
           env.ORDERS.prepare(
             `SELECT product_id, title, currency, minor, qty FROM (
                SELECT l.product_id, MAX(COALESCE(p.title, l.title)) AS title, ${CURRENCY} AS currency,
-                      SUM(l.qty * l.unit_price_cents) AS minor, SUM(l.qty) AS qty,
+                      SUM(${NET}) AS minor, SUM(l.qty) AS qty,
                       ROW_NUMBER() OVER (PARTITION BY ${CURRENCY}
-                                         ORDER BY SUM(l.qty * l.unit_price_cents) DESC, l.product_id) AS rank
+                                         ORDER BY SUM(${NET}) DESC, l.product_id) AS rank
                  ${SALES}${sales.sql}
                 GROUP BY l.product_id, ${CURRENCY})
               WHERE rank <= 5 ORDER BY currency, minor DESC, product_id`,
@@ -858,6 +1381,11 @@ function build(env: TenancyEnv, scope: Scope): Repository {
             week: w.map((r) => ({ currency: r.currency, minor: r.week })),
             month: w.map((r) => ({ currency: r.currency, minor: r.month })),
           },
+          gross: {
+            today: w.map((r) => ({ currency: r.currency, minor: r.gross_today })),
+            week: w.map((r) => ({ currency: r.currency, minor: r.gross_week })),
+            month: w.map((r) => ({ currency: r.currency, minor: r.gross_month })),
+          },
           orders: counts ?? { today: 0, week: 0, month: 0 },
           trend: Array.from({ length: 30 }, (_, i) => {
             const day = utcDay(29 - i, now)
@@ -877,6 +1405,9 @@ function build(env: TenancyEnv, scope: Scope): Repository {
     products: wrap('products', raw.products) as Repository['products'],
     orders: wrap('orders', raw.orders) as Repository['orders'],
     stats: wrap('stats', raw.stats) as Repository['stats'],
+    fulfilment: wrap('fulfilment', raw.fulfilment) as Repository['fulfilment'],
+    refunds: wrap('refunds', raw.refunds) as Repository['refunds'],
+    finance: wrap('finance', raw.finance) as Repository['finance'],
   }
   return audited
 }
@@ -933,6 +1464,7 @@ export const platformWide = async (env: TenancyEnv, staffId: string): Promise<Pl
     ...build(env, scope),
     merchants: wrapGroup(env, scope, 'merchants', only.merchants) as PlatformRepository['merchants'],
     audit: wrapGroup(env, scope, 'audit', only.audit) as PlatformRepository['audit'],
+    payouts: wrapGroup(env, scope, 'payouts', only.payouts) as PlatformRepository['payouts'],
   }
 }
 
