@@ -336,12 +336,32 @@ before the write and again by a guard statement inside it. Every one of these
 writes lands in one batch with its audit row.
 
 Money is integer minor units throughout. A merchant's balance, per currency,
-is `gross − refunds − commission − payouts`, where
-`commission = floor((gross − refunds) × commission_bps / 10000)` is floored
-once on the running total (8% by default), and a payout larger than the
-available balance is refused by the statement that would insert it. Revenue
-on the dashboards is net of refunds, with gross beside it. See
+is `gross − refunds − commission − payouts`. Each order line records the
+commission rate it was sold at (the merchant's rate at checkout, 8% by
+default), so changing a rate prices future sales only; commission is
+`floor(Σ (line gross − line refunds) × line rate / 10000)`, floored once on the
+total. A payout larger than the available balance is refused by the statement
+that would insert it. A balance can still go negative — a refund after a
+payout — and is then flagged `owes`: the merchant owes the platform. Revenue on
+the dashboards is net of refunds, with gross beside it. See
 `worker/src/tenancy.ts` (`Balance`) and migration `0013`.
+
+Limits worth knowing:
+
+- **Payouts rest on simulated payment.** An order is as real as its caller
+  says; `POST /api/orders` is rate limited per IP (`ORDER_LIMITER`, 10 a
+  minute), but nothing verifies a charge, so balances and payouts are demo
+  figures.
+- **Cancelling refunds the goods, not shipping or tax.** Those belong to the
+  order, not to any one merchant; refunding them is not built yet.
+- **A refund is money, not a return.** Refunding units does not put them back
+  in stock; only cancelling a part that took stock at checkout does. Parts
+  from before `0013` never took stock, so cancelling one restocks nothing.
+- **A suspended merchant's pending parts** can be cancelled by the platform
+  (`POST /api/platform/orders/:id/parts/:merchantId/cancel`).
+- **A retried checkout** reuses its order id (kept in the browser across a
+  reload), and the server answers an id it already holds with that order, so
+  a lost answer never becomes a second order.
 
 ## Asset pipeline
 
