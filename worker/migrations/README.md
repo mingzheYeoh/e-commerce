@@ -45,6 +45,7 @@ Verified against `sqlite_master` on 2026-09-21; production caught up on 2026-09-
 | `0010` display order | ✅ 2026-09-24 | ✅ applied 2026-09-21, rebuilt 2026-09-22 |
 | `0011` staff sessions | ✅ 2026-09-24 | ✅ applied 2026-09-22 |
 | `0012` audit merchant seq index | ✅ 2026-09-25 | ✅ 2026-09-25 |
+| `0013` order lifecycle | ❌ | ❌ |
 
 Production currently holds six tables: `orders`, `order_lines`, and the four
 from `0006`. It has never had `users`, `sessions`, `email_tokens` or
@@ -57,7 +58,29 @@ staging by the whole accounts phase, not broken by it.
 
 ## Pending
 
-Nothing. `0012` (an index only) was applied to staging and then production on
+**`0013` order lifecycle, on neither database yet.** It adds
+`merchants.commission_bps` (default 800), the `order_fulfilments`, `refunds`
+and `payouts` tables with their indexes and append-only triggers, and backfills
+one `pending` fulfilment row per merchant of every paid order already stored.
+Additive only, so it is safe ahead of the workers, and it has to be: the
+branch's `nexus-api` inserts a fulfilment row and decrements `stock_count` in
+the order batch, and its `nexus-console` reads all three tables, so a worker
+deployed ahead of `0013` fails every checkout (503) and every order page.
+Staging first, then production, each before both workers:
+
+```bash
+npx wrangler d1 execute nexus-orders-staging --remote --file=migrations/0013-order-lifecycle.sql
+```
+
+Check afterwards that `SELECT COUNT(*) FROM order_fulfilments` equals
+`SELECT COUNT(*) FROM (SELECT DISTINCT l.order_id, l.merchant_id FROM order_lines l JOIN orders o ON o.id = l.order_id WHERE o.payment_status = 'succeeded')`.
+
+One thing to know before any later migration rebuilds `order_lines` the way
+`0009` did: nothing in `0013` references that table from a trigger, on purpose
+(see the comment above the refunds triggers), so such a rebuild still works.
+Keep it that way.
+
+`0012` (an index only) was applied to staging and then production on
 2026-09-25, each ahead of the console worker that reads it.
 
 ## Before production next deploys
