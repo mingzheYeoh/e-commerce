@@ -321,6 +321,28 @@ restoring a merchant, and reading the audit log, exist only on the repository
 Totals are lists of `{ currency, minor }`: order lines take their currency from
 the product they were priced from, and two currencies are never added together.
 
+### The order lifecycle
+
+Checkout waits for `POST /api/orders`, which takes each line's units out of
+stock and opens one fulfilment part per merchant in the same D1 batch as the
+order; a line short of stock refuses the whole order with a 409 naming the
+product, and the shopper stays on the checkout with the cart intact.
+
+Each merchant moves only its own part: `pending → shipped → delivered`, or
+`pending → cancelled` (which puts the units back and refunds the lines in
+full). Any other transition is a 409. Refunds are per line, in units and/or
+money, never past what was paid for the line less earlier refunds — checked
+before the write and again by a guard statement inside it. Every one of these
+writes lands in one batch with its audit row.
+
+Money is integer minor units throughout. A merchant's balance, per currency,
+is `gross − refunds − commission − payouts`, where
+`commission = floor((gross − refunds) × commission_bps / 10000)` is floored
+once on the running total (8% by default), and a payout larger than the
+available balance is refused by the statement that would insert it. Revenue
+on the dashboards is net of refunds, with gross beside it. See
+`worker/src/tenancy.ts` (`Balance`) and migration `0013`.
+
 ## Asset pipeline
 
 `scripts/fetch-assets.mjs` downloads real, licensed photography into
@@ -400,9 +422,12 @@ rather than trusted from the request. What is genuinely still missing:
   their password has no self-serve way back in; a customer does.
 - **Merchant staff beyond the owner.** One login per merchant; no inviting a
   teammate.
-- **Fulfilment in the console.** A merchant sees their own lines of every paid
-  order and where to ship them, but cannot mark anything shipped: orders have a
-  payment status and no fulfilment status yet.
+- **Console pages for the money.** Balances, commission and payouts exist as
+  repository methods and console routes (see [the order lifecycle](#the-order-lifecycle)),
+  but only the order page's fulfilment and refund actions have UI so far.
+- **Tracking for guest orders.** Carrier, tracking number and refunds are shown
+  only to the account that placed an order; a guest's order link shows what it
+  always did.
 - **A route-layer isolation sweep and both timing residuals** noted in the
   registration code's own comments — known, deferred, not silently ignored.
 
