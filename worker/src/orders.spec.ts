@@ -486,6 +486,21 @@ describe('placeOrder addresses', () => {
     expect(rows('orders')).toHaveLength(1)
   })
 
+  it('tells a request with a different email only that the id is taken, never what the order was', async () => {
+    // Order ids are short enough to guess. The stored totals are a retry's
+    // answer, and a retry resends the email it was placed with.
+    const { db } = seeded()
+    expect((await placeOrder({ ORDERS: db }, payload())).status).toBe(200)
+    const guess = await placeOrder({ ORDERS: db }, payload({ address: { ...payload().address, email: 'someone@else.test' } }))
+    expect(guess).toEqual({ status: 409, body: { error: 'That order id is already taken.', code: 'duplicate' } })
+    // Case and surrounding spaces are not a different person.
+    const shouted = await placeOrder(
+      { ORDERS: db },
+      payload({ address: { ...payload().address, email: `  ${payload().address.email.toUpperCase()} ` } }),
+    )
+    expect(shouted.status).toBe(200)
+  })
+
   it('reports two racing inserts of one id as a duplicate, not a server fault', async () => {
     // Both passed the lookup; the table's own primary key decides.
     const { db } = seeded()
@@ -681,6 +696,19 @@ describe('getOrder', () => {
     await placeOrder({ ORDERS: db }, payload())
     raw.prepare(`UPDATE order_fulfilments SET status = 'shipped', carrier = 'UPS', tracking = '1Z', shipped_at = datetime('now')`).run()
     expect(await getOrder({ ORDERS: db }, 'NX-4K2P9', null)).not.toHaveProperty('parts')
+  })
+
+  it('shows where an order is going only to the account that placed it', async () => {
+    const { db } = seeded()
+    await placeOrder({ ORDERS: db }, payload(), 'usr_owner')
+    const owner = await getOrder({ ORDERS: db }, 'NX-4K2P9', 'usr_owner')
+    expect(owner?.address).toMatchObject({ name: 'Ada Lovelace', line1: '12 Analytical Way' })
+    for (const viewer of [null, 'usr_stranger']) {
+      const seen = (await getOrder({ ORDERS: db }, 'NX-4K2P9', viewer))!.address
+      expect(seen.name).toBe('Ada')
+      expect([seen.line1, seen.line2, seen.postal, seen.phone]).toEqual(['', '', '', ''])
+      expect(seen.city).toBe(owner!.address.city)
+    }
   })
 })
 
