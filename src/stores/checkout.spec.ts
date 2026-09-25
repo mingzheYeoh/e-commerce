@@ -3,7 +3,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { useCheckoutStore } from './checkout'
 import { useCartStore } from './cart'
 import { products } from '@/data/products'
-import { saveOrder, fetchOrder, type RemoteOrder } from '@/lib/api'
+import { saveOrder, fetchOrder, type RemoteOrder, type SaveResult } from '@/lib/api'
 
 /**
  * The API is stubbed rather than reached. These tests are about what the store
@@ -11,7 +11,7 @@ import { saveOrder, fetchOrder, type RemoteOrder } from '@/lib/api'
  * that fails on a train.
  */
 vi.mock('@/lib/api', () => ({
-  saveOrder: vi.fn(async () => true),
+  saveOrder: vi.fn(async (): Promise<SaveResult> => ({ ok: true })),
   fetchOrder: vi.fn(async () => null),
 }))
 const mockSave = vi.mocked(saveOrder)
@@ -37,7 +37,7 @@ describe('checkout store', () => {
     setActivePinia(createPinia())
     localStorage.clear()
     mockSave.mockClear()
-    mockSave.mockResolvedValue(true)
+    mockSave.mockResolvedValue({ ok: true })
     mockFetch.mockReset()
     mockFetch.mockResolvedValue(null)
   })
@@ -161,7 +161,7 @@ describe('orders beyond this browser', () => {
     setActivePinia(createPinia())
     localStorage.clear()
     mockSave.mockClear()
-    mockSave.mockResolvedValue(true)
+    mockSave.mockResolvedValue({ ok: true })
     mockFetch.mockReset()
     mockFetch.mockResolvedValue(null)
   })
@@ -185,21 +185,111 @@ describe('orders beyond this browser', () => {
     expect(JSON.stringify(sent)).not.toMatch(/unitPrice|total|subtotal/i)
   })
 
-  it('completes the purchase even when the order cannot be stored', async () => {
-    // A database outage costs the shareable copy of an order. It must not cost
-    // the order, and it must not show the shopper an error for a card that was
-    // accepted.
-    mockSave.mockResolvedValue(false)
+  it('waits for the server before writing a receipt, and stays placing until it answers', async () => {
+    // The server takes the stock. A receipt written before it answers could
+    // promise goods it is about to refuse.
+    let answer!: (r: SaveResult) => void
+    mockSave.mockReturnValue(new Promise((resolve) => (answer = resolve)))
     const cart = useCartStore()
     const checkout = useCheckoutStore()
     cart.add(inStock())
     fill(checkout)
     checkout.card.number = '4242 4242 4242 4242'
 
+    const pending = checkout.place()
+    await vi.waitFor(() => expect(mockSave).toHaveBeenCalled())
+    expect(checkout.placing).toBe(true)
+    expect(cart.count).toBe(1)
+    expect(localStorage.getItem('nexus:orders')).toBeNull()
+    // A second press while the first is in flight places nothing.
+    expect(await checkout.place()).toEqual({ ok: false })
+    expect(mockSave).toHaveBeenCalledTimes(1)
+
+    answer({ ok: true })
+    const res = await pending
+    expect(res.ok).toBe(true)
+    expect(checkout.placing).toBe(false)
+    expect(cart.count).toBe(0)
+    expect(checkout.synced[(res as { id: string }).id]).toBe(true)
+  })
+
+  it('keeps the cart and stays on the checkout when an item sold out, in the server\'s words', async () => {
+    mockSave.mockResolvedValue({
+      ok: false,
+      reason: 'refused',
+      status: 409,
+      error: '"Flagship" is sold out. Remove it from your cart to continue.',
+      duplicate: false,
+    })
+    const cart = useCartStore()
+    const checkout = useCheckoutStore()
+    cart.add(inStock())
+    fill(checkout)
+    checkout.card.number = '4242 4242 4242 4242'
+    checkout.step = 3
+
+    const res = await checkout.place()
+    expect(res.ok).toBe(false)
+    expect(checkout.error).toBe('"Flagship" is sold out. Remove it from your cart to continue.')
+    expect(cart.count).toBe(1)
+    // Still on the payment step, card still filled in: nothing to start over.
+    expect(checkout.step).toBe(3)
+    expect(checkout.card.number).toBe('4242 4242 4242 4242')
+    expect(checkout.orders).toEqual([])
+    expect(checkout.placing).toBe(false)
+  })
+
+  it('keeps the cart when the server cannot be reached, and retries under the same order id', async () => {
+    // No answer is not a no: the order may have landed. A retry reuses the id,
+    // so if it did, the server's "already exists" confirms it rather than a
+    // second order being placed.
+    mockSave.mockResolvedValueOnce({ ok: false, reason: 'unreachable' })
+    const cart = useCartStore()
+    const checkout = useCheckoutStore()
+    cart.add(inStock())
+    fill(checkout)
+    checkout.card.number = '4242 4242 4242 4242'
+
+    expect((await checkout.place()).ok).toBe(false)
+    expect(checkout.error).toMatch(/could not confirm/)
+    expect(cart.count).toBe(1)
+
+    mockSave.mockResolvedValueOnce({ ok: false, reason: 'refused', status: 409, error: 'order already exists', duplicate: true })
     const res = await checkout.place()
     expect(res.ok).toBe(true)
-    expect(checkout.error).toBe('')
-    expect(cart.items).toHaveLength(0)
+    const [first, second] = mockSave.mock.calls.map((c) => c[0].id)
+    expect(second).toBe(first)
+    expect(cart.count).toBe(0)
+  })
+
+  it('does not take "already exists" as success for an id this checkout never sent before', async () => {
+    // A fresh id that collided with someone else's order is not this order.
+    mockSave.mockResolvedValueOnce({ ok: false, reason: 'refused', status: 409, error: 'order already exists', duplicate: true })
+    const cart = useCartStore()
+    const checkout = useCheckoutStore()
+    cart.add(inStock())
+    fill(checkout)
+    checkout.card.number = '4242 4242 4242 4242'
+
+    expect((await checkout.place()).ok).toBe(false)
+    expect(cart.count).toBe(1)
+    // And the next attempt draws a new id rather than repeating the taken one.
+    await checkout.place()
+    const [first, second] = mockSave.mock.calls.map((c) => c[0].id)
+    expect(second).not.toBe(first)
+  })
+
+  it('keeps the cart when the server fails, and says to try again', async () => {
+    mockSave.mockResolvedValue({ ok: false, reason: 'refused', status: 503, error: 'could not store order', duplicate: false })
+    const cart = useCartStore()
+    const checkout = useCheckoutStore()
+    cart.add(inStock())
+    fill(checkout)
+    checkout.card.number = '4242 4242 4242 4242'
+
+    expect((await checkout.place()).ok).toBe(false)
+    expect(checkout.error).toMatch(/try again/)
+    expect(cart.count).toBe(1)
   })
 
   it('reads an order this browser never placed', async () => {
