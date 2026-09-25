@@ -70,6 +70,8 @@ export interface Repository {
      * mints them from the storage keys it wrote.
      */
     setMedia(id: string, media: string, expected: string): Promise<ProductRow | null>
+    /** Every product with its stock and the units sold on it in the last 30 days. */
+    inventory(): Promise<InventoryRow[]>
   }
   /**
    * Orders that hold at least one line in scope, and only those lines. A
@@ -78,14 +80,18 @@ export interface Repository {
    */
   orders: {
     /**
-     * Newest first, at most ORDER_CAP + 1: one past the cap, so the caller can
-     * say the list was cut instead of silently showing a partial one.
+     * Newest first, at most `limit` (ORDER_CAP by default) + 1: one past, so
+     * the caller can tell there is another page, or say the list was cut.
      */
-    list(range: OrderRange): Promise<OrderSummary[]>
+    list(filter: OrderFilter): Promise<OrderSummary[]>
     get(id: string): Promise<OrderDetail | null>
   }
   stats: {
     overview(): Promise<Overview>
+    /** What needs doing now: parts to ship, live products running low or out. */
+    queue(): Promise<Queue>
+    /** Sales in a range and the one before it, by currency, day or week, category and product. */
+    sales(range: OrderRange): Promise<SalesReport>
   }
   /**
    * This merchant's own part of an order: pending → shipped → delivered, or
@@ -111,6 +117,10 @@ export interface Repository {
   finance: {
     /** Per merchant and currency. A merchant sees its own rows; the platform every merchant's. */
     balance(): Promise<Balance[]>
+    /** Sales, refunds and payouts dated in the range, each with the balance after it; see Ledger. */
+    ledger(range: OrderRange): Promise<Ledger>
+    /** Every payout, newest first. */
+    payouts(): Promise<(Payout & { created_at: string })[]>
   }
 }
 
@@ -163,6 +173,112 @@ export interface Amount {
 export interface OrderRange {
   from: string
   to: string
+}
+
+/** Every field narrows; none given is every paid order in scope. */
+export interface OrderFilter extends Partial<OrderRange> {
+  /** The in-scope part of the order is in this state (for the platform: any part). */
+  status?: FulfilmentStatus
+  /** Part of the order id, any case. */
+  q?: string
+  /** Keyset: only orders placed strictly before this one, in list order. */
+  before?: { at: string; id: string }
+  limit?: number
+}
+
+export interface InventoryRow {
+  id: string
+  merchant_id: string
+  sku: string
+  title: string
+  category: string
+  status: string
+  price_minor: number
+  currency: string
+  stock_count: number
+  /** Units on paid orders in the last 30 days (UTC), less refunded units. */
+  sold_30d: number
+}
+
+export interface Queue {
+  /** Parts of paid orders still pending. */
+  to_ship: number
+  /** Published, 1 to LOW_STOCK units left. */
+  low_stock: number
+  /** Published, none left. */
+  out_of_stock: number
+}
+
+/**
+ * One currency's sales in a period. Commission is the balance's rule applied
+ * to the period's net per merchant (see Balance): so the periods of a year can
+ * each drop a fraction of a minor unit that the all-time balance does not.
+ */
+export interface ReportTotals {
+  currency: string
+  gross: number
+  /** Refunded on these orders, whenever the refund was made. */
+  refunds: number
+  net: number
+  commission: number
+  /** Net less commission: what these sales add to the payable balance. */
+  earnings: number
+  /** Orders with a line in scope. On a platform read, one per merchant part. */
+  orders: number
+  /** Units sold, before refunds. */
+  units: number
+}
+
+export interface SalesReport {
+  from: string
+  to: string
+  /** The same number of days, ending the day before `from`. */
+  previous: OrderRange & { totals: ReportTotals[] }
+  totals: ReportTotals[]
+  /** Past 92 days a series of days would be too thin to read, so it goes by week. */
+  bucket: 'day' | 'week'
+  /** Only buckets with sales; `start` is the bucket's first day, counted from `from`. */
+  series: { start: string; currency: string; net: number; gross: number }[]
+  categories: { category: string; currency: string; net: number; units: number }[]
+  /** Every product sold in the range, best net first within each currency. */
+  products: { product_id: string; title: string; currency: string; gross: number; net: number; units: number }[]
+}
+
+/**
+ * Money in and out in date order, per merchant and currency.
+ *
+ * Sales are dated by the order, refunds and payouts by when they were made.
+ * `commission` on an entry is what the entry moved the running commission by,
+ * where running commission is Balance's floor taken on the net to date — so
+ * the entries' commissions add up to the balance's, and the last entry's
+ * `balance` is the balance's `available`.
+ */
+export interface Ledger {
+  /** The merchant's rate; null on a platform read, which spans merchants. */
+  commission_bps: number | null
+  /** Per merchant and currency with any activity up to the end of the range. */
+  summary: {
+    merchant_id: string
+    currency: string
+    opening: number
+    sales: number
+    refunds: number
+    commission: number
+    payouts: number
+    closing: number
+  }[]
+  entries: {
+    merchant_id: string
+    currency: string
+    at: string
+    kind: 'sale' | 'refund' | 'payout'
+    /** The order id, or the payout's reference. */
+    ref: string
+    /** Signed: a sale adds, a refund or payout takes away. */
+    amount: number
+    commission: number
+    balance: number
+  }[]
 }
 
 export interface OrderSummary {
@@ -387,12 +503,14 @@ const tenant = (scope: Scope, column = 'merchant_id') =>
  * Anonymous `?` rather than the numbered `?1` used elsewhere in this worker.
  * The tenant clause is present or absent, and numbering that shifts with it is
  * exactly where an off-by-one silently drops the predicate.
+ *
+ * A clause carries as many values as it has `?`, in order: most have one.
  */
-function where(parts: (readonly [string, unknown] | null)[]): { sql: string; args: unknown[] } {
-  const live = parts.filter((p): p is readonly [string, unknown] => p !== null)
+function where(parts: (readonly [string, ...unknown[]] | null)[]): { sql: string; args: unknown[] } {
+  const live = parts.filter((p): p is readonly [string, ...unknown[]] => p !== null)
   return {
     sql: live.length ? ` WHERE ${live.map(([clause]) => clause).join(' AND ')}` : '',
-    args: live.map(([, value]) => value),
+    args: live.flatMap(([, ...values]) => values),
   }
 }
 
@@ -407,10 +525,15 @@ function assertIntegerMinor(value: number, field: string): void {
 const READS = new Set([
   'products.list',
   'products.get',
+  'products.inventory',
   'orders.list',
   'orders.get',
   'stats.overview',
+  'stats.queue',
+  'stats.sales',
   'finance.balance',
+  'finance.ledger',
+  'finance.payouts',
 ])
 
 /**
@@ -612,13 +735,19 @@ const GROSS = 'l.qty * l.unit_price_cents'
 const NET = `(${GROSS} - ${REFUNDED_MINOR})`
 
 /**
+ * The platform's cut of a net amount, at a merchant's rate: the one place the
+ * rule is written, so the balance, the ledger and the reports cannot disagree
+ * about it. SQLite integer division of non-negative integers is the floor.
+ */
+const COMMISSION = (net: string, bps = 'm.commission_bps') => `(((${net}) * ${bps}) / 10000)`
+
+/**
  * Every in-scope merchant's balance per currency, as one SELECT; see Balance
  * for the arithmetic. Shared by finance.balance and payouts.create, so the
  * figure a payout is checked against is the figure the page shows.
  *
- * Commission is SQLite integer division of non-negative integers, which is the
- * floor. Refunds and payouts take their currency the way lines do: refunds
- * from the product row, payouts as recorded (they were checked against it).
+ * Refunds and payouts take their currency the way lines do: refunds from the
+ * product row, payouts as recorded (they were checked against it).
  */
 function balances(scope: Scope): { sql: string; args: unknown[] } {
   const sold = where([PAID, tenant(scope, 'l.merchant_id')])
@@ -627,7 +756,7 @@ function balances(scope: Scope): { sql: string; args: unknown[] } {
   return {
     sql: `SELECT g.merchant_id, g.currency, m.commission_bps, g.minor AS gross,
                  COALESCE(rf.minor, 0) AS refunds,
-                 ((g.minor - COALESCE(rf.minor, 0)) * m.commission_bps) / 10000 AS commission,
+                 ${COMMISSION('g.minor - COALESCE(rf.minor, 0)')} AS commission,
                  COALESCE(po.minor, 0) AS payouts
             FROM (SELECT l.merchant_id, ${CURRENCY} AS currency, SUM(${GROSS}) AS minor
                     ${SALES}${sold.sql}
@@ -643,6 +772,58 @@ function balances(scope: Scope): { sql: string; args: unknown[] } {
     args: [...sold.args, ...back.args, ...paid.args],
   }
 }
+
+/**
+ * Every in-scope line of a paid order placed in [from, to], with what the
+ * reports read off it, as a subquery. Refunds are the line's, whenever made:
+ * the same "net by the day the order was placed" the overview reports.
+ */
+function soldLines(scope: Scope, from: string, to: string): { sql: string; args: unknown[] } {
+  const w = where([
+    PAID,
+    ['o.created_at >= ?', from],
+    ["o.created_at < date(?, '+1 day')", to],
+    tenant(scope, 'l.merchant_id'),
+  ])
+  return {
+    sql: `SELECT l.merchant_id, o.id AS order_id, substr(o.created_at, 1, 10) AS day, ${CURRENCY} AS currency,
+                 l.product_id, COALESCE(p.title, l.title) AS title, COALESCE(p.category, 'unknown') AS category,
+                 l.qty AS units, ${GROSS} AS gross, ${REFUNDED_MINOR} AS refunds
+            ${SALES}${w.sql}`,
+    args: w.args,
+  }
+}
+
+/**
+ * The ledger's events, as a subquery: one sale per order and currency (the
+ * in-scope lines' gross), every refund, every payout. Amounts are signed the
+ * way they move the balance. `rank` orders a sale before a refund before a
+ * payout within the same second, and `id` breaks what ties remain, so the
+ * running figures come out the same on every read.
+ */
+function ledgerEvents(scope: Scope): { sql: string; args: unknown[] } {
+  const sold = where([PAID, tenant(scope, 'l.merchant_id')])
+  const back = where([tenant(scope, 'r.merchant_id')])
+  const paid = where([tenant(scope)])
+  return {
+    sql: `SELECT l.merchant_id, ${CURRENCY} AS currency, o.created_at AS at, 1 AS rank, 'sale' AS kind,
+                 o.id AS id, o.id AS ref, SUM(${GROSS}) AS amount
+            ${SALES}${sold.sql}
+           GROUP BY l.merchant_id, o.id, ${CURRENCY}
+          UNION ALL
+          SELECT r.merchant_id, ${CURRENCY}, r.created_at, 2, 'refund', r.id, r.order_id, -r.amount_minor
+            FROM refunds r LEFT JOIN products p ON p.id = r.product_id${back.sql}
+          UNION ALL
+          SELECT merchant_id, currency, created_at, 3, 'payout', id, reference, -amount_minor
+            FROM payouts${paid.sql}`,
+    args: [...sold.args, ...back.args, ...paid.args],
+  }
+}
+
+/** Calendar arithmetic on `YYYY-MM-DD`, in UTC. */
+const DAY_MS = 86_400_000
+const dayNumber = (day: string) => Date.parse(`${day}T00:00:00Z`) / DAY_MS
+const dayOf = (n: number) => new Date(n * DAY_MS).toISOString().slice(0, 10)
 
 /**
  * The refund cap, as the last statement of any batch that inserts a refund.
@@ -1040,26 +1221,55 @@ function build(env: TenancyEnv, scope: Scope): Repository {
           .run()
         return meta.changes === 1 ? get(productId) : null
       },
+
+      async inventory() {
+        // Sold is net of refunded units: a cancelled part refunds every unit,
+        // so it reads as the zero demand it was.
+        const sold = where([PAID, ['o.created_at >= ?', utcDay(29)], tenant(scope, 'l.merchant_id')])
+        const own = where([tenant(scope, 'p.merchant_id')])
+        const { results } = await env.ORDERS.prepare(
+          `SELECT p.id, p.merchant_id, p.sku, p.title, p.category, p.status, p.price_minor, p.currency, p.stock_count,
+                  COALESCE(s.units, 0) AS sold_30d
+             FROM products p
+             LEFT JOIN (SELECT l.product_id, SUM(l.qty - ${REFUNDED_QTY}) AS units
+                          FROM order_lines l JOIN orders o ON o.id = l.order_id${sold.sql}
+                         GROUP BY l.product_id) s ON s.product_id = p.id${own.sql}
+            ORDER BY p.created_at DESC, p.id`,
+        )
+          .bind(...sold.args, ...own.args)
+          .all<InventoryRow>()
+        return results ?? []
+      },
     },
 
     orders: {
-      async list(range: OrderRange) {
+      async list(filter: OrderFilter) {
         // The tenant clause is on the LINE, so an order shared with another
         // merchant appears here, but summed over this merchant's lines only.
+        const parts = tenant(scope, 'f.merchant_id')
+        const partClause = parts ? ` AND ${parts[0]}` : ''
+        const partArgs = parts ? [parts[1]] : []
         const picked = where([
           PAID,
-          ['o.created_at >= ?', range.from],
-          ["o.created_at < date(?, '+1 day')", range.to],
+          filter.from ? ['o.created_at >= ?', filter.from] : null,
+          filter.to ? ["o.created_at < date(?, '+1 day')", filter.to] : null,
+          // LIKE is ASCII case-insensitive; the pattern's own % and _ are escaped.
+          filter.q ? ["o.id LIKE ? ESCAPE '\\'", `%${filter.q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`] : null,
+          filter.status
+            ? [
+                `EXISTS (SELECT 1 FROM order_fulfilments f WHERE f.order_id = o.id AND f.status = ?${partClause})`,
+                filter.status,
+                ...partArgs,
+              ]
+            : null,
+          // Keyset on the list's own order, so a page never repeats or skips
+          // an order however many arrive while someone reads.
+          filter.before ? ['(o.created_at, o.id) < (?, ?)', filter.before.at, filter.before.id] : null,
           tenant(scope, 'l.merchant_id'),
         ])
         const mine = where([tenant(scope, 'l.merchant_id')])
-        // The fulfilment of the in-scope parts, in a subquery of its own, so
-        // its tenant clause (when there is one) binds between the two above.
-        const parts = tenant(scope, 'f.merchant_id')
-        // The cap counts ORDERS, in the CTE. A LIMIT on the grouped rows below
+        // The limit counts ORDERS, in the CTE. A LIMIT on the grouped rows below
         // would count an order once per currency, and cut an order in half.
-        // ponytail: capped, not paged — the date range is the pager. Real
-        // paging when a seller routinely has more than ORDER_CAP in a range.
         const { results } = await env.ORDERS.prepare(
           `WITH picked AS (
              SELECT o.id FROM orders o JOIN order_lines l ON l.order_id = o.id${picked.sql}
@@ -1072,7 +1282,7 @@ function build(env: TenancyEnv, scope: Scope): Repository {
                   json_group_array(DISTINCT l.merchant_id) AS merchant_ids,
                   (SELECT json_group_array(status) FROM (
                      SELECT f.status FROM order_fulfilments f
-                      WHERE f.order_id = o.id${parts ? ` AND ${parts[0]}` : ''}
+                      WHERE f.order_id = o.id${partClause}
                       ORDER BY f.merchant_id)) AS fulfilment
              FROM picked
              JOIN orders o ON o.id = picked.id
@@ -1081,7 +1291,7 @@ function build(env: TenancyEnv, scope: Scope): Repository {
             GROUP BY o.id, ${CURRENCY}
             ORDER BY o.created_at DESC, o.id DESC, ${CURRENCY}`,
         )
-          .bind(...picked.args, ORDER_CAP + 1, ...(parts ? [parts[1]] : []), ...mine.args)
+          .bind(...picked.args, (filter.limit ?? ORDER_CAP) + 1, ...partArgs, ...mine.args)
           .all<
             Omit<OrderSummary, 'totals' | 'merchant_ids' | 'fulfilment'> &
               Amount & { merchant_ids: string; fulfilment: string }
@@ -1297,6 +1507,84 @@ function build(env: TenancyEnv, scope: Scope): Repository {
           .all<Omit<Balance, 'available'>>()
         return (results ?? []).map((r) => ({ ...r, available: r.gross - r.refunds - r.commission - r.payouts }))
       },
+
+      async ledger(range: OrderRange) {
+        const events = ledgerEvents(scope)
+        const end = dayOf(dayNumber(range.to) + 1)
+        /*
+         * Running figures over the whole history, then cut to the range: an
+         * entry's balance depends on everything before it. `net` is sales less
+         * refunds to date, `paid` payouts to date; commission to date is
+         * COMMISSION(net), the balance's own rule, so each entry's commission
+         * is how far it moved that figure.
+         *
+         * ponytail: every read runs the window over the merchant's whole
+         * history. A monthly snapshot of the running figures when that history
+         * reaches the hundreds of thousands of events.
+         */
+        const running = `
+          SELECT e.*, SUM(CASE WHEN e.kind = 'payout' THEN 0 ELSE e.amount END) OVER w AS net,
+                 SUM(CASE WHEN e.kind = 'payout' THEN -e.amount ELSE 0 END) OVER w AS paid,
+                 ${COMMISSION("SUM(CASE WHEN e.kind = 'payout' THEN 0 ELSE e.amount END) OVER w")} AS charged
+            FROM (${events.sql}) e JOIN merchants m ON m.id = e.merchant_id
+          WINDOW w AS (PARTITION BY e.merchant_id, e.currency ORDER BY e.at, e.rank, e.id)`
+        const [entries, summary, rate] = await Promise.all([
+          env.ORDERS.prepare(
+            `SELECT merchant_id, currency, at, kind, ref, amount, commission, balance FROM (
+               SELECT merchant_id, currency, at, rank, id, kind, ref, amount,
+                      charged - LAG(charged, 1, 0) OVER (PARTITION BY merchant_id, currency ORDER BY at, rank, id) AS commission,
+                      net - charged - paid AS balance
+                 FROM (${running}))
+              WHERE at >= ? AND at < ?
+              ORDER BY at, rank, id, currency`,
+          )
+            .bind(...events.args, range.from, end)
+            .all<Ledger['entries'][number]>(),
+          // Opening and closing from the balance's formula over the events
+          // before each bound; the period's commission is the difference.
+          env.ORDERS.prepare(
+            `SELECT merchant_id, currency,
+                    net_before - ${COMMISSION('net_before', 'bps')} - paid_before AS opening,
+                    sales, refunds, ${COMMISSION('net_through', 'bps')} - ${COMMISSION('net_before', 'bps')} AS commission,
+                    payouts, net_through - ${COMMISSION('net_through', 'bps')} - paid_through AS closing
+               FROM (SELECT e.merchant_id, e.currency, m.commission_bps AS bps,
+                            SUM(CASE WHEN e.at < ? AND e.kind <> 'payout' THEN e.amount ELSE 0 END) AS net_before,
+                            SUM(CASE WHEN e.at < ? AND e.kind = 'payout' THEN -e.amount ELSE 0 END) AS paid_before,
+                            SUM(CASE WHEN e.at >= ? AND e.kind = 'sale' THEN e.amount ELSE 0 END) AS sales,
+                            SUM(CASE WHEN e.at >= ? AND e.kind = 'refund' THEN -e.amount ELSE 0 END) AS refunds,
+                            SUM(CASE WHEN e.at >= ? AND e.kind = 'payout' THEN -e.amount ELSE 0 END) AS payouts,
+                            SUM(CASE WHEN e.kind <> 'payout' THEN e.amount ELSE 0 END) AS net_through,
+                            SUM(CASE WHEN e.kind = 'payout' THEN -e.amount ELSE 0 END) AS paid_through
+                       FROM (${events.sql}) e JOIN merchants m ON m.id = e.merchant_id
+                      WHERE e.at < ?
+                      GROUP BY e.merchant_id, e.currency)
+              ORDER BY merchant_id, currency`,
+          )
+            .bind(range.from, range.from, range.from, range.from, range.from, ...events.args, end)
+            .all<Ledger['summary'][number]>(),
+          scope.kind === 'merchant'
+            ? env.ORDERS.prepare(`SELECT commission_bps FROM merchants WHERE id = ?`)
+                .bind(scope.merchantId)
+                .first<{ commission_bps: number }>()
+            : null,
+        ])
+        return {
+          commission_bps: rate?.commission_bps ?? null,
+          summary: summary.results ?? [],
+          entries: entries.results ?? [],
+        }
+      },
+
+      async payouts() {
+        const w = where([tenant(scope)])
+        const { results } = await env.ORDERS.prepare(
+          `SELECT id, merchant_id, currency, amount_minor, reference, created_by, created_at
+             FROM payouts${w.sql} ORDER BY created_at DESC, rowid DESC`,
+        )
+          .bind(...w.args)
+          .all<Payout & { created_at: string }>()
+        return results ?? []
+      },
     },
 
     stats: {
@@ -1394,6 +1682,97 @@ function build(env: TenancyEnv, scope: Scope): Repository {
           top: top.results ?? [],
           lowStock: lowStock.results ?? [],
           products,
+        }
+      },
+
+      async queue() {
+        // Three counts, one statement. The first is a seek on
+        // order_fulfilments_merchant_idx (merchant_id, status).
+        const parts = where([['f.status = ?', 'pending'], PAID, tenant(scope, 'f.merchant_id')])
+        const low = where([['status = ?', 'published'], ['stock_count BETWEEN 1 AND ?', LOW_STOCK], tenant(scope)])
+        const out = where([['status = ?', 'published'], ['stock_count = ?', 0], tenant(scope)])
+        const row = await env.ORDERS.prepare(
+          `SELECT (SELECT COUNT(*) FROM order_fulfilments f JOIN orders o ON o.id = f.order_id${parts.sql}) AS to_ship,
+                  (SELECT COUNT(*) FROM products${low.sql}) AS low_stock,
+                  (SELECT COUNT(*) FROM products${out.sql}) AS out_of_stock`,
+        )
+          .bind(...parts.args, ...low.args, ...out.args)
+          .first<Queue>()
+        return row ?? { to_ship: 0, low_stock: 0, out_of_stock: 0 }
+      },
+
+      async sales(range: OrderRange) {
+        const [from, to] = [dayNumber(range.from), dayNumber(range.to)]
+        const days = to - from + 1
+        const previous = { from: dayOf(from - days), to: dayOf(from - 1) }
+        const size = days > 92 ? 7 : 1
+        const both = soldLines(scope, previous.from, range.to)
+        const now = soldLines(scope, range.from, range.to)
+
+        const [totals, series, categories, products] = await Promise.all([
+          // Both periods in one pass. Commission per merchant first, on that
+          // merchant's net, then summed: the balance's rule, merchant by merchant.
+          env.ORDERS.prepare(
+            `SELECT period, currency, SUM(gross) AS gross, SUM(refunds) AS refunds, SUM(commission) AS commission,
+                    SUM(orders) AS orders, SUM(units) AS units
+               FROM (SELECT CASE WHEN s.day >= ? THEN 'now' ELSE 'before' END AS period, s.merchant_id, s.currency,
+                            SUM(s.gross) AS gross, SUM(s.refunds) AS refunds,
+                            ${COMMISSION('SUM(s.gross) - SUM(s.refunds)')} AS commission,
+                            COUNT(DISTINCT s.order_id) AS orders, SUM(s.units) AS units
+                       FROM (${both.sql}) s JOIN merchants m ON m.id = s.merchant_id
+                      GROUP BY period, s.merchant_id, s.currency)
+              GROUP BY period, currency ORDER BY currency`,
+          )
+            .bind(range.from, ...both.args)
+            .all<Omit<ReportTotals, 'net' | 'earnings'> & { period: 'now' | 'before' }>(),
+          // The size is cast because a bound number can arrive as a REAL, and
+          // integer division by 7.0 is not integer division.
+          env.ORDERS.prepare(
+            `SELECT date(?, printf('+%d days', (CAST(julianday(day) - julianday(?) AS INTEGER) / CAST(? AS INTEGER)) * ?)) AS start,
+                    currency, SUM(gross - refunds) AS net, SUM(gross) AS gross
+               FROM (${now.sql})
+              GROUP BY start, currency ORDER BY start, currency`,
+          )
+            .bind(range.from, range.from, size, size, ...now.args)
+            .all<SalesReport['series'][number]>(),
+          env.ORDERS.prepare(
+            `SELECT category, currency, SUM(gross - refunds) AS net, SUM(units) AS units
+               FROM (${now.sql})
+              GROUP BY currency, category ORDER BY currency, net DESC, category`,
+          )
+            .bind(...now.args)
+            .all<SalesReport['categories'][number]>(),
+          env.ORDERS.prepare(
+            `SELECT product_id, MAX(title) AS title, currency, SUM(gross) AS gross, SUM(gross - refunds) AS net,
+                    SUM(units) AS units
+               FROM (${now.sql})
+              GROUP BY currency, product_id ORDER BY currency, net DESC, product_id`,
+          )
+            .bind(...now.args)
+            .all<SalesReport['products'][number]>(),
+        ])
+
+        const period = (p: 'now' | 'before'): ReportTotals[] =>
+          (totals.results ?? [])
+            .filter((r) => r.period === p)
+            .map(({ currency, gross, refunds, commission, orders, units }) => ({
+              currency,
+              gross,
+              refunds,
+              net: gross - refunds,
+              commission,
+              earnings: gross - refunds - commission,
+              orders,
+              units,
+            }))
+        return {
+          ...range,
+          previous: { ...previous, totals: period('before') },
+          totals: period('now'),
+          bucket: size === 7 ? ('week' as const) : ('day' as const),
+          series: series.results ?? [],
+          categories: categories.results ?? [],
+          products: products.results ?? [],
         }
       },
     },

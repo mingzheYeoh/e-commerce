@@ -541,9 +541,14 @@ const CASES: Record<string, unknown[]> = {
   ],
   'products.update': ['LEAK_p_b', { title: 'Sweep' }],
   'products.setMedia': ['LEAK_p_b', '{"gallery":[]}', '{}'],
+  'products.inventory': [],
   'orders.list': [{ from: '2000-01-01', to: '2999-12-31' }],
   'orders.get': ['LEAK_o_b'],
   'stats.overview': [],
+  'stats.queue': [],
+  'stats.sales': [{ from: '2000-01-01', to: '2100-12-31' }],
+  'finance.ledger': [{ from: '2000-01-01', to: '2100-12-31' }],
+  'finance.payouts': [],
   // B's order and B's line: a merchant repository must find neither. The
   // shared order is the sharper case for refunds — A has a line in it, just
   // not this one.
@@ -1599,5 +1604,313 @@ describe('revenue after refunds', () => {
 
     const list = await (await platformWide(t.env, 'stf_p')).merchants.list()
     expect(list.find((m) => m.merchant_id === 'mch_a')!.revenue).toEqual([{ currency: 'USD', minor: 9500 }])
+  })
+})
+
+/* ------------------------------------------------------- merchant back office */
+
+/**
+ * sales() with its parts open, a second category and a second currency for A,
+ * and A's rate at 333 bps so every floor below is visible:
+ *
+ *   pa2 is 'audio' (pa1 stays 'phones'). pa_sgd: A's, SGD, 'computing', stock 0.
+ *   o7 today   pa_sgd x1 = 1000 SGD, part pending
+ *   A ships o1, cancels o2 (pa2 x1 refunded 2500, restocked), refunds one pa2
+ *   unit on o3 (2500). B refunds 100 on o6, money only.
+ */
+async function backOffice() {
+  const t = lifecycle()
+  t.raw.prepare(`UPDATE products SET category = 'audio' WHERE id = 'pa2'`).run()
+  t.raw
+    .prepare(
+      `INSERT INTO products (id, merchant_id, sku, title, brand, category, price_minor, currency, status, stock_count)
+       VALUES ('pa_sgd','mch_a','AS','Alpha SGD','B','computing',1000,'SGD','published',0)`,
+    )
+    .run()
+  placeOrderRow(t.raw, 'o7')
+  addLine(t.raw, 'o7', 'pa_sgd', 'mch_a', 'Alpha SGD', 1, 1000)
+  t.raw.prepare(`INSERT INTO order_fulfilments (order_id, merchant_id) VALUES ('o7', 'mch_a')`).run()
+  const platform = await platformWide(t.env, 'stf_p')
+  await platform.merchants.setCommission('mch_a', 333)
+  const a = await scopedTo(t.env, 'mch_a', 'stf_a')
+  const b = await scopedTo(t.env, 'mch_b', 'stf_b')
+  await a.fulfilment.ship('o1', { carrier: 'UPS', tracking: '1Z' })
+  await a.fulfilment.cancel('o2')
+  await a.refunds.create('o3', refund('pa2', 1))
+  await b.refunds.create('o6', refund('pb1', 0, 100))
+  return { ...t, a, b, platform }
+}
+
+const LAST_30 = () => ({ from: utcDay(29), to: utcDay(0) })
+
+describe('the order history', () => {
+  it('filters by the merchant part status, by order id, and pages on (placed, id) without repeats', async () => {
+    const { a, platform } = await backOffice()
+    const ids = async (f: Parameters<Repository['orders']['list']>[0], repo: Repository = a) =>
+      (await repo.orders.list(f)).map((o) => o.id)
+
+    expect(await ids({})).toEqual(['o7', 'o1', 'o2', 'o3', 'o4'])
+    expect(await ids({ status: 'pending' })).toEqual(['o7', 'o3', 'o4'])
+    expect(await ids({ status: 'shipped' })).toEqual(['o1'])
+    expect(await ids({ status: 'cancelled' })).toEqual(['o2'])
+    expect(await ids({ status: 'delivered' })).toEqual([])
+    // The platform's "pending" is any part pending: B has not shipped its half of o1.
+    expect(await ids({ status: 'pending' }, platform)).toEqual(['o7', 'o6', 'o1', 'o3', 'o4'])
+
+    expect(await ids({ q: 'O3' }), 'any case').toEqual(['o3'])
+    expect(await ids({ q: 'o6' }), "B's order is not found by id either").toEqual([])
+    expect(await ids({ q: '%' }), 'a LIKE wildcard is a literal').toEqual([])
+    expect(await ids({ from: utcDay(5), to: utcDay(1) })).toEqual(['o2'])
+
+    // limit + 1, so the caller can tell a next page exists.
+    const first = await a.orders.list({ limit: 2 })
+    expect(first.map((o) => o.id)).toEqual(['o7', 'o1', 'o2'])
+    const cut = first[1]
+    expect(await ids({ limit: 2, before: { at: cut.created_at, id: cut.id } })).toEqual(['o2', 'o3', 'o4'])
+  })
+})
+
+describe('the sales report', () => {
+  it("adds up a merchant's range and the one before it by hand-checked figures, per currency", async () => {
+    const { a } = await backOffice()
+    const r = await a.stats.sales(LAST_30())
+    /*
+     * USD, last 30 days: o1 pa1 2000, o2 pa2 2500 (all refunded), o3 pa1 1000 +
+     * pa2 5000 (2500 refunded). Gross 10500, refunds 5000, net 5500,
+     * 5500 × 333 / 10000 = 183.15 → 183. Orders o1 o2 o3; units 2+1+1+2.
+     * SGD: o7 1000, 1000 × 333 / 10000 = 33.3 → 33.
+     */
+    expect(r.totals).toEqual([
+      { currency: 'SGD', gross: 1000, refunds: 0, net: 1000, commission: 33, earnings: 967, orders: 1, units: 1 },
+      { currency: 'USD', gross: 10500, refunds: 5000, net: 5500, commission: 183, earnings: 5317, orders: 3, units: 6 },
+    ])
+    // The 30 days before: o4 alone, 5000; 5000 × 333 / 10000 = 166.5 → 166.
+    expect(r.previous).toEqual({
+      from: utcDay(59),
+      to: utcDay(30),
+      totals: [{ currency: 'USD', gross: 5000, refunds: 0, net: 5000, commission: 166, earnings: 4834, orders: 1, units: 5 }],
+    })
+    expect(r.bucket).toBe('day')
+    expect(r.series).toEqual([
+      { start: utcDay(10), currency: 'USD', net: 3500, gross: 6000 },
+      { start: utcDay(3), currency: 'USD', net: 0, gross: 2500 },
+      { start: utcDay(0), currency: 'SGD', net: 1000, gross: 1000 },
+      { start: utcDay(0), currency: 'USD', net: 2000, gross: 2000 },
+    ])
+    expect(r.categories).toEqual([
+      { category: 'computing', currency: 'SGD', net: 1000, units: 1 },
+      { category: 'phones', currency: 'USD', net: 3000, units: 3 },
+      { category: 'audio', currency: 'USD', net: 2500, units: 3 },
+    ])
+    expect(r.products).toEqual([
+      { product_id: 'pa_sgd', title: 'Alpha SGD', currency: 'SGD', gross: 1000, net: 1000, units: 1 },
+      { product_id: 'pa1', title: 'Alpha One', currency: 'USD', gross: 3000, net: 3000, units: 3 },
+      { product_id: 'pa2', title: 'Alpha Two', currency: 'USD', gross: 7500, net: 2500, units: 3 },
+    ])
+  })
+
+  it('goes by week past 92 days, each bucket counted from the first day of the range', async () => {
+    const { a } = await backOffice()
+    const r = await a.stats.sales({ from: utcDay(119), to: utcDay(0) })
+    expect(r.bucket).toBe('week')
+    // Offsets from the start: o4 79 → week 11 (day 77), o3 109 → 15 (105), o2 116 → 16 (112), o1 and o7 119 → 17 (119).
+    expect(r.series.map((s) => [s.start, s.currency, s.gross])).toEqual([
+      [utcDay(42), 'USD', 5000],
+      [utcDay(14), 'USD', 6000],
+      [utcDay(7), 'USD', 2500],
+      [utcDay(0), 'SGD', 1000],
+      [utcDay(0), 'USD', 2000],
+    ])
+  })
+
+  it("keeps each merchant to its own lines, and floors the platform's commission merchant by merchant", async () => {
+    const { b, platform } = await backOffice()
+    // B: o1 700 + o6 2100, 100 refunded. 2700 × 800 / 10000 = 216.
+    expect((await b.stats.sales(LAST_30())).totals).toEqual([
+      { currency: 'SGD', gross: 2800, refunds: 100, net: 2700, commission: 216, earnings: 2484, orders: 2, units: 4 },
+    ])
+    const all = await platform.stats.sales(LAST_30())
+    // SGD across both: A's 33 + B's 216, each on its own net at its own rate.
+    expect(all.totals.find((t) => t.currency === 'SGD')).toEqual({
+      currency: 'SGD',
+      gross: 3800,
+      refunds: 100,
+      net: 3700,
+      commission: 249,
+      earnings: 3451,
+      orders: 3,
+      units: 5,
+    })
+  })
+})
+
+describe('the inventory and the queue', () => {
+  it('reports stock with units sold in 30 days net of refunded units', async () => {
+    const { a } = await backOffice()
+    const rows = Object.fromEntries((await a.products.inventory()).map((p) => [p.id, [p.stock_count, p.sold_30d, p.status]]))
+    // pa1: o1 2 + o3 1 (o4 is 40 days back). pa2: o2's unit was refunded by the
+    // cancel, which also put it back on the shelf; one of o3's two was refunded.
+    expect(rows).toEqual({
+      pa1: [3, 3, 'published'],
+      pa2: [11, 1, 'published'],
+      pa3: [0, 0, 'draft'],
+      pa_sgd: [0, 1, 'published'],
+    })
+  })
+
+  it('counts parts to ship and live products running low or out, for each merchant alone', async () => {
+    const { a, b } = await backOffice()
+    // A: o3, o4, o7 pending (o1 shipped, o2 cancelled). pa1 at 3 is low; pa_sgd
+    // at 0 is out; the draft at 0 is not on sale.
+    expect(await a.stats.queue()).toEqual({ to_ship: 3, low_stock: 1, out_of_stock: 1 })
+    expect(await b.stats.queue()).toEqual({ to_ship: 2, low_stock: 0, out_of_stock: 0 })
+  })
+})
+
+describe('the ledger', () => {
+  /*
+   * sales() with events at distinct times, so the running figures have one
+   * order. A at 333 bps, USD:
+   *
+   *   o4   -40d  sale    +5000  net  5000  floor(166.5)  166  +166  balance  4834
+   *   o3   -10d  sale    +6000  net 11000  floor(366.3)  366  +200  balance 10634
+   *   rfd   -9d  refund  -2500  net  8500  floor(283.05) 283   -83  balance  8217
+   *   pay   -5d  payout  -5000                            283     0  balance  3217
+   *   o2    -3d  sale    +2500  net 11000                 366   +83  balance  5634
+   *   o1   now   sale    +2000  net 13000  floor(432.9)   432   +66  balance  7568
+   *
+   * 7568 is the available balance the balance test works out another way.
+   * SGD: o7 now, +1000, floor(33.3) 33, balance 967.
+   */
+  async function ledgered() {
+    const s = sales()
+    s.raw.prepare(`UPDATE merchants SET commission_bps = 333 WHERE id = 'mch_a'`).run()
+    s.raw
+      .prepare(
+        `INSERT INTO products (id, merchant_id, sku, title, brand, category, price_minor, currency, status, stock_count)
+         VALUES ('pa_sgd','mch_a','AS','Alpha SGD','B','computing',1000,'SGD','published',0)`,
+      )
+      .run()
+    placeOrderRow(s.raw, 'o7')
+    addLine(s.raw, 'o7', 'pa_sgd', 'mch_a', 'Alpha SGD', 1, 1000)
+    s.raw
+      .prepare(
+        `INSERT INTO refunds (id, order_id, merchant_id, product_id, qty, amount_minor, reason, actor_id, actor_scope, created_at)
+         VALUES ('rfd_a', 'o3', 'mch_a', 'pa2', 1, 2500, 'r', 'stf_a', 'merchant', datetime('now', '-9 days')),
+                ('rfd_b', 'o6', 'mch_b', 'pb1', 0, 100, 'r', 'stf_b', 'merchant', datetime('now', '-1 days'))`,
+      )
+      .run()
+    s.raw
+      .prepare(
+        `INSERT INTO payouts (id, merchant_id, currency, amount_minor, reference, created_by, created_at)
+         VALUES ('pay_a', 'mch_a', 'USD', 5000, 'September', 'stf_p', datetime('now', '-5 days')),
+                ('pay_b', 'mch_b', 'SGD', 100, 'B only', 'stf_p', datetime('now', '-2 days'))`,
+      )
+      .run()
+    return { ...s, a: await scopedTo(s.env, 'mch_a', 'stf_a') }
+  }
+
+  it('runs the balance forward entry by entry, commission floored on the net to date', async () => {
+    const { a } = await ledgered()
+    const l = await a.finance.ledger({ from: utcDay(6), to: utcDay(0) })
+    expect(l.commission_bps).toBe(333)
+    expect(
+      l.entries.map(({ currency, kind, ref, amount, commission, balance }) => [currency, kind, ref, amount, commission, balance]),
+    ).toEqual([
+      ['USD', 'payout', 'September', -5000, 0, 3217],
+      ['USD', 'sale', 'o2', 2500, 83, 5634],
+      ['USD', 'sale', 'o1', 2000, 66, 7568],
+      ['SGD', 'sale', 'o7', 1000, 33, 967],
+    ])
+    // Opening is the balance after the -9d refund; the period's commission is 83 + 66.
+    expect(l.summary).toEqual([
+      { merchant_id: 'mch_a', currency: 'SGD', opening: 0, sales: 1000, refunds: 0, commission: 33, payouts: 0, closing: 967 },
+      { merchant_id: 'mch_a', currency: 'USD', opening: 8217, sales: 4500, refunds: 0, commission: 149, payouts: 5000, closing: 7568 },
+    ])
+    // Closing today is the balance, by its own formula.
+    expect((await a.finance.balance()).map((b) => [b.currency, b.available])).toEqual([
+      ['SGD', 967],
+      ['USD', 7568],
+    ])
+  })
+
+  it('states a past range from what had happened by its end, and nothing after', async () => {
+    const { a } = await ledgered()
+    const l = await a.finance.ledger({ from: utcDay(45), to: utcDay(35) })
+    expect(l.entries.map((e) => [e.ref, e.amount, e.commission, e.balance])).toEqual([['o4', 5000, 166, 4834]])
+    // No SGD row: its first sale is after the end of the range.
+    expect(l.summary).toEqual([
+      { merchant_id: 'mch_a', currency: 'USD', opening: 0, sales: 5000, refunds: 0, commission: 166, payouts: 0, closing: 4834 },
+    ])
+    expect(await a.finance.payouts()).toEqual([
+      expect.objectContaining({ id: 'pay_a', currency: 'USD', amount_minor: 5000, reference: 'September' }),
+    ])
+  })
+
+  it("never carries another merchant's refunds or payouts", async () => {
+    const { a } = await ledgered()
+    const all = { from: '2000-01-01', to: '2100-12-31' }
+    for (const r of [await a.finance.ledger(all), await a.finance.payouts()]) {
+      expect(JSON.stringify(r)).not.toMatch(/mch_b|pb1|B only|o6|rfd_b/)
+    }
+  })
+})
+
+describe('the back office reads', () => {
+  it("never carry another merchant's lines, revenue, refunds or payouts", async () => {
+    // A sells in USD and SGD, B in SGD only: B's traces are its product, its
+    // order and its merchant id. Every new read, as A.
+    const { a } = await backOffice()
+    const reads = [
+      await a.products.inventory(),
+      await a.orders.list({}),
+      await a.stats.sales({ from: '2000-01-01', to: '2100-12-31' }),
+      await a.finance.ledger({ from: '2000-01-01', to: '2100-12-31' }),
+      await a.finance.payouts(),
+    ]
+    for (const r of reads) expect(JSON.stringify(r)).not.toMatch(/mch_b|pb1|Beta|o6/)
+  })
+
+  it('record nothing when a merchant reads its own data, and each merchant drawn on for the platform', async () => {
+    const { a, platform, raw } = await backOffice()
+    const before = raw.prepare(`SELECT COUNT(*) AS n FROM audit_log`).get()
+    await a.products.inventory()
+    await a.stats.queue()
+    await a.stats.sales(LAST_30())
+    await a.finance.ledger(LAST_30())
+    await a.finance.payouts()
+    expect(raw.prepare(`SELECT COUNT(*) AS n FROM audit_log`).get()).toEqual(before)
+
+    await platform.products.inventory()
+    expect(
+      raw.prepare(`SELECT merchant_id FROM audit_log WHERE action = 'products.inventory' ORDER BY merchant_id`).all(),
+    ).toEqual([{ merchant_id: 'mch_a' }, { merchant_id: 'mch_b' }])
+  })
+
+  it('read a merchant by index, never by scanning a table every merchant writes to', async () => {
+    // Every statement the new reads issue, planned by SQLite. A SCAN of a
+    // shared table grows with the whole platform's history; a SEARCH on the
+    // merchant's index grows with that merchant's own, which is what they are.
+    const { env, raw } = await backOffice()
+    const statements: string[] = []
+    const recording = {
+      ...env.ORDERS,
+      prepare: (sql: string) => (statements.push(sql), env.ORDERS.prepare(sql)),
+    } as unknown as D1Database
+    const a = await scopedTo({ ORDERS: recording }, 'mch_a', 'stf_a')
+    await a.products.inventory()
+    await a.orders.list({ status: 'pending', q: 'o', before: { at: '2999-01-01 00:00:00', id: 'z' }, limit: 50 })
+    await a.stats.queue()
+    await a.stats.sales(LAST_30())
+    await a.finance.ledger(LAST_30())
+    await a.finance.payouts()
+    const scans = statements.flatMap((sql) =>
+      (raw.prepare(`EXPLAIN QUERY PLAN ${sql}`).all() as { detail: string }[])
+        .map((r) => r.detail)
+        // A table by name or by the alias these queries give it. A SCAN of a
+        // subquery (`e`, `(subquery-3)`) walks rows already narrowed to the merchant.
+        .filter((d) => /^SCAN (orders|order_lines|refunds|payouts|products|order_fulfilments|merchants|[lopfrm])\b/.test(d)),
+    )
+    expect(scans).toEqual([])
   })
 })
