@@ -34,6 +34,11 @@ describe('toSegments', () => {
     expect(render(out)).toBe('Try the [galaxy-z-fold-99] instead.')
   })
 
+  it('links a console-published product, whose id has an underscore', () => {
+    const out = toSegments('The [prd_7f3a2c] lasts 40 hours.', (id) => (id === 'prd_7f3a2c' ? 'Studio One' : undefined))
+    expect(render(out)).toBe('The <Studio One> lasts 40 hours.')
+  })
+
   it('handles several citations in one sentence', () => {
     const out = toSegments('Both [gan-charger] and [iphone-18-pro] use USB-C.', titleOf)
     expect(render(out)).toBe('Both <Prime 250W GaN Charger> and <iPhone 18 Pro> use USB-C.')
