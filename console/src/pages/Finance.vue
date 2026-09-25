@@ -23,7 +23,7 @@ const month = ref(new Date().toISOString().slice(0, 7))
 
 const current = ref<Balance[] | null>(null)
 const paid = ref<PayoutRow[] | null>(null)
-const statement = ref<{ from: string; to: string; commissionBps: number | null; summary: LedgerSummary[]; entries: LedgerEntry[] } | null>(null)
+const statement = ref<{ from: string; to: string; currentBps: number | null; summary: LedgerSummary[]; entries: LedgerEntry[] } | null>(null)
 const error = ref<string | null>(null)
 const stmtError = ref<string | null>(null)
 const stmtLoading = ref(true)
@@ -62,7 +62,7 @@ function exportStatement() {
   const s = statement.value!
   download(`statement-${month.value}.csv`, [
     ['Statement', `${s.from} to ${s.to} (UTC)`],
-    ['Commission rate', s.commissionBps === null ? '' : formatBps(s.commissionBps)],
+    ['Commission rate now', s.currentBps === null ? '' : formatBps(s.currentBps)],
     [],
     ['Currency', 'Opening', 'Sales', 'Refunds', 'Commission', 'Payouts', 'Closing'],
     ...s.summary.map((t) => [
@@ -97,8 +97,8 @@ function exportStatement() {
   <section class="mb-8" aria-labelledby="balance-h">
     <div class="mb-3 flex flex-wrap items-baseline justify-between gap-2">
       <h2 id="balance-h" class="text-sm font-semibold text-text-primary">Balance</h2>
-      <p v-if="statement?.commissionBps != null" class="text-xs text-text-secondary">
-        Commission rate: <span class="nums text-text-primary">{{ formatBps(statement.commissionBps) }}</span> of net sales
+      <p v-if="statement?.currentBps != null" class="text-xs text-text-secondary">
+        Your rate now: <span class="nums text-text-primary">{{ formatBps(statement.currentBps) }}</span> of net sales. Each sale is charged at the rate in force when it was placed.
       </p>
     </div>
     <p v-if="!current && !error" class="text-text-secondary">Loading…</p>
@@ -106,9 +106,14 @@ function exportStatement() {
     <div v-else-if="current" class="grid grid-cols-1 gap-3 md:grid-cols-2">
       <div v-for="b in current" :key="b.currency" class="card p-4">
         <div class="mb-3 flex items-baseline justify-between gap-3">
-          <span class="label">Available, {{ b.currency }}</span>
-          <span class="nums font-display text-xl font-bold text-text-primary">{{ formatMinor(b.available, b.currency) }}</span>
+          <span class="label">{{ b.owes ? 'You owe' : 'Available' }}, {{ b.currency }}</span>
+          <span class="nums font-display text-xl font-bold" :class="b.owes ? 'text-accent-amber' : 'text-text-primary'">
+            {{ formatMinor(b.owes ? -b.available : b.available, b.currency) }}
+          </span>
         </div>
+        <p v-if="b.owes" class="mb-3 text-xs text-text-secondary">
+          Refunds after a payout took the balance below zero; it comes off your next sales.
+        </p>
         <dl class="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
           <dt class="text-text-secondary">Gross sales</dt>
           <dd class="nums text-right text-text-primary">{{ formatMinor(b.gross, b.currency) }}</dd>

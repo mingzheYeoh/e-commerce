@@ -312,12 +312,15 @@ export const inventory = () => call<{ lowStockAt: number; products: InventoryIte
 export type Balance = {
   merchantId: string
   currency: string
-  commissionBps: number
+  /** The merchant's rate now: what the next sale is charged. */
+  currentBps: number
   gross: number
   refunds: number
   commission: number
   payouts: number
   available: number
+  /** available < 0: money owed to the platform, a refund after a payout most often. */
+  owes: boolean
 }
 
 export const balances = () => call<{ balances: Balance[] } | ErrorBody>('/api/merchant/balance')
@@ -344,7 +347,7 @@ export type LedgerSummary = {
 
 export const ledger = (from: string, to: string) =>
   call<
-    | { from: string; to: string; commissionBps: number | null; summary: LedgerSummary[]; entries: LedgerEntry[] }
+    | { from: string; to: string; currentBps: number | null; summary: LedgerSummary[]; entries: LedgerEntry[] }
     | ErrorBody
   >(`/api/merchant/finance/ledger?${query({ from, to })}`)
 

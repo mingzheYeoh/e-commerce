@@ -188,6 +188,7 @@ const PLATFORM_ROUTES = [
   ['POST', '/api/platform/merchants/mch_x/commission'],
   ['POST', '/api/platform/merchants/mch_x/payouts'],
   ['GET', '/api/platform/balances'],
+  ['POST', '/api/platform/orders/o1/parts/mch_x/cancel'],
 ] as const
 
 describe('the console worker: who may reach what', () => {
@@ -1060,8 +1061,8 @@ describe('the console worker: the back office', () => {
       ],
     })
 
-    const ledger = (await s.get('/api/merchant/finance/ledger')).body as { commissionBps: number; summary: unknown[]; entries: { kind: string; balance: number }[] }
-    expect(ledger.commissionBps).toBe(800)
+    const ledger = (await s.get('/api/merchant/finance/ledger')).body as { currentBps: number; summary: unknown[]; entries: { kind: string; balance: number }[] }
+    expect(ledger.currentBps).toBe(800)
     // 2000 − 160 − 500 = 1340, the balance route's own figure.
     expect(ledger.summary).toEqual([{ currency: 'USD', opening: 0, sales: 2000, refunds: 0, commission: 160, payouts: 500, closing: 1340 }])
     expect(ledger.entries.map((e) => [e.kind, e.balance])).toEqual([['sale', 1840], ['payout', 1340]])
@@ -1100,7 +1101,7 @@ describe('the console worker: fulfilment and refunds', () => {
     const s = await activeSession()
     sharedOrders(s.raw, s.merchantId)
     s.raw
-      .prepare(`INSERT INTO order_fulfilments (order_id, merchant_id) VALUES ('o_shared', ?), ('o_shared', 'mch_other'), ('o_theirs', 'mch_other')`)
+      .prepare(`INSERT INTO order_fulfilments (order_id, merchant_id, stock_taken) VALUES ('o_shared', ?, 1), ('o_shared', 'mch_other', 1), ('o_theirs', 'mch_other', 1)`)
       .run(s.merchantId)
     s.raw.prepare(`UPDATE products SET stock_count = 5`).run()
     const post = (path: string, body: unknown = {}) => call(s.db, 'POST', path, { cookie: s.cookie, body })
@@ -1205,12 +1206,13 @@ describe('the console worker: fulfilment and refunds', () => {
         {
           merchantId: s.merchantId,
           currency: 'USD',
-          commissionBps: 800,
+          currentBps: 800,
           gross: 2000,
           refunds: 1000,
           commission: 80,
           payouts: 0,
           available: 920,
+          owes: false,
         },
       ],
     })
@@ -1255,6 +1257,25 @@ describe('the console worker: platform orders and money', () => {
     ])
   })
 
+  it("cancels a merchant's pending part on its behalf, and answers the wrong part with 404", async () => {
+    const p = await platformWithOrders()
+    const res = await p.post(`/api/platform/orders/o_shared/parts/${p.merchantId}/cancel`)
+    expect(res.status).toBe(200)
+    expect(await res.json()).toMatchObject({ merchantId: p.merchantId, status: 'cancelled' })
+    expect((await p.post(`/api/platform/orders/o_shared/parts/${p.merchantId}/cancel`)).status, 'twice').toBe(409)
+    expect((await p.post('/api/platform/orders/o_theirs/parts/mch_nope/cancel')).status).toBe(404)
+    expect(p.raw.prepare(`SELECT status FROM order_fulfilments WHERE merchant_id = 'mch_other'`).get()).toEqual({ status: 'pending' })
+  })
+
+  it('answers a refund of nothing and a payout in XXX with 400, not 500', async () => {
+    const p = await platformWithOrders()
+    p.raw.prepare(`UPDATE order_lines SET unit_price_cents = 0 WHERE product_id = 'prd_theirs'`).run()
+    const free = await p.post('/api/platform/orders/o_shared/refunds', { productId: 'prd_theirs', qty: 1, reason: 'x' })
+    expect(free.status).toBe(400)
+    const xxx = await p.post(`/api/platform/merchants/${p.merchantId}/payouts`, { currency: 'XXX', amountMinor: 1, reference: 'x' })
+    expect(xxx.status).toBe(400)
+  })
+
   it('sets commission, records payouts up to the available balance, and reports every balance', async () => {
     const p = await platformWithOrders()
     expect((await p.post(`/api/platform/merchants/${p.merchantId}/commission`, { commissionBps: 10_001 })).status).toBe(400)
@@ -1262,21 +1283,22 @@ describe('the console worker: platform orders and money', () => {
     const set = await p.post(`/api/platform/merchants/${p.merchantId}/commission`, { commissionBps: 1000 })
     expect(await set.json()).toEqual({ merchantId: p.merchantId, commissionBps: 1000 })
 
-    // Gross 2000 at 10%: 200 commission, 1800 available.
+    // Both lines were sold at the default 8% before the change: 160 commission,
+    // 1840 available. The new 10% prices only sales from now on.
     const pay = (amountMinor: unknown, currency = 'USD') =>
       p.post(`/api/platform/merchants/${p.merchantId}/payouts`, { currency, amountMinor, reference: 'Sept' })
     expect((await pay(0)).status).toBe(400)
     expect((await pay(100, 'usd')).status).toBe(400)
-    const refused = await pay(1801)
+    const refused = await pay(1841)
     expect(refused.status).toBe(409)
     expect(((await refused.json()) as { error: string }).error).toMatch(/available USD balance/)
-    expect((await pay(1800)).status).toBe(201)
+    expect((await pay(1840)).status).toBe(201)
     expect((await p.post('/api/platform/merchants/mch_nope/payouts', { currency: 'USD', amountMinor: 1, reference: 'x' })).status).toBe(404)
 
     const { balances } = (await (await p.get('/api/platform/balances')).json()) as {
       balances: { merchantId: string; available: number; commission: number; payouts: number }[]
     }
-    expect(balances.find((b) => b.merchantId === p.merchantId)).toMatchObject({ commission: 200, payouts: 1800, available: 0 })
+    expect(balances.find((b) => b.merchantId === p.merchantId)).toMatchObject({ currentBps: 1000, commission: 160, payouts: 1840, available: 0, owes: false })
     // mch_other: 2000 gross at the default 8%.
     expect(balances.find((b) => b.merchantId === 'mch_other')).toMatchObject({ commission: 160, available: 1840 })
   })

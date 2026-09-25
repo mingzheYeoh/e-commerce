@@ -68,7 +68,7 @@ describe('placeOrder', () => {
 
     expect(res.status).toBe(200)
     // Oregon levies no sales tax, and this product clears the free-shipping bar.
-    expect(res.body).toEqual({ id: 'NX-4K2P9', total: unitCents })
+    expect(res.body).toEqual({ id: 'NX-4K2P9', total: unitCents, totals: { subtotal: unitCents, shipping: 0, tax: 0, total: unitCents } })
     expect(rows('orders')).toHaveLength(1)
     expect(rows('order_lines')).toHaveLength(1)
   })
@@ -474,13 +474,32 @@ describe('placeOrder addresses', () => {
     expect(res.status).toBe(400)
   })
 
-  it('reports a repeated order id as a conflict, not a server fault', async () => {
-    // Placed twice for real, against the table's own primary key, rather than
-    // against a stand-in rigged to throw the message this branch looks for.
+  it('answers a repeated order id with the stored order, and stores it once', async () => {
+    // A retry after a lost answer. The checkout decides whether the id was its
+    // own; the server says what that order was.
     const { db, rows } = seeded()
     expect((await placeOrder({ ORDERS: db }, payload())).status).toBe(200)
-    expect((await placeOrder({ ORDERS: db }, payload())).status).toBe(409)
+    expect(await placeOrder({ ORDERS: db }, payload())).toEqual({
+      status: 200,
+      body: { id: 'NX-4K2P9', total: unitCents, totals: { subtotal: unitCents, shipping: 0, tax: 0, total: unitCents }, existing: true },
+    })
     expect(rows('orders')).toHaveLength(1)
+  })
+
+  it('reports two racing inserts of one id as a duplicate, not a server fault', async () => {
+    // Both passed the lookup; the table's own primary key decides.
+    const { db } = seeded()
+    const racing = {
+      prepare: db.prepare.bind(db),
+      batch: (async (stmts: D1PreparedStatement[]) => {
+        await placeOrder({ ORDERS: db }, payload())
+        return db.batch(stmts)
+      }) as D1Database['batch'],
+    } as unknown as D1Database
+    expect(await placeOrder({ ORDERS: racing }, payload())).toEqual({
+      status: 409,
+      body: { error: 'order already exists', code: 'duplicate' },
+    })
   })
 
   it('rejects a body that is not an object at all', async () => {
@@ -561,14 +580,39 @@ describe('placeOrder and stock', () => {
     expect(rows('order_fulfilments')).toEqual([])
   })
 
-  it('tells a repeated order id from a stock refusal, and does not take stock twice', async () => {
+  it('answers a replay of an order that took the last unit as that order, not as sold out', async () => {
+    // Stock 1: the first POST lands and takes it, its answer is lost, the
+    // checkout retries. Judged afresh, the replay would be refused as sold out
+    // by its own unit, and the shopper sent to pay again.
+    const { db, raw, rows } = seeded()
+    raw.prepare(`UPDATE products SET stock_count = 1 WHERE id = ?`).run(FLAGSHIP.id)
+    expect((await placeOrder({ ORDERS: db }, payload())).status).toBe(200)
+    const replay = await placeOrder({ ORDERS: db }, payload())
+    expect(replay).toMatchObject({ status: 200, body: { id: 'NX-4K2P9', total: unitCents, existing: true } })
+    expect(stock(raw, FLAGSHIP.id)).toBe(0)
+    // Even once the product is off sale, the stored order is still the answer.
+    raw.prepare(`UPDATE products SET status = 'archived'`).run()
+    expect((await placeOrder({ ORDERS: db }, payload())).status).toBe(200)
+    expect(rows('orders')).toHaveLength(1)
+  })
+
+  it('marks the part as having taken stock, so a cancel may put it back', async () => {
+    const { db, rows } = seeded()
+    await placeOrder({ ORDERS: db }, payload())
+    expect(rows('order_fulfilments')[0]).toMatchObject({ stock_taken: 1 })
+  })
+})
+
+describe('placeOrder and commission', () => {
+  it("freezes the merchant's rate onto each line, so a later change prices only later sales", async () => {
     const { db, raw } = seeded()
     await placeOrder({ ORDERS: db }, payload())
-    expect(await placeOrder({ ORDERS: db }, payload())).toEqual({
-      status: 409,
-      body: { error: 'order already exists', code: 'duplicate' },
-    })
-    expect(stock(raw, FLAGSHIP.id)).toBe(8)
+    raw.prepare(`UPDATE merchants SET commission_bps = 1250`).run()
+    await placeOrder({ ORDERS: db }, payload({ id: 'NX-5M3RT' }))
+    expect(raw.prepare(`SELECT order_id, commission_bps FROM order_lines ORDER BY order_id`).all()).toEqual([
+      { order_id: 'NX-4K2P9', commission_bps: 800 },
+      { order_id: 'NX-5M3RT', commission_bps: 1250 },
+    ])
   })
 })
 

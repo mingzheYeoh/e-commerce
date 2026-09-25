@@ -37,6 +37,7 @@ import {
   confirmTotpEnrolment,
   disableTotp,
   authDefences,
+  guard,
   type AuthEnv,
   type AuthResult,
 } from './auth'
@@ -214,6 +215,15 @@ export default {
        * receipt, and a 409 (sold out) keeps the shopper on the checkout.
        */
       if (url.pathname === '/api/orders' && request.method === 'POST') {
+        // Per IP, before anything is read: payment is simulated, so nothing
+        // else stops a script placing orders that take real stock.
+        const limited = await guard(env, request, 'order')
+        if (limited) {
+          return json(limited.body, {
+            status: 429,
+            headers: { ...headers, 'retry-after': String(limited.retryAfter) },
+          })
+        }
         // Signing in is optional at checkout. When there is a session the order
         // is filed to it, which is the only way it ever joins an account.
         const user = await sessionUser(env, request)
@@ -226,11 +236,10 @@ export default {
         // for the account the order was filed to (see getOrder).
         const user = await sessionUser(env, request)
         const order = await getOrder(env, url.pathname.slice('/api/orders/'.length), user?.id ?? null)
-        return order
-          ? // Private when it carries the owner's delivery details; a shared
-            // cache must never hand them to the next visitor.
-            json(order, { headers: order.parts ? { ...headers, 'cache-control': 'private, no-store' } : headers })
-          : json({ error: 'not found' }, { status: 404, headers })
+        // Never cached anywhere: the answer depends on who is asking, and it
+        // carries a name and an address either way.
+        const noStore = { ...headers, 'cache-control': 'private, no-store' }
+        return order ? json(order, { headers: noStore }) : json({ error: 'not found' }, { status: 404, headers: noStore })
       }
 
       /*
