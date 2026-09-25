@@ -44,7 +44,7 @@ Verified against `sqlite_master` on 2026-09-21; production caught up on 2026-09-
 | `0009` order lines product id | ✅ 2026-09-24 | ✅ applied 2026-09-21 |
 | `0010` display order | ✅ 2026-09-24 | ✅ applied 2026-09-21, rebuilt 2026-09-22 |
 | `0011` staff sessions | ✅ 2026-09-24 | ✅ applied 2026-09-22 |
-| `0012` audit merchant seq index | ❌ | ❌ |
+| `0012` audit merchant seq index | ✅ 2026-09-25 | ✅ 2026-09-25 |
 
 Production currently holds six tables: `orders`, `order_lines`, and the four
 from `0006`. It has never had `users`, `sessions`, `email_tokens` or
@@ -57,10 +57,8 @@ staging by the whole accounts phase, not broken by it.
 
 ## Pending
 
-**`0012` is not applied anywhere yet** — neither production nor staging. It
-is an index only, so it is safe in either order relative to the console worker
-that reads it: without it the audit log viewer still works, it just sorts the
-whole of a merchant's log for every page filtered to that merchant.
+Nothing. `0012` (an index only) was applied to staging and then production on
+2026-09-25, each ahead of the console worker that reads it.
 
 ## Before production next deploys
 
