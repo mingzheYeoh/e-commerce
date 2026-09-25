@@ -1,9 +1,12 @@
 -- The order lifecycle: fulfilment per merchant, line-level refunds, the
 -- platform's commission, and simulated payouts.
 --
--- Additive only: one column on merchants, three new tables,
--- their indexes and triggers, and a backfill that inserts rows no existing
--- query reads. Production holds live orders, so nothing here rewrites one.
+-- Additive only: a column on merchants and one on order_lines, three new
+-- tables, their indexes and triggers, and a backfill that inserts rows no
+-- existing query reads. Production holds live orders, so nothing here rewrites
+-- one. The ALTERs make this file run once only. The backfill statement at the
+-- foot is the one part that can run again, and is also 0013b, which the
+-- runbook in README.md re-runs after the workers are deployed.
 --
 -- Safe ahead of the worker that reads it (the ordering rule in README.md): the
 -- old nexus-api never touches these tables, and an order it places after this
@@ -18,6 +21,14 @@
 -- What the platform keeps of each merchant's net sales, in basis points: 800 is
 -- 8%. An integer, so commission is integer arithmetic and never a float.
 ALTER TABLE merchants ADD COLUMN commission_bps INTEGER NOT NULL DEFAULT 800
+  CHECK (typeof(commission_bps) = 'integer' AND commission_bps >= 0 AND commission_bps <= 10000);
+
+-- The rate each line was sold at, copied from the merchant at checkout, so a
+-- later change to the merchant's rate never re-prices a past sale. Every line
+-- already stored was sold while every merchant was implicitly at 8%, which is
+-- exactly the default, so no backfill UPDATE is needed. Any future rebuild of
+-- order_lines (as 0009 did) must carry this column across.
+ALTER TABLE order_lines ADD COLUMN commission_bps INTEGER NOT NULL DEFAULT 800
   CHECK (typeof(commission_bps) = 'integer' AND commission_bps >= 0 AND commission_bps <= 10000);
 
 -- Each merchant ships its own part of an order, so status is per (order,
@@ -37,6 +48,11 @@ CREATE TABLE IF NOT EXISTS order_fulfilments (
   shipped_at   TEXT,
   delivered_at TEXT,
   updated_at   TEXT NOT NULL DEFAULT (datetime('now')),
+  -- 1 when checkout took this part's units out of stock, which is what a
+  -- cancel may put back. A part backfilled from before 0013 never took any
+  -- (stock was not decremented then), so it stays 0 and its cancel restocks
+  -- nothing, or it would conjure units.
+  stock_taken  INTEGER NOT NULL DEFAULT 0 CHECK (stock_taken IN (0, 1)),
   PRIMARY KEY (order_id, merchant_id),
   -- A shipped or delivered part always says how and when it left.
   CHECK (status NOT IN ('shipped','delivered')
@@ -111,7 +127,9 @@ BEGIN SELECT RAISE(ABORT,'payouts are append-only'); END;
 
 -- Every paid order already stored gets its parts, all pending: none was ever
 -- marked shipped, because until now there was no way to. Declined attempts get
--- none, since nothing ships for them. OR IGNORE makes a second run harmless.
+-- none, since nothing ships for them. stock_taken stays 0. OR IGNORE makes a
+-- second run of this statement (0013b) harmless, and it must be re-run once
+-- the new nexus-api is live, for orders the old one placed in between.
 INSERT OR IGNORE INTO order_fulfilments (order_id, merchant_id)
 SELECT DISTINCT l.order_id, l.merchant_id
   FROM order_lines l JOIN orders o ON o.id = l.order_id

@@ -46,8 +46,8 @@ describe('the migration and the schema', () => {
 
   it('backfills one pending part per merchant of every paid order already stored, and none for a declined one', () => {
     // Replayed against a database that has the orders but not yet the parts,
-    // which is where production stands when 0013 runs. Twice, because a
-    // migration applied by hand gets applied twice.
+    // which is where production stands when 0013 runs. Twice, because the
+    // runbook runs it again as 0013b once the workers are live.
     const { raw } = memoryD1()
     for (const m of ['mch_a', 'mch_b']) {
       raw.prepare(`INSERT INTO merchants (id, slug, name, settlement_currency, status) VALUES (?, ?, 'M', 'USD', 'active')`).run(m, m)
@@ -58,16 +58,28 @@ describe('the migration and the schema', () => {
     addLine(raw, 'o_paid', 'p2', 'mch_a', 'Two', 1, 100)
     addLine(raw, 'o_paid', 'p3', 'mch_b', 'Three', 1, 100)
     addLine(raw, 'o_declined', 'p1', 'mch_a', 'One', 1, 100)
-    const migration = readFileSync('worker/migrations/0013-order-lifecycle.sql', 'utf8')
-    const backfill = migration.slice(migration.indexOf('INSERT OR IGNORE INTO order_fulfilments'))
-    raw.prepare(backfill).run()
-    raw.prepare(backfill).run()
-    expect(raw.prepare(`SELECT order_id, merchant_id, status FROM order_fulfilments ORDER BY merchant_id`).all()).toEqual([
-      { order_id: 'o_paid', merchant_id: 'mch_a', status: 'pending' },
-      { order_id: 'o_paid', merchant_id: 'mch_b', status: 'pending' },
+    const backfill = readFileSync('worker/migrations/0013b-backfill-fulfilments.sql', 'utf8')
+    raw.prepare(backfill.slice(backfill.indexOf('INSERT OR IGNORE'))).run()
+    raw.prepare(backfill.slice(backfill.indexOf('INSERT OR IGNORE'))).run()
+    expect(
+      raw.prepare(`SELECT order_id, merchant_id, status, stock_taken FROM order_fulfilments ORDER BY merchant_id`).all(),
+    ).toEqual([
+      // stock_taken 0: stock was never decremented for these, so a cancel must not restock.
+      { order_id: 'o_paid', merchant_id: 'mch_a', status: 'pending', stock_taken: 0 },
+      { order_id: 'o_paid', merchant_id: 'mch_b', status: 'pending', stock_taken: 0 },
     ])
-    // Every existing merchant takes the default 8%.
+    // Every existing merchant, and every line already sold, takes the default 8%.
     expect(raw.prepare(`SELECT DISTINCT commission_bps FROM merchants`).all()).toEqual([{ commission_bps: 800 }])
+    expect(raw.prepare(`SELECT DISTINCT commission_bps FROM order_lines`).all()).toEqual([{ commission_bps: 800 }])
+  })
+
+  it('keeps 0013b the very statement 0013 ends with', () => {
+    // The re-run after deploy must do exactly what the migration did, no more.
+    const norm = (p: string) => {
+      const s = readFileSync(p, 'utf8').replace(/\r\n/g, '\n')
+      return s.slice(s.indexOf('INSERT OR IGNORE INTO order_fulfilments')).trim()
+    }
+    expect(norm('worker/migrations/0013b-backfill-fulfilments.sql')).toBe(norm('worker/migrations/0013-order-lifecycle.sql'))
   })
 })
 
@@ -322,6 +334,7 @@ import {
   utcDay,
   SELF_AUDITED,
   Conflict,
+  Invalid,
   type TenancyEnv,
   type Repository,
 } from './tenancy'
@@ -561,6 +574,7 @@ const CASES: Record<string, unknown[]> = {
   'merchants.setCommission': ['mch_b', 900],
   'audit.list': [{ merchantId: null, before: null }],
   'payouts.create': ['mch_a', { currency: 'MYR', amountMinor: 1, reference: 'Sweep' }],
+  'parts.cancel': ['LEAK_o_b', 'mch_b'],
 }
 
 /** Everything in CASES that a merchant repository does not carry at all. */
@@ -571,6 +585,7 @@ const PLATFORM_ONLY = [
   'merchants.setCommission',
   'audit.list',
   'payouts.create',
+  'parts.cancel',
 ]
 
 /** Methods the platform repository carries and refuses: they act for one merchant, which the platform is not. */
@@ -1012,6 +1027,7 @@ describe('suspending a merchant', () => {
       'merchants.restore',
       'merchants.setCommission',
       'merchants.suspend',
+      'parts.cancel',
       'payouts.create',
       'refunds.create',
     ])
@@ -1190,12 +1206,14 @@ describe('what a platform read records', () => {
 
 /**
  * sales(), with every paid order's parts opened the way 0013's backfill opens
- * them (the same statement, read from the migration).
+ * them (the same statement, read from the migration), and then marked as
+ * checkout marks them: stock taken. `legacy` leaves them as the backfill does.
  */
-function lifecycle() {
+function lifecycle({ legacy = false } = {}) {
   const s = sales()
   const migration = readFileSync('worker/migrations/0013-order-lifecycle.sql', 'utf8')
   s.raw.prepare(migration.slice(migration.indexOf('INSERT OR IGNORE INTO order_fulfilments'))).run()
+  if (!legacy) s.raw.prepare(`UPDATE order_fulfilments SET stock_taken = 1`).run()
   const stock = (id: string) =>
     (s.raw.prepare(`SELECT stock_count FROM products WHERE id = ?`).get(id) as { stock_count: number }).stock_count
   const status = (orderId: string, merchantId: string) =>
@@ -1304,6 +1322,38 @@ describe('fulfilment', () => {
     expect([t.stock('pa1'), t.stock('pa2')]).toEqual([4, 12])
     expect(t.rows('refunds')).toHaveLength(3)
     expect(t.actions()).toEqual(['refunds.create', 'fulfilment.cancel'])
+  })
+
+  it('cancels a part from before 0013 without restocking units it never took, and still refunds it', async () => {
+    // Backfilled parts were placed while stock was never decremented. Putting
+    // their units back would conjure stock: 3 on the shelf would become 4.
+    const t = lifecycle({ legacy: true })
+    const a = await scopedTo(t.env, 'mch_a', 'stf_a')
+    expect(await a.fulfilment.cancel('o3')).toMatchObject({ status: 'cancelled', stock_taken: 0 })
+    expect([t.stock('pa1'), t.stock('pa2')]).toEqual([3, 10])
+    expect(t.rows('refunds').reduce((sum, r) => sum + (r.amount_minor as number), 0)).toBe(6000)
+    // And it can still be shipped, the ordinary way.
+    expect(await a.fulfilment.ship('o2', { carrier: 'UPS', tracking: '1Z' })).toMatchObject({ status: 'shipped' })
+  })
+
+  it("lets the platform cancel a suspended merchant's pending part, audited as its own act", async () => {
+    const t = lifecycle()
+    const platform = await platformWide(t.env, 'stf_p')
+    await platform.merchants.suspend('mch_b')
+    // o6: pb1 x3 at 700, stock 50.
+    expect(await platform.parts.cancel('o6', 'mch_b')).toMatchObject({ merchant_id: 'mch_b', status: 'cancelled' })
+    expect(t.stock('pb1')).toBe(53)
+    expect(t.raw.prepare(`SELECT amount_minor, actor_id, actor_scope FROM refunds`).all()).toEqual([
+      { amount_minor: 2100, actor_id: 'stf_p', actor_scope: 'platform' },
+    ])
+    expect(t.raw.prepare(`SELECT action, actor_scope, merchant_id, subject FROM audit_log WHERE action = 'parts.cancel'`).all()).toEqual([
+      { action: 'parts.cancel', actor_scope: 'platform', merchant_id: 'mch_b', subject: 'o6' },
+    ])
+    // The same state machine: not twice, not a shipped part, not a part that is not there.
+    await expect(platform.parts.cancel('o6', 'mch_b')).rejects.toThrow(Conflict)
+    await (await scopedTo(t.env, 'mch_a', 'stf_a')).fulfilment.ship('o2', { carrier: 'UPS', tracking: '1Z' })
+    await expect(platform.parts.cancel('o2', 'mch_a')).rejects.toThrow(Conflict)
+    expect(await platform.parts.cancel('o6', 'mch_a')).toBeNull()
   })
 
   it("answers another merchant's order, a declined one and a missing one with null", async () => {
@@ -1441,6 +1491,15 @@ describe('refunds', () => {
     ])
   })
 
+  it('refuses a refund that comes to nothing as a bad request, not a crash', async () => {
+    // A unit of a free line, with no amount stated, refunds zero.
+    const t = lifecycle()
+    t.raw.prepare(`UPDATE order_lines SET unit_price_cents = 0 WHERE order_id = 'o2'`).run()
+    const a = await scopedTo(t.env, 'mch_a', 'stf_a')
+    await expect(a.refunds.create('o2', refund('pa2', 1))).rejects.toThrow(Invalid)
+    expect(t.rows('refunds')).toEqual([])
+  })
+
   it('writes no refund when its audit row cannot be written', async () => {
     const t = lifecycle()
     const a = await scopedTo(t.env, 'mch_a', 'stf_a')
@@ -1456,8 +1515,9 @@ describe('balances and payouts', () => {
    *   A (USD): o1 2000 + o2 2500 + o3 6000 + o4 5000 = 15500 gross
    *   B (SGD): o1 700 + o6 2100 = 2800 gross
    *
-   * Then: A refunds one pa2 unit on o3 (2500) and takes 333 bps; B refunds
-   * 1 on o6 at the default 800; A is paid out 5000.
+   * Then: A's lines are recorded as sold at 333 bps (its rate then), A refunds
+   * one pa2 unit on o3 (2500); B refunds 1 on o6, sold at the default 800; A is
+   * paid out 5000.
    *
    *   A: net 13000. 13000 × 333 / 10000 = 432.9 → 432. available 13000 − 432 − 5000 = 7568
    *   B: net 2799.  2799 × 800 / 10000 = 223.92 → 223. available 2799 − 223 = 2576
@@ -1471,6 +1531,8 @@ describe('balances and payouts', () => {
     const platform = await platformWide(t.env, 'stf_p')
     await (await scopedTo(t.env, 'mch_a', 'stf_a')).refunds.create('o3', refund('pa2', 1))
     await (await scopedTo(t.env, 'mch_b', 'stf_b')).refunds.create('o6', refund('pb1', 0, 1))
+    // The rate each line was sold at is on the line: A's at 333, B's at 800.
+    t.raw.prepare(`UPDATE order_lines SET commission_bps = 333 WHERE merchant_id = 'mch_a'`).run()
     await platform.merchants.setCommission('mch_a', 333)
     await platform.payouts.create('mch_a', { currency: 'USD', amountMinor: 5000, reference: 'September' })
     return { ...t, platform }
@@ -1481,22 +1543,24 @@ describe('balances and payouts', () => {
     const A = {
       merchant_id: 'mch_a',
       currency: 'USD',
-      commission_bps: 333,
+      current_bps: 333,
       gross: 15500,
       refunds: 2500,
       commission: 432,
       payouts: 5000,
       available: 7568,
+      owes: false,
     }
     const B = {
       merchant_id: 'mch_b',
       currency: 'SGD',
-      commission_bps: 800,
+      current_bps: 800,
       gross: 2800,
       refunds: 1,
       commission: 223,
       payouts: 0,
       available: 2576,
+      owes: false,
     }
     expect(await (await scopedTo(env, 'mch_a', 'stf_a')).finance.balance()).toEqual([A])
     expect(await (await scopedTo(env, 'mch_b', 'stf_b')).finance.balance()).toEqual([B])
@@ -1516,10 +1580,45 @@ describe('balances and payouts', () => {
     addLine(raw, 'o7', 'pa_sgd', 'mch_a', 'Alpha SGD', 1, 1000)
     const rows = await (await scopedTo(env, 'mch_a', 'stf_a')).finance.balance()
     expect(rows.map((r) => [r.currency, r.gross, r.available])).toEqual([
-      // 1000 × 333 / 10000 = 33.3 → 33.
-      ['SGD', 1000, 967],
+      // Sold at the default 800: 1000 × 800 / 10000 = 80.
+      ['SGD', 1000, 920],
       ['USD', 15500, 7568],
     ])
+  })
+
+  it('charges each sale the rate it was sold at: a later rate change prices only later sales', async () => {
+    // B: o1 700 and o6 2100, both sold at 800 → 224. Then B's rate goes to
+    // 1000 and it sells 1000 more at that rate → 100. floor((2800 × 800 +
+    // 1000 × 1000) / 10000) = floor(324) = 324, not 3800 × 1000 / 10000 = 380.
+    const t = lifecycle()
+    const platform = await platformWide(t.env, 'stf_p')
+    await platform.merchants.setCommission('mch_b', 1000)
+    placeOrderRow(t.raw, 'o8')
+    t.raw
+      .prepare(
+        `INSERT INTO order_lines (order_id, product_id, merchant_id, sku, title, qty, unit_price_cents, commission_bps)
+         VALUES ('o8', 'pb1', 'mch_b', 'B1', 'Beta One', 1, 1000, 1000)`,
+      )
+      .run()
+    const [b] = await (await scopedTo(t.env, 'mch_b', 'stf_b')).finance.balance()
+    expect(b).toMatchObject({ current_bps: 1000, gross: 3800, commission: 324, available: 3476 })
+  })
+
+  it('says outright when a balance is owed to the platform', async () => {
+    // A is paid out everything, then refunds a line: that money is now owed.
+    const { platform, env } = await settled()
+    await platform.payouts.create('mch_a', { currency: 'USD', amountMinor: 7568, reference: 'All of it' })
+    await (await scopedTo(env, 'mch_a', 'stf_a')).refunds.create('o2', refund('pa2', 1))
+    const [a] = await (await scopedTo(env, 'mch_a', 'stf_a')).finance.balance()
+    // Refunds 5000, so net 10500; commission floor(10500 × 333 / 10000) = 349;
+    // paid out 5000 + 7568 = 12568. Available 10500 − 349 − 12568 = −2417.
+    expect(a).toMatchObject({ available: -2417, owes: true })
+  })
+
+  it('refuses a payout in XXX, the currency of a line whose product is gone', async () => {
+    const { platform, rows } = await settled()
+    await expect(platform.payouts.create('mch_a', { currency: 'XXX', amountMinor: 1, reference: 'x' })).rejects.toThrow(Invalid)
+    expect(rows('payouts')).toHaveLength(1)
   })
 
   it('refuses a payout over the available balance, and writes nothing for it', async () => {

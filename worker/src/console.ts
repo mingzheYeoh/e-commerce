@@ -32,6 +32,7 @@ import {
   platformWide,
   utcDay,
   Conflict,
+  Invalid,
   type AuditPage,
   type Balance,
   type Fulfilment,
@@ -198,12 +199,14 @@ const refundOut = (r: Refund) => ({
 const balanceOut = (b: Balance) => ({
   merchantId: b.merchant_id,
   currency: b.currency,
-  commissionBps: b.commission_bps,
+  currentBps: b.current_bps,
   gross: b.gross,
   refunds: b.refunds,
   commission: b.commission,
   payouts: b.payouts,
   available: b.available,
+  // A negative balance is money the merchant owes the platform, said outright.
+  owes: b.owes,
 })
 
 const payoutOut = (p: Payout) => ({
@@ -422,7 +425,7 @@ function newPayout(body: unknown): NewPayout | string {
   const currency = typeof p.currency === 'string' && /^[A-Z]{3}$/.test(p.currency) ? p.currency : null
   const amountMinor = whole(p.amountMinor)
   const reference = text(p.reference, 120)
-  if (!currency) return 'currency is a three-letter code, such as USD.'
+  if (!currency || currency === 'XXX') return 'currency is a three-letter code, such as USD.'
   if (!amountMinor) return 'amountMinor is a whole number of minor units, more than zero.'
   if (!reference) return 'Give the period or reference this payout covers, 120 characters at most.'
   return { currency, amountMinor, reference }
@@ -438,6 +441,7 @@ async function outcome<T>(write: () => Promise<T | null>, out: (v: T) => unknown
     return value === null ? json({ error: 'not found' }, 404) : json(out(value), status)
   } catch (err) {
     if (err instanceof Conflict) return json({ error: err.message }, 409)
+    if (err instanceof Invalid) return json({ error: err.message }, 400)
     throw err
   }
 }
@@ -499,6 +503,7 @@ const PLATFORM_ORDER = /^\/api\/platform\/orders\/([^/]+)$/
 const PLATFORM_REFUND = /^\/api\/platform\/orders\/([^/]+)\/refunds$/
 const COMMISSION = /^\/api\/platform\/merchants\/([^/]+)\/commission$/
 const PAYOUTS = /^\/api\/platform\/merchants\/([^/]+)\/payouts$/
+const PART_CANCEL = /^\/api\/platform\/orders\/([^/]+)\/parts\/([^/]+)\/cancel$/
 
 async function route(request: Request, env: ConsoleEnv, url: URL, ctx: ExecutionContext): Promise<Response> {
   const path = url.pathname
@@ -767,6 +772,16 @@ async function route(request: Request, env: ConsoleEnv, url: URL, ctx: Execution
     const input = newRefund(await readBody(request))
     if (typeof input === 'string') return json({ error: input }, 400)
     return outcome(() => repo.refunds.create(platformRefund, input), refundOut, 201)
+  }
+
+  /* One merchant's pending part, cancelled by the platform: for a suspended
+     merchant whose own staff can no longer reach the console. */
+  const partCancel = path.match(PART_CANCEL)
+  if (partCancel && method === 'POST') {
+    const repo = await platformRepo(env, request)
+    if (repo instanceof Response) return repo
+    const [, target, merchantId] = partCancel
+    return outcome(() => repo.parts.cancel(target, merchantId), fulfilmentOut)
   }
 
   const commissionFor = path.match(COMMISSION)?.[1]

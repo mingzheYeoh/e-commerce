@@ -59,26 +59,43 @@ staging by the whole accounts phase, not broken by it.
 ## Pending
 
 **`0013` order lifecycle, on neither database yet.** It adds
-`merchants.commission_bps` (default 800), the `order_fulfilments`, `refunds`
-and `payouts` tables with their indexes and append-only triggers, and backfills
-one `pending` fulfilment row per merchant of every paid order already stored.
-Additive only, so it is safe ahead of the workers, and it has to be: the
-branch's `nexus-api` inserts a fulfilment row and decrements `stock_count` in
-the order batch, and its `nexus-console` reads all three tables, so a worker
-deployed ahead of `0013` fails every checkout (503) and every order page.
-Staging first, then production, each before both workers:
+`merchants.commission_bps` (default 800) and `order_lines.commission_bps` (the
+rate each line was sold at, default 800 for every line already stored), the
+`order_fulfilments`, `refunds` and `payouts` tables with their indexes and
+append-only triggers, and backfills one `pending` fulfilment row
+(`stock_taken = 0`) per merchant of every paid order already stored. Additive
+only, so it is safe ahead of the workers, and it has to be: the branch's
+`nexus-api` inserts a fulfilment row, decrements `stock_count` and writes
+`order_lines.commission_bps` in the order batch, and its `nexus-console` reads
+all three tables, so a worker deployed ahead of `0013` fails every checkout
+(503) and every order page.
 
-```bash
-npx wrangler d1 execute nexus-orders-staging --remote --file=migrations/0013-order-lifecycle.sql
-```
+`0013` runs **once**: its `ALTER TABLE`s fail a second time. Only its last
+statement, the backfill, is safe to repeat, and it is also `0013b` on its own.
 
-Check afterwards that `SELECT COUNT(*) FROM order_fulfilments` equals
-`SELECT COUNT(*) FROM (SELECT DISTINCT l.order_id, l.merchant_id FROM order_lines l JOIN orders o ON o.id = l.order_id WHERE o.payment_status = 'succeeded')`.
+The runbook, staging first and then production, each in this order:
 
-One thing to know before any later migration rebuilds `order_lines` the way
-`0009` did: nothing in `0013` references that table from a trigger, on purpose
-(see the comment above the refunds triggers), so such a rebuild still works.
-Keep it that way.
+1. Apply `0013`:
+   `npx wrangler d1 execute <db> --remote --file=migrations/0013-order-lifecycle.sql`
+2. Deploy `nexus-api` (it must also get the new `ORDER_LIMITER` binding from
+   `wrangler.toml`).
+3. Deploy `nexus-console`.
+4. Re-run the backfill, for the orders the old `nexus-api` took between steps
+   1 and 2 — they have no fulfilment row, so no merchant could ship them:
+   `npx wrangler d1 execute <db> --remote --file=migrations/0013b-backfill-fulfilments.sql`
+5. Check that `SELECT COUNT(*) FROM order_fulfilments` equals
+   `SELECT COUNT(*) FROM (SELECT DISTINCT l.order_id, l.merchant_id FROM order_lines l JOIN orders o ON o.id = l.order_id WHERE o.payment_status = 'succeeded')`.
+
+Two hazards for any later migration that rebuilds a table the way `0009` did:
+
+- **`order_lines`**: carry `commission_bps` across, or every past sale is
+  re-priced at the default. Nothing in `0013` references `order_lines` from a
+  trigger, on purpose (see the comment above the refunds triggers), so such a
+  rebuild still works. Keep it that way.
+- **`orders`**: `order_fulfilments.order_id` is `ON DELETE CASCADE`, and D1
+  enforces foreign keys, so `DROP TABLE orders` inside a rebuild deletes every
+  fulfilment row with it. Copy them aside first, or rebuild with foreign keys
+  deferred.
 
 `0012` (an index only) was applied to staging and then production on
 2026-09-25, each ahead of the console worker that reads it.

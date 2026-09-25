@@ -141,6 +141,16 @@ export interface PlatformRepository extends Repository {
      */
     create(merchantId: string, input: NewPayout): Promise<Payout | null>
   }
+  parts: {
+    /**
+     * Cancels one merchant's pending part of an order on its behalf — the
+     * way out for a suspended merchant's unshipped orders, whose own staff can
+     * no longer act. The same state machine, restock and refunds as the
+     * merchant's own cancel, audited as the platform's act. Null for no such
+     * part.
+     */
+    cancel(orderId: string, merchantId: string): Promise<Fulfilment | null>
+  }
   audit: {
     /**
      * Newest first by insertion order. `before` is the previous page's `next`.
@@ -191,6 +201,8 @@ export interface Fulfilment {
   shipped_at: string | null
   delivered_at: string | null
   updated_at: string
+  /** 1 when checkout took this part's units out of stock; 0 for a part backfilled from before 0013. */
+  stock_taken: number
 }
 
 export interface NewRefund {
@@ -219,25 +231,33 @@ export interface Refund {
 /**
  * A merchant's money in one currency, integer minor units throughout.
  *
- *   commission = floor((gross − refunds) × commission_bps / 10000)
+ *   commission = floor(Σ over lines of (line gross − line refunds) × line.commission_bps / 10000)
  *   available  = gross − refunds − commission − payouts
  *
- * The floor is taken once, on the running net per merchant and currency — not
- * per order or per line. Flooring per order would under-collect up to one minor
- * unit per order and make the figure depend on how sales were split; flooring
- * the total makes the balance a pure function of the ledger, and whatever
- * fraction is dropped stays with the merchant. The current commission_bps is
- * applied to all of history, so changing it re-prices past sales too.
+ * Each line carries the rate it was sold at (order_lines.commission_bps, copied
+ * from the merchant at checkout), so changing a merchant's rate prices future
+ * sales only. The floor is taken once, on the sum per merchant and currency —
+ * not per order or per line. Flooring per order would under-collect up to one
+ * minor unit per order and make the figure depend on how sales were split;
+ * flooring the total makes the balance a pure function of the ledger, and
+ * whatever fraction is dropped stays with the merchant.
+ *
+ * `available` can be negative — a refund after a payout, most often. That is
+ * money the merchant owes the platform, and `owes` says so rather than leaving
+ * a minus sign to be noticed.
  */
 export interface Balance {
   merchant_id: string
   currency: string
-  commission_bps: number
+  /** The merchant's rate now: what the next sale will be charged. */
+  current_bps: number
   gross: number
   refunds: number
   commission: number
   payouts: number
   available: number
+  /** available < 0: the merchant owes the platform that much. */
+  owes: boolean
 }
 
 export interface NewPayout {
@@ -261,6 +281,9 @@ export interface Payout {
  * with 409 and its message.
  */
 export class Conflict extends Error {}
+
+/** A request the repository cannot act on as stated (a refund of nothing, say). Routes answer 400. */
+export class Invalid extends Error {}
 
 /**
  * What a seller needs to fulfil their lines: who, where, how fast. No email
@@ -428,6 +451,7 @@ export const SELF_AUDITED = new Set([
   'fulfilment.cancel',
   'refunds.create',
   'payouts.create',
+  'parts.cancel',
 ])
 
 /**
@@ -625,11 +649,12 @@ function balances(scope: Scope): { sql: string; args: unknown[] } {
   const back = where([tenant(scope, 'r.merchant_id')])
   const paid = where([tenant(scope)])
   return {
-    sql: `SELECT g.merchant_id, g.currency, m.commission_bps, g.minor AS gross,
-                 COALESCE(rf.minor, 0) AS refunds,
-                 ((g.minor - COALESCE(rf.minor, 0)) * m.commission_bps) / 10000 AS commission,
+    sql: `SELECT g.merchant_id, g.currency, m.commission_bps AS current_bps, g.minor AS gross,
+                 COALESCE(rf.minor, 0) AS refunds, g.commission,
                  COALESCE(po.minor, 0) AS payouts
-            FROM (SELECT l.merchant_id, ${CURRENCY} AS currency, SUM(${GROSS}) AS minor
+            FROM (SELECT l.merchant_id, ${CURRENCY} AS currency, SUM(${GROSS}) AS minor,
+                         -- Each line at the rate it was sold at, floored once on the sum.
+                         SUM(${NET} * l.commission_bps) / 10000 AS commission
                     ${SALES}${sold.sql}
                    GROUP BY l.merchant_id, ${CURRENCY}) g
             JOIN merchants m ON m.id = g.merchant_id
@@ -672,6 +697,110 @@ const MOVES = {
   deliver: ['shipped', 'delivered'],
   cancel: ['pending', 'cancelled'],
 } as const
+
+type MoveRest = [
+  set?: string,
+  setArgs?: unknown[],
+  detail?: object | null,
+  after?: (auditId: string, merchantId: string) => D1PreparedStatement[],
+]
+
+/** One merchant's part of a paid order, or null. */
+const partOf = (env: TenancyEnv, orderId: string, merchantId: string) =>
+  env.ORDERS.prepare(
+    `SELECT f.* FROM order_fulfilments f JOIN orders o ON o.id = f.order_id
+      WHERE f.order_id = ? AND f.merchant_id = ? AND o.payment_status = ?`,
+  )
+    .bind(orderId, merchantId, 'succeeded')
+    .first<Fulfilment>()
+
+/**
+ * One step of the fulfilment state machine on `merchantId`'s part: the status
+ * change, its audit row (recorded as `action`, by `actor`), and whatever
+ * `after` adds, in one batch.
+ *
+ * The UPDATE matches only the `from` status, and the audit INSERT only if the
+ * UPDATE changed a row, so a transition that lost a race writes nothing at
+ * all. The status is also checked first, which is where a refusal gets a
+ * message worth showing. Whose part it is comes from the caller: the scope's
+ * own merchant for a merchant, a named one for the platform.
+ */
+async function movePart(
+  env: TenancyEnv,
+  actor: Scope,
+  orderId: string,
+  merchantId: string,
+  step: keyof typeof MOVES,
+  action: string,
+  set = '',
+  setArgs: unknown[] = [],
+  detail: object | null = null,
+  after: (auditId: string, merchantId: string) => D1PreparedStatement[] = () => [],
+): Promise<Fulfilment | null> {
+  const row = await partOf(env, orderId, merchantId)
+  if (!row) return null
+  const [from, to] = MOVES[step]
+  if (row.status !== from) {
+    throw new Conflict(`Only a ${from} order can be marked ${to}; this one is ${row.status}.`)
+  }
+  const auditId = id('aud')
+  const [update] = await env.ORDERS.batch([
+    env.ORDERS.prepare(
+      `UPDATE order_fulfilments SET status = ?${set}, updated_at = datetime('now')
+        WHERE order_id = ? AND merchant_id = ? AND status = ?`,
+    ).bind(to, ...setArgs, orderId, merchantId, from),
+    env.ORDERS.prepare(
+      `INSERT INTO audit_log (id, actor_id, actor_scope, merchant_id, action, subject, detail)
+       SELECT ?, ?, ?, ?, ?, ?, ? WHERE changes() = 1`,
+    ).bind(auditId, actor.staffId, actor.kind, merchantId, action, orderId, detail && JSON.stringify(detail)),
+    ...after(auditId, merchantId),
+  ])
+  if (update.meta.changes !== 1) throw new Conflict('This order changed in the meantime. Reload and try again.')
+  return partOf(env, orderId, merchantId)
+}
+
+/**
+ * What cancelling a part does besides its status: units back on the shelf and
+ * the lines refunded. Both conditional on THIS call's audit row, which exists
+ * only if the status change matched — keyed on the row rather than on the
+ * status, because a second cancel finds the part already cancelled and must
+ * restock and refund nothing.
+ *
+ * Restocked only where checkout took the stock (stock_taken = 1). A part
+ * backfilled from before 0013 never took any, and putting its units back would
+ * conjure stock. Where it did, every unit goes back: a pending part never left
+ * the warehouse, whatever was refunded on it before. Line refunds alone never
+ * restock: a refund is money, not a return.
+ */
+const cancelEffects =
+  (env: TenancyEnv, actor: Scope, orderId: string) =>
+  (auditId: string, merchantId: string): D1PreparedStatement[] => [
+    env.ORDERS.prepare(
+      `UPDATE products
+          SET stock_count = stock_count + (SELECT SUM(l.qty) FROM order_lines l
+                                            WHERE l.order_id = ? AND l.merchant_id = ? AND l.product_id = products.id),
+              updated_at = datetime('now')
+        WHERE id IN (SELECT l.product_id FROM order_lines l WHERE l.order_id = ? AND l.merchant_id = ?)
+          AND EXISTS (SELECT 1 FROM order_fulfilments
+                       WHERE order_id = ? AND merchant_id = ? AND stock_taken = 1)
+          AND EXISTS (SELECT 1 FROM audit_log WHERE id = ?)`,
+    ).bind(orderId, merchantId, orderId, merchantId, orderId, merchantId, auditId),
+    // Whatever of each line is not refunded yet, in full. The ids are minted by
+    // SQLite, one per line, because the lines are only known inside this
+    // statement; they are opaque either way.
+    env.ORDERS.prepare(
+      `INSERT INTO refunds (id, order_id, merchant_id, product_id, variant, qty, amount_minor,
+                            reason, actor_id, actor_scope)
+       SELECT 'rfd_' || lower(hex(randomblob(10))), l.order_id, l.merchant_id, l.product_id, l.variant,
+              l.qty - ${REFUNDED_QTY}, ${NET}, 'Order cancelled', ?, ?
+         FROM order_lines l
+        WHERE l.order_id = ? AND l.merchant_id = ? AND ${NET} > 0
+          AND EXISTS (SELECT 1 FROM audit_log WHERE id = ?)`,
+    ).bind(actor.staffId, actor.kind, orderId, merchantId, auditId),
+    // Cannot fire (the remainder is computed in this same transaction), and
+    // there anyway, so no batch that writes a refund goes unguarded.
+    refundCapGuard(env, orderId),
+  ]
 
 /** Two decimals, for a refusal message. Display only; nothing is computed from it. */
 const shown = (minor: number, currency: string) => `${(minor / 100).toFixed(2)} ${currency}`
@@ -771,7 +900,9 @@ function platformOnly(env: TenancyEnv, staffId: string): Omit<PlatformRepository
     payouts: {
       async create(merchantId: string, input: NewPayout) {
         assertIntegerMinor(input.amountMinor, 'amountMinor')
-        if (input.amountMinor <= 0) throw new RangeError('a payout is more than nothing')
+        if (input.amountMinor <= 0) throw new Invalid('A payout is more than nothing.')
+        // XXX is how a line whose product row is gone reads: no currency anyone can be paid in.
+        if (input.currency === 'XXX') throw new Invalid('XXX is not a currency a payout can be made in.')
         // The balance of this one merchant: the same SELECT the page reads,
         // with the merchant's own tenant clause.
         const b = balances({ kind: 'merchant', merchantId, staffId })
@@ -807,6 +938,13 @@ function platformOnly(env: TenancyEnv, staffId: string): Omit<PlatformRepository
           reference: input.reference,
           created_by: staffId,
         }
+      },
+    },
+
+    parts: {
+      cancel(orderId: string, merchantId: string) {
+        const actor: Scope = { kind: 'platform', staffId }
+        return movePart(env, actor, orderId, merchantId, 'cancel', 'parts.cancel', '', [], null, cancelEffects(env, actor, orderId))
       },
     },
 
@@ -879,59 +1017,17 @@ function build(env: TenancyEnv, scope: Scope): Repository {
   }
 
   /**
-   * This merchant's part of a paid order, or null. The merchant id in the
-   * WHERE is the scope's, so another merchant's order reads as no order.
+   * The scope's own merchant, for the fulfilment steps: the merchant id in
+   * every WHERE is the scope's, so another merchant's order reads as no order.
    */
-  const part = async (orderId: string) => {
+  const own = () => {
     if (scope.kind !== 'merchant') {
       throw new Error('only a merchant ships, delivers or cancels its own part of an order')
     }
-    return env.ORDERS.prepare(
-      `SELECT f.* FROM order_fulfilments f JOIN orders o ON o.id = f.order_id
-        WHERE f.order_id = ? AND f.merchant_id = ? AND o.payment_status = ?`,
-    )
-      .bind(orderId, scope.merchantId, 'succeeded')
-      .first<Fulfilment>()
+    return scope.merchantId
   }
-
-  /**
-   * One step of the fulfilment state machine: the part's status change, its
-   * audit row, and whatever `after` adds, in one batch.
-   *
-   * The UPDATE matches only the `from` status, and the audit INSERT only if
-   * the UPDATE changed a row, so a transition that lost a race writes nothing
-   * at all. The status is also checked first, which is where a refusal gets a
-   * message worth showing.
-   */
-  const move = async (
-    orderId: string,
-    action: keyof typeof MOVES,
-    set = '',
-    setArgs: unknown[] = [],
-    detail: object | null = null,
-    after: (auditId: string, merchantId: string) => D1PreparedStatement[] = () => [],
-  ) => {
-    const row = await part(orderId)
-    if (!row) return null
-    const [from, to] = MOVES[action]
-    if (row.status !== from) {
-      throw new Conflict(`Only a ${from} order can be marked ${to}; this one is ${row.status}.`)
-    }
-    const auditId = id('aud')
-    const [update] = await env.ORDERS.batch([
-      env.ORDERS.prepare(
-        `UPDATE order_fulfilments SET status = ?${set}, updated_at = datetime('now')
-          WHERE order_id = ? AND merchant_id = ? AND status = ?`,
-      ).bind(to, ...setArgs, orderId, row.merchant_id, from),
-      env.ORDERS.prepare(
-        `INSERT INTO audit_log (id, actor_id, actor_scope, merchant_id, action, subject, detail)
-         SELECT ?, ?, 'merchant', ?, ?, ?, ? WHERE changes() = 1`,
-      ).bind(auditId, scope.staffId, row.merchant_id, `fulfilment.${action}`, orderId, detail && JSON.stringify(detail)),
-      ...after(auditId, row.merchant_id),
-    ])
-    if (update.meta.changes !== 1) throw new Conflict('This order changed in the meantime. Reload and try again.')
-    return part(orderId)
-  }
+  const move = (orderId: string, action: keyof typeof MOVES, ...rest: MoveRest) =>
+    movePart(env, scope, orderId, own(), action, `fulfilment.${action}`, ...rest)
 
   const raw: Repository = {
     products: {
@@ -1160,41 +1256,7 @@ function build(env: TenancyEnv, scope: Scope): Repository {
           tracking,
         }),
       deliver: (orderId: string) => move(orderId, 'deliver', ", delivered_at = datetime('now')"),
-      cancel: (orderId: string) =>
-        move(orderId, 'cancel', '', [], null, (auditId, merchantId) => [
-          /*
-           * Both conditional on THIS call's audit row, which exists only if
-           * the status change above matched. Keyed on the row rather than on
-           * the status: a second cancel finds the part already cancelled, and
-           * must restock and refund nothing.
-           *
-           * Every unit goes back: a pending part never left the warehouse,
-           * whatever was refunded on it before.
-           */
-          env.ORDERS.prepare(
-            `UPDATE products
-                SET stock_count = stock_count + (SELECT SUM(l.qty) FROM order_lines l
-                                                  WHERE l.order_id = ? AND l.merchant_id = ? AND l.product_id = products.id),
-                    updated_at = datetime('now')
-              WHERE id IN (SELECT l.product_id FROM order_lines l WHERE l.order_id = ? AND l.merchant_id = ?)
-                AND EXISTS (SELECT 1 FROM audit_log WHERE id = ?)`,
-          ).bind(orderId, merchantId, orderId, merchantId, auditId),
-          // Whatever of each line is not refunded yet, in full. The ids are
-          // minted by SQLite, one per line, because the lines are only known
-          // inside this statement; they are opaque either way.
-          env.ORDERS.prepare(
-            `INSERT INTO refunds (id, order_id, merchant_id, product_id, variant, qty, amount_minor,
-                                  reason, actor_id, actor_scope)
-             SELECT 'rfd_' || lower(hex(randomblob(10))), l.order_id, l.merchant_id, l.product_id, l.variant,
-                    l.qty - ${REFUNDED_QTY}, ${NET}, 'Order cancelled', ?, 'merchant'
-               FROM order_lines l
-              WHERE l.order_id = ? AND l.merchant_id = ? AND ${NET} > 0
-                AND EXISTS (SELECT 1 FROM audit_log WHERE id = ?)`,
-          ).bind(scope.staffId, orderId, merchantId, auditId),
-          // Cannot fire (the remainder is computed in this same transaction),
-          // and there anyway, so no batch that writes a refund goes unguarded.
-          refundCapGuard(env, orderId),
-        ]),
+      cancel: (orderId: string) => move(orderId, 'cancel', '', [], null, cancelEffects(env, scope, orderId)),
     },
 
     refunds: {
@@ -1227,7 +1289,8 @@ function build(env: TenancyEnv, scope: Scope): Repository {
         if (!line) return null
 
         const amount = input.amountMinor ?? input.qty * line.unit_price_cents
-        if (input.qty < 0 || amount <= 0) throw new RangeError('a refund is for some units or some money')
+        // A unit of a free line refunds nothing: say so as a bad request, not a crash.
+        if (input.qty < 0 || amount <= 0) throw new Invalid('A refund is for some money: this one comes to nothing. State an amount.')
         const [qtyLeft, minorLeft] = [line.qty - line.refunded_qty, line.paid - line.refunded_minor]
         if (input.qty > qtyLeft) {
           throw new Conflict(`Only ${qtyLeft} of ${line.qty} units on this line are left to refund.`)
@@ -1294,8 +1357,11 @@ function build(env: TenancyEnv, scope: Scope): Repository {
         const b = balances(scope)
         const { results } = await env.ORDERS.prepare(`${b.sql} ORDER BY g.merchant_id, g.currency`)
           .bind(...b.args)
-          .all<Omit<Balance, 'available'>>()
-        return (results ?? []).map((r) => ({ ...r, available: r.gross - r.refunds - r.commission - r.payouts }))
+          .all<Omit<Balance, 'available' | 'owes'>>()
+        return (results ?? []).map((r) => {
+          const available = r.gross - r.refunds - r.commission - r.payouts
+          return { ...r, available, owes: available < 0 }
+        })
       },
     },
 
@@ -1465,6 +1531,7 @@ export const platformWide = async (env: TenancyEnv, staffId: string): Promise<Pl
     merchants: wrapGroup(env, scope, 'merchants', only.merchants) as PlatformRepository['merchants'],
     audit: wrapGroup(env, scope, 'audit', only.audit) as PlatformRepository['audit'],
     payouts: wrapGroup(env, scope, 'payouts', only.payouts) as PlatformRepository['payouts'],
+    parts: wrapGroup(env, scope, 'parts', only.parts) as PlatformRepository['parts'],
   }
 }
 

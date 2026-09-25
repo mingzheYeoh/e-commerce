@@ -32,6 +32,8 @@ interface ProductRow {
   price_minor: number
   colorways: string
   stock_count: number
+  /** The merchant's rate now, frozen onto the line it prices. */
+  commission_bps: number
 }
 
 /**
@@ -48,7 +50,7 @@ async function resolve(env: OrdersEnv, ids: string[]) {
   const { results } = await env.ORDERS.prepare(
     // A suspended merchant's product is not for sale even if a basket, or a
     // cached copy of the catalogue, still holds it.
-    `SELECT p.id, p.merchant_id, p.sku, p.title, p.price_minor, p.colorways, p.stock_count
+    `SELECT p.id, p.merchant_id, p.sku, p.title, p.price_minor, p.colorways, p.stock_count, m.commission_bps
        FROM products p JOIN merchants m ON m.id = p.merchant_id
       WHERE p.status = 'published' AND m.status = 'active' AND p.id IN (${marks})`,
   )
@@ -110,7 +112,16 @@ export interface OrderPayload {
 }
 
 export type PlaceResult =
-  | { status: 200; body: { id: string; total: number } }
+  | {
+      status: 200
+      body: {
+        id: string
+        total: number
+        totals: { subtotal: number; shipping: number; tax: number; total: number }
+        /** This id was already stored: the answer describes that order, not this request. */
+        existing?: true
+      }
+    }
   | { status: 400 | 409 | 503; body: { error: string; code?: 'duplicate' } }
 
 const str = (v: unknown, max = 200): string | null =>
@@ -139,6 +150,32 @@ export async function placeOrder(
   // The same alphabet the client draws from. A free-form id would let a caller
   // choose one that looks like someone else's.
   if (!id || !/^NX-[A-HJ-NP-Z2-9]{5}$/.test(id)) return { status: 400, body: { error: 'bad order id' } }
+
+  /*
+   * An id already stored is answered first, before any stock or catalogue
+   * check. A retry of an order that landed while its answer was lost would
+   * otherwise be judged afresh — and refused as sold out by the very units it
+   * took — telling the shopper a paid order failed, and sending them to pay
+   * again. The answer carries the stored totals, so the receipt shows what the
+   * server charged. Whether this id is the caller's own retry or a collision
+   * with somebody else's order is the checkout's to decide (it knows whether
+   * it sent this id before); the totals are no more than GET /api/orders/:id
+   * already tells anyone holding the id.
+   */
+  const stored = await env.ORDERS.prepare(
+    `SELECT subtotal_cents, shipping_cents, tax_cents, total_cents FROM orders WHERE id = ?1`,
+  )
+    .bind(id)
+    .first<{ subtotal_cents: number; shipping_cents: number; tax_cents: number; total_cents: number }>()
+  if (stored) {
+    const totals = {
+      subtotal: stored.subtotal_cents,
+      shipping: stored.shipping_cents,
+      tax: stored.tax_cents,
+      total: stored.total_cents,
+    }
+    return { status: 200, body: { id, total: totals.total, totals, existing: true } }
+  }
 
   // Whether this method exists at all. Whether it runs to *this* address is
   // checked below, once the country is known.
@@ -231,6 +268,7 @@ export async function placeOrder(
   const lines: {
     productId: string
     merchantId: string
+    commissionBps: number
     sku: string
     title: string
     qty: number
@@ -266,6 +304,7 @@ export async function placeOrder(
     lines.push({
       productId,
       merchantId: product.merchant_id,
+      commissionBps: product.commission_bps,
       sku: product.sku,
       title: product.title,
       qty: qty as number,
@@ -334,10 +373,12 @@ export async function placeOrder(
       ),
       ...lines.map((l) =>
         env.ORDERS.prepare(
+          // commission_bps is the platform's rate at the moment of sale, so a
+          // later change to the merchant's rate never re-prices this line.
           `INSERT INTO order_lines (order_id, product_id, merchant_id, sku, title, qty,
-                                    unit_price_cents, variant)
-           VALUES (?1,?2,?3,?4,?5,?6,?7,?8)`,
-        ).bind(id, l.productId, l.merchantId, l.sku, l.title, l.qty, l.unit, l.finish),
+                                    unit_price_cents, variant, commission_bps)
+           VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9)`,
+        ).bind(id, l.productId, l.merchantId, l.sku, l.title, l.qty, l.unit, l.finish, l.commissionBps),
       ),
       // One statement whatever the line count: D1 counts statements per
       // invocation, and a statement per product would double what a big
@@ -352,8 +393,10 @@ export async function placeOrder(
                 WHERE id IN (SELECT json_extract(value, '$[0]') FROM json_each(?1))`,
             ).bind(units),
             env.ORDERS.prepare(
-              `INSERT INTO order_fulfilments (order_id, merchant_id)
-               SELECT DISTINCT order_id, merchant_id FROM order_lines WHERE order_id = ?1`,
+              // stock_taken = 1: these units came out of stock just above, so
+              // cancelling this part puts them back (a backfilled part never did).
+              `INSERT INTO order_fulfilments (order_id, merchant_id, stock_taken)
+               SELECT DISTINCT order_id, merchant_id, 1 FROM order_lines WHERE order_id = ?1`,
             ).bind(id),
           ]
         : []),
@@ -375,7 +418,7 @@ export async function placeOrder(
     return { status: 503, body: { error: 'could not store order' } }
   }
 
-  return { status: 200, body: { id, total: totals.total } }
+  return { status: 200, body: { id, total: totals.total, totals } }
 }
 
 export interface StoredOrder {

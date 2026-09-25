@@ -1202,6 +1202,7 @@ describe('what /api/health reports', () => {
       mail: true,
       loginRateLimit: false,
       signupRateLimit: false,
+      orderRateLimit: false,
       durableThrottle: false,
     })
 
