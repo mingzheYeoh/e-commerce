@@ -79,6 +79,18 @@ const vectors = new Float32Array((await fs.readFile('public/media/search/product
 const { recommend } = await loadModule('src/lib/recommend.ts')
 const embed = await pipeline('feature-extraction', MODEL, { dtype: 'q8' })
 
+/*
+ * The catalogue the labels were judged against: the build-time snapshot, which
+ * is also exactly what the --ablate exact scan ranks. The hosted index is
+ * written live by nexus-console, so it also holds every product merchants have
+ * published since, none of them labelled. Left in, each one that outranks a
+ * labelled product counts as a miss and the exact-vs-ANN agreement check below
+ * warns about a stale index that is not stale. Remote hits are restricted to
+ * this set before scoring, so both routes rank the same corpus.
+ */
+const { products } = await loadModule('src/data/products.ts')
+const labelled = new Set(products.map((p) => p.id))
+
 const semanticFor = async (q) => {
   const out = await embed([q], { pooling: 'mean', normalize: true })
   const query = Float32Array.from(out.data)
@@ -91,16 +103,18 @@ const semanticFor = async (q) => {
 /**
  * Asks the deployed worker for a ranking, with no model in the loop.
  *
- * topK is the whole catalogue so MRR is comparable: truncating the ranking
+ * topK is the endpoint's maximum so MRR is comparable: truncating the ranking
  * would score a backend 0 on any query whose first relevant hit fell outside
- * the window, which measures the window rather than the retrieval.
+ * the window, which measures the window rather than the retrieval. 50 covers
+ * the 45 labelled products with room for a few merchant ones; once dozens of
+ * merchant products outrank labelled ones, the tail of MRR starts to read low.
  */
 async function vectorizeFor(q) {
   const started = Date.now()
   const res = await fetch(`${API}/api/search?q=${encodeURIComponent(q)}&k=50`)
   if (!res.ok) throw new Error(`${API} answered ${res.status} for "${q}"`)
   const body = await res.json()
-  return { ids: body.ids, wall: Date.now() - started, ...body.timing }
+  return { ids: body.ids.filter((id) => labelled.has(id)), wall: Date.now() - started, ...body.timing }
 }
 
 const timings = { device: [], hosted: [], hostedEmbed: [], hostedQuery: [] }
@@ -165,7 +179,6 @@ for (const { q, relevant } of evalSet) {
  * picture entirely.
  */
 async function ablate() {
-  const { products } = await loadModule('src/data/products.ts')
   const { documentFor, passageFor } = await loadModule('src/lib/passages.ts')
 
   const models = [
@@ -302,6 +315,7 @@ if (ABLATE) {
     if (drift > 0.1) {
       console.log(`    WARNING: ${(drift * 100).toFixed(1)} pts apart. The deployed index is probably stale —`)
       console.log('             rebuild and upsert: node scripts/build-vectorize.mjs')
+      console.log('             (merchant products are already excluded; they cannot cause this)')
     }
   }
 }
