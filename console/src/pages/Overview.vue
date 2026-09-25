@@ -2,17 +2,20 @@
 import { computed, onMounted, ref } from 'vue'
 import StatCard from '../components/StatCard.vue'
 import SalesChart from '../components/SalesChart.vue'
-import { merchantOverview, isError, type Overview } from '../api'
+import { merchantOverview, merchantBalance, isError, type Balance, type Overview } from '../api'
 import { formatAmounts, formatMinor, groupByCurrency, seriesByCurrency } from '../money'
 
 const data = ref<Overview | null>(null)
 const error = ref<string | null>(null)
+/** Settlement per currency; empty until anything has sold. A failed read hides the section, not the page. */
+const balances = ref<Balance[]>([])
 
 onMounted(async () => {
-  const { body } = await merchantOverview()
+  const [{ body }, money] = await Promise.all([merchantOverview(), merchantBalance()])
   if (isError(body)) error.value = body.error
   else if ('revenue' in body) data.value = body
   else error.value = 'Something went wrong. Reload and try again.'
+  if ('balances' in money.body) balances.value = money.body.balances
 })
 
 const series = computed(() => (data.value ? seriesByCurrency(data.value.trend) : []))
@@ -48,6 +51,32 @@ const sub = (window: 'today' | 'week' | 'month') => {
         :value="`${data.products.published} live`"
         :sub="`${data.products.draft} draft · ${data.products.archived} archived`"
       />
+    </section>
+
+    <section v-if="balances.length" class="card p-4 md:p-6">
+      <h2 class="mb-1 text-sm font-semibold text-text-primary">Balance</h2>
+      <p class="mb-4 text-xs text-text-muted">
+        All time: net sales, less the platform's commission at the rate each sale was made at, less payouts.
+        Payouts are simulated, like payment.
+      </p>
+      <ul class="flex flex-col divide-y divide-border-hairline">
+        <li v-for="b in balances" :key="b.currency" class="flex flex-wrap items-baseline gap-x-4 gap-y-1 py-2.5 text-sm">
+          <span class="label w-12">{{ b.currency }}</span>
+          <span
+            class="nums font-semibold"
+            :class="b.owes ? 'text-accent-red' : 'text-text-primary'"
+          >{{ formatMinor(b.owes ? -b.available : b.available, b.currency) }}</span>
+          <span v-if="b.owes" class="rounded-full border border-accent-red/40 px-2 py-0.5 text-xs text-accent-red">
+            You owe the platform
+          </span>
+          <span v-else class="text-xs text-text-secondary">available</span>
+          <span class="nums text-xs text-text-muted">
+            {{ formatMinor(b.gross, b.currency) }} gross · {{ formatMinor(b.refunds, b.currency) }} refunded ·
+            {{ formatMinor(b.commission, b.currency) }} commission · {{ formatMinor(b.payouts, b.currency) }} paid out ·
+            now {{ b.currentBps / 100 }}%
+          </span>
+        </li>
+      </ul>
     </section>
 
     <section class="card p-4 md:p-6">

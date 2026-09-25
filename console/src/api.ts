@@ -242,6 +242,21 @@ export type AuditEntry = {
 
 export const merchantOverview = () => call<Overview | ErrorBody>('/api/merchant/overview')
 
+/** One currency's settlement position, in minor units. `owes`: available is negative. */
+export type Balance = {
+  merchantId: string
+  currency: string
+  currentBps: number
+  gross: number
+  refunds: number
+  commission: number
+  payouts: number
+  available: number
+  owes: boolean
+}
+
+export const merchantBalance = () => call<{ balances: Balance[] } | ErrorBody>('/api/merchant/balance')
+
 export const listOrders = (range: { from?: string; to?: string }) => {
   const q = new URLSearchParams(Object.entries(range).filter(([, v]) => v) as [string, string][])
   return call<{ from: string; to: string; truncated: boolean; orders: OrderSummary[] } | ErrorBody>(

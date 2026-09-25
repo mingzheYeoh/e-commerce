@@ -63,6 +63,11 @@ async function act(run: () => Promise<{ body: object | ErrorBody }>): Promise<bo
     }
     await load()
     return true
+  } catch {
+    // No answer at all (offline, a dropped connection): the change may or may
+    // not have landed, so say that rather than nothing.
+    actionError.value = 'Could not reach the console. Check your connection, then reload to see where this order stands.'
+    return false
   } finally {
     busy.value = false
   }

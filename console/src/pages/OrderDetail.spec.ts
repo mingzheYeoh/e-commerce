@@ -79,6 +79,19 @@ describe('the order page actions', () => {
     confirm.mockRestore()
   })
 
+  it('says so when the console cannot be reached, rather than doing nothing', async () => {
+    vi.mocked(shipOrder).mockRejectedValueOnce(new TypeError('Failed to fetch'))
+    const w = await render('pending')
+    await w.findAll('button').find((b) => b.text() === 'Mark shipped')!.trigger('click')
+    await w.find('#ship-carrier').setValue('UPS')
+    await w.find('#ship-tracking').setValue('1Z')
+    await w.find('form').trigger('submit')
+    await flushPromises()
+    expect(w.find('[role="alert"]').text()).toMatch(/Could not reach the console/)
+    // The button is usable again.
+    expect(w.findAll('button').find((b) => b.text() === 'Mark shipped')!.attributes('disabled')).toBeUndefined()
+  })
+
   it("shows the worker's refusal rather than swallowing it", async () => {
     vi.mocked(refundLine).mockResolvedValueOnce({ status: 409, body: { error: 'Only 5.00 USD is left to refund on this line.' } })
     vi.spyOn(window, 'confirm').mockReturnValue(true)
