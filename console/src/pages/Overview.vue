@@ -2,18 +2,23 @@
 import { computed, onMounted, ref } from 'vue'
 import StatCard from '../components/StatCard.vue'
 import SalesChart from '../components/SalesChart.vue'
-import { merchantOverview, isError, type Overview } from '../api'
+import { merchantOverview, merchantQueue, isError, type Overview, type Queue } from '../api'
 import { formatAmounts, formatMinor, groupByCurrency, seriesByCurrency } from '../money'
 
 const data = ref<Overview | null>(null)
+// The action cards are a second read; if it fails the overview still shows, without them.
+const queue = ref<Queue | null>(null)
 const error = ref<string | null>(null)
 
 onMounted(async () => {
-  const { body } = await merchantOverview()
+  const [{ body }, q] = await Promise.all([merchantOverview(), merchantQueue()])
   if (isError(body)) error.value = body.error
   else if ('revenue' in body) data.value = body
   else error.value = 'Something went wrong. Reload and try again.'
+  if ('toShip' in q.body) queue.value = q.body
 })
+
+const TILE = 'block rounded-card transition-colors hover:[&>div]:border-border-strong focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent'
 
 const series = computed(() => (data.value ? seriesByCurrency(data.value.trend) : []))
 const top = computed(() => (data.value ? groupByCurrency(data.value.top) : []))
@@ -39,15 +44,42 @@ const sub = (window: 'today' | 'week' | 'month') => {
       Gross is before refunds. Days are UTC.
     </p>
 
+    <section v-if="queue && (queue.toShip || queue.lowStock || queue.outOfStock)" class="grid grid-cols-1 gap-3 xs:grid-cols-2" aria-label="Needs doing">
+      <router-link v-if="queue.toShip" to="/orders?status=pending" :class="TILE">
+        <div class="card border-accent-amber/40 p-4">
+          <p class="label">Orders to ship</p>
+          <p class="nums mt-1 font-display text-xl font-bold text-accent-amber">{{ queue.toShip }}</p>
+          <p class="mt-1 text-xs text-text-secondary">Paid and waiting on you → ship them</p>
+        </div>
+      </router-link>
+      <router-link v-if="queue.lowStock || queue.outOfStock" :to="`/inventory?filter=${queue.outOfStock ? 'out' : 'low'}`" :class="TILE">
+        <div class="card border-accent-amber/40 p-4">
+          <p class="label">Stock running out</p>
+          <p class="nums mt-1 font-display text-xl font-bold text-accent-amber">
+            {{ queue.outOfStock }} out · {{ queue.lowStock }} low
+          </p>
+          <p class="mt-1 text-xs text-text-secondary">Live products at {{ queue.lowStockAt }} or fewer → restock</p>
+        </div>
+      </router-link>
+    </section>
+
     <section class="grid grid-cols-1 gap-3 xs:grid-cols-2 lg:grid-cols-4">
-      <StatCard label="Net today" :value="formatAmounts(data.revenue.today, 'No sales')" :sub="sub('today')" />
-      <StatCard label="Net, last 7 days" :value="formatAmounts(data.revenue.week, 'No sales')" :sub="sub('week')" />
-      <StatCard label="Net, last 30 days" :value="formatAmounts(data.revenue.month, 'No sales')" :sub="sub('month')" />
-      <StatCard
-        label="Products"
-        :value="`${data.products.published} live`"
-        :sub="`${data.products.draft} draft · ${data.products.archived} archived`"
-      />
+      <router-link to="/orders" :class="TILE">
+        <StatCard label="Net today" :value="formatAmounts(data.revenue.today, 'No sales')" :sub="sub('today')" />
+      </router-link>
+      <router-link to="/reports" :class="TILE">
+        <StatCard label="Net, last 7 days" :value="formatAmounts(data.revenue.week, 'No sales')" :sub="sub('week')" />
+      </router-link>
+      <router-link to="/reports" :class="TILE">
+        <StatCard label="Net, last 30 days" :value="formatAmounts(data.revenue.month, 'No sales')" :sub="sub('month')" />
+      </router-link>
+      <router-link to="/inventory" :class="TILE">
+        <StatCard
+          label="Products"
+          :value="`${data.products.published} live`"
+          :sub="`${data.products.draft} draft · ${data.products.archived} archived`"
+        />
+      </router-link>
     </section>
 
     <section class="card p-4 md:p-6">
