@@ -11,6 +11,16 @@ import { extractFacts } from './extract-facts'
 import type { Product } from '@/types'
 
 /**
+ * What the hosted passage is written from, and nothing else.
+ *
+ * Narrower than Product so nexus-console can build one straight from a D1 row
+ * when a merchant publishes (worker/src/indexing.ts) without inventing a
+ * rating or a photo it has no use for. It is also the list of fields whose
+ * change means a product must be re-embedded.
+ */
+export type PassageSource = Pick<Product, 'title' | 'brand' | 'category' | 'priceMinor' | 'specsSummary' | 'specs'>
+
+/**
  * What a product "means", as a sentence. Used by the on-device index.
  *
  * Titles alone embed poorly — "Q3 Max QMK Custom" carries no signal about
@@ -37,7 +47,7 @@ export function documentFor(p: Product): string {
  * facts are appended because a question like "which charges fastest" is
  * answered by the number, not by the marketing line.
  */
-export function passageFor(p: Product): string {
+export function passageFor(p: PassageSource): string {
   const f = extractFacts(p)
   const numbers = Object.entries(f)
     .filter(([, v]) => typeof v === 'number')

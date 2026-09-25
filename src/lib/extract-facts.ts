@@ -13,6 +13,9 @@
  */
 import type { Product } from '@/types'
 
+/** Facts come from the spec text alone, so a D1 row's two JSON columns are enough. */
+type SpecSource = Pick<Product, 'specsSummary' | 'specs'>
+
 export interface ProductFacts {
   batteryHours?: number
   batteryMah?: number
@@ -26,7 +29,7 @@ export interface ProductFacts {
   features: string[]
 }
 
-const specText = (p: Product) =>
+const specText = (p: SpecSource) =>
   [...p.specsSummary, ...p.specs.map((s) => `${s.label}: ${s.value}`)].join(' | ')
 
 /**
@@ -38,7 +41,7 @@ const specText = (p: Product) =>
  * matched. Headphones do not have refresh rates; the fix is to ask the right
  * lines rather than to make the pattern cleverer.
  */
-const linesAbout = (p: Product, subject: RegExp) =>
+const linesAbout = (p: SpecSource, subject: RegExp) =>
   p.specs
     .filter((s) => subject.test(s.label) || subject.test(s.value))
     .map((s) => `${s.label}: ${s.value}`)
@@ -151,7 +154,7 @@ function displayRefresh(displayText: string): number | undefined {
   return hz !== undefined && hz >= 24 && hz <= 540 ? hz : undefined
 }
 
-export function extractFacts(product: Product): ProductFacts {
+export function extractFacts(product: SpecSource): ProductFacts {
   const text = specText(product)
   const displayText = linesAbout(product, /display|screen|refresh|panel|oled|amoled|lcd/i)
   // Battery claims and charging claims share a line; scoping keeps a quoted

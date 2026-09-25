@@ -11,11 +11,25 @@
  * all — the binding is the credential, and it never leaves Cloudflare.
  */
 import { facts, type GraphEnv } from './graph'
+import { liveIds } from './catalogue'
 
 export interface Env extends GraphEnv {
   AI: Ai
   VECTORIZE: VectorizeIndex
+  /** The catalogue itself. The index is a copy; every hit is checked against this. */
+  ORDERS: D1Database
 }
+
+/**
+ * Hits asked of Vectorize beyond what a caller wants, so the liveness check
+ * can drop a few and still leave a full list.
+ *
+ * ponytail: five covers a lagging or failed delete. A suspended merchant's
+ * vectors stay in the index by design (restoring them then needs no
+ * re-embedding), so a large catalogue suspended for a long time can crowd a
+ * query past this; deleting on suspension is the upgrade if that ever shows.
+ */
+export const SLACK = 5
 
 const EMBED_MODEL = '@cf/baai/bge-small-en-v1.5'
 
@@ -96,17 +110,29 @@ function numericIntent(question: string): { property: string; value: number } | 
  */
 export const POOLING = 'cls' as const
 
-/** Embeds one string, or returns null if the model gave back an async job. */
-export async function embedOne(env: Env, text: string): Promise<number[] | null> {
+/**
+ * Embeds one string, or returns null if the model gave back an async job.
+ *
+ * Questions and, since nexus-console indexes on publish (indexing.ts),
+ * passages both come through here — which is what keeps the two sides on one
+ * model and one pooling.
+ */
+export async function embedOne(env: Pick<Env, 'AI'>, text: string): Promise<number[] | null> {
   const out = await env.AI.run(EMBED_MODEL, { text: [text], pooling: POOLING })
   return 'data' in out ? (out.data?.[0] ?? null) : null
 }
 
-/** Vector search over the product passages held in Vectorize. */
-async function vectorPassages(env: Env, question: string, topK = 5): Promise<Passage[]> {
+/** Vector passages a question keeps, once the liveness check has run. */
+const VECTOR_K = 5
+
+/**
+ * Vector search over the product passages held in Vectorize: SLACK more than
+ * VECTOR_K, because ask() checks them against D1 before trimming.
+ */
+async function vectorPassages(env: Env, question: string): Promise<Passage[]> {
   const vector = await embedOne(env, question)
   if (!vector) return []
-  const hits = await env.VECTORIZE.query(vector, { topK, returnMetadata: 'all' })
+  const hits = await env.VECTORIZE.query(vector, { topK: VECTOR_K + SLACK, returnMetadata: 'all' })
   return hits.matches.map((m) => ({
     id: String(m.id),
     title: String(m.metadata?.title ?? m.id),
@@ -136,7 +162,8 @@ export interface SearchResult {
  *
  * Workers pin `Date.now()` between I/O operations, so these measure the awaits
  * they bracket and nothing else — which is exactly what is wanted here, and is
- * also why there is no third number for the arithmetic in between.
+ * also why there is no third number for the arithmetic in between. The
+ * liveness check after the query is left out of both: it is neither bet.
  */
 export async function search(env: Env, question: string, topK = 20): Promise<SearchResult> {
   const t0 = Date.now()
@@ -144,12 +171,15 @@ export async function search(env: Env, question: string, topK = 20): Promise<Sea
   const t1 = Date.now()
   if (!vector) return { ids: [], scores: [], timing: { embed: t1 - t0, query: 0 } }
 
-  const hits = await env.VECTORIZE.query(vector, { topK })
+  const hits = await env.VECTORIZE.query(vector, { topK: topK + SLACK })
   const t2 = Date.now()
 
+  const live = await liveIds(env, hits.matches.map((m) => String(m.id)))
+  const kept = hits.matches.filter((m) => live.has(String(m.id))).slice(0, topK)
+
   return {
-    ids: hits.matches.map((m) => String(m.id)),
-    scores: hits.matches.map((m) => m.score),
+    ids: kept.map((m) => String(m.id)),
+    scores: kept.map((m) => m.score),
     timing: { embed: t1 - t0, query: t2 - t1 },
   }
 }
@@ -192,7 +222,9 @@ Rules:
  */
 function verifyCitations(text: string, passages: Passage[]): string[] {
   const known = new Set(passages.map((p) => p.id))
-  const cited = [...text.matchAll(/\[([a-z0-9-]+)\]/gi)].map((m) => m[1])
+  // Underscore included: console-minted ids are `prd_…`, and a pattern that
+  // stopped at [a-z0-9-] reported every answer about one as ungrounded.
+  const cited = [...text.matchAll(/\[([a-z0-9_-]+)\]/gi)].map((m) => m[1])
   return [...new Set(cited.filter((id) => known.has(id)))]
 }
 
@@ -201,9 +233,14 @@ export async function ask(env: Env, question: string): Promise<Answer> {
   if (!q) return { answer: REFUSAL, citations: [], grounded: false, refused: true }
 
   const [vector, graph] = await Promise.all([vectorPassages(env, q), graphPassages(env, q)])
+  // One read of D1 for both lists. The index and the graph are both copies,
+  // and either may still hold a product that was unpublished, archived or
+  // whose merchant was suspended after it was built.
+  const live = await liveIds(env, [...graph, ...vector].map((p) => p.id))
+  const [liveGraph, liveVector] = [graph, vector].map((list) => list.filter((p) => live.has(p.id)))
   // Graph rows first: when a question has a numeric constraint, that is the
   // part the model is least able to work out for itself.
-  const passages = [...graph, ...vector].slice(0, 8)
+  const passages = [...liveGraph, ...liveVector.slice(0, VECTOR_K)].slice(0, 8)
 
   if (!passages.length) {
     return { answer: REFUSAL, citations: [], grounded: false, refused: true }
