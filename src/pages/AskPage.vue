@@ -3,7 +3,7 @@ import { ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import AskPanel from '@/components/commerce/AskPanel.vue'
 import ChatAssistant from '@/components/commerce/ChatAssistant.vue'
-import { products } from '@/data/products'
+import { catalogue } from '@/stores/catalog'
 
 /**
  * Two modes, because they demonstrate different things and fail differently.
@@ -33,7 +33,7 @@ const MODES = [
       <header class="mb-8 max-w-2xl">
         <h1 class="text-3xl font-bold md:text-4xl">Ask about the catalogue</h1>
         <p class="mt-3 text-text-secondary">
-          Answers come from the published specifications of all {{ products.length }} products —
+          Answers come from the published specifications of all {{ catalogue.length }} products —
           charging speeds, ports, battery figures, what pairs with what. Every claim links to the
           product it came from, and anything the catalogue does not cover is declined rather than
           guessed at.

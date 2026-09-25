@@ -320,6 +320,19 @@ describe('placeOrder prices from the catalogue', () => {
     expect(result.status).toBe(400)
     expect((result.body as { error: string }).error).toBe('unknown product')
   })
+
+  it("will not sell a suspended merchant's product, published or not, and sells it again once restored", async () => {
+    // A basket or a cached catalogue can still hold the id after the
+    // storefront stopped showing it; checkout is where suspension has to bite.
+    const { db, raw, rows } = seeded()
+    raw.prepare(`UPDATE merchants SET status = 'suspended' WHERE id = 'mch_nexus'`).run()
+    const refused = await placeOrder({ ORDERS: db }, payload())
+    expect(refused).toEqual({ status: 400, body: { error: 'unknown product' } })
+    expect(rows('orders')).toHaveLength(0)
+
+    raw.prepare(`UPDATE merchants SET status = 'active' WHERE id = 'mch_nexus'`).run()
+    expect((await placeOrder({ ORDERS: db }, payload())).status).toBe(200)
+  })
 })
 
 describe('placeOrder addresses', () => {

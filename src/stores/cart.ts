@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import type { Product } from '@/types'
-import { products } from '@/data/products'
+import { catalogue, catalogueStatus, findProduct } from './catalog'
 
 export interface CartLine {
   /**
@@ -14,7 +14,12 @@ export interface CartLine {
   title: string
   brand: string
   thumb: string
-  /** Frozen at add time so a later price change never rewrites a bag. */
+  /**
+   * The price when it was added. Kept for storage only: what the bag shows and
+   * charges is the live catalogue price, via the `lines` getter, because the
+   * order endpoint re-prices from the live catalogue anyway - a frozen price
+   * here would only be a second price for one product.
+   */
   unitPriceCents: number
   qty: number
   stockCount: number
@@ -28,6 +33,24 @@ export interface CartLine {
    * fire-and-forget.
    */
   finish?: string
+}
+
+/**
+ * A stored line joined to the live catalogue.
+ *
+ * `available` is false once the product is no longer published (unpublished,
+ * archived, merchant suspended) or is sold out. The line stays in the bag so
+ * the shopper can see what happened, but checkout refuses it. The order
+ * endpoint refuses an unpublished product too; it does NOT check stock, so a
+ * sold-out line is stopped here or nowhere.
+ *
+ * `qty` is the stored quantity clamped to live stock, and `limited` says the
+ * clamp bit. Bag, subtotal and the posted order all use this `qty`, so they
+ * cannot disagree about how many are being bought.
+ */
+export interface CartView extends CartLine {
+  available: boolean
+  limited: boolean
 }
 
 /**
@@ -60,10 +83,10 @@ const stored = {
       // productId at runtime even though the type says it must.
       //
       // Repair it the way `checkout.ts`'s `loadOrder()` repairs a delisted
-      // product: look the sku up in the bundled catalogue, which every
+      // product: look the sku up in the catalogue, which every
       // stored line has always carried. A sku that no longer resolves is
       // dropped, same as this app already treats a delisted product.
-      const bySku = new Map(products.map((p) => [p.sku, p]))
+      const bySku = new Map(catalogue.value.map((p) => [p.sku, p]))
       const lines = JSON.parse(raw) as CartLine[]
       return lines.flatMap((line) => {
         if (line.productId) return [line]
@@ -94,14 +117,55 @@ export const useCartStore = defineStore('cart', {
   }),
 
   getters: {
-    count: (state) => state.items.reduce((total, line) => total + line.qty, 0),
+    /** Units in the bag, as the bag shows them (clamped to live stock). */
+    count(): number {
+      return this.lines.reduce((total, line) => total + line.qty, 0)
+    },
+
+    /**
+     * What the bag renders and what checkout orders: each line with the live
+     * price, stock, title and image of its product.
+     *
+     * A product missing from the list is gone only once the live catalogue
+     * has answered. Before that - or when the fetch failed - it may just be
+     * newer than the build-time snapshot, so its stored line stands in and the
+     * server, which re-prices every line, has the final word.
+     */
+    lines: (state): CartView[] =>
+      state.items.map((line) => {
+        const p = findProduct(line.productId)
+        if (!p) return { ...line, available: catalogueStatus.value !== 'live', limited: false }
+        // A sold-out line keeps its quantity: it is unavailable, not zero.
+        const qty = p.stockCount > 0 ? Math.min(line.qty, p.stockCount) : line.qty
+        return {
+          ...line,
+          title: p.title,
+          brand: p.brand,
+          thumb: p.media.thumb,
+          unitPriceCents: p.priceMinor,
+          stockCount: p.stockCount,
+          qty,
+          limited: qty < line.qty,
+          available: p.inStock && p.stockCount > 0,
+        }
+      }),
+
+    /** Any line that cannot be ordered. Checkout refuses while this is true. */
+    hasUnavailable(): boolean {
+      return this.lines.some((line) => !line.available)
+    },
 
     /**
      * Cents, not dollars. Every total in the UI derives from this, so float
-     * cents can never accumulate across lines.
+     * cents can never accumulate across lines. Unavailable lines are not in it:
+     * they cannot be bought, so they cannot be owed.
      */
-    subtotalCents: (state) =>
-      state.items.reduce((total, line) => total + line.unitPriceCents * line.qty, 0),
+    subtotalCents(): number {
+      return this.lines.reduce(
+        (total, line) => (line.available ? total + line.unitPriceCents * line.qty : total),
+        0,
+      )
+    },
   },
 
   actions: {
@@ -135,7 +199,8 @@ export const useCartStore = defineStore('cart', {
       const index = this.items.findIndex((line) => lineKey(line) === key)
       if (index === -1) return
 
-      const next = clamp(qty, this.items[index].stockCount)
+      const line = this.items[index]
+      const next = clamp(qty, findProduct(line.productId)?.stockCount ?? line.stockCount)
       if (next === 0) this.items.splice(index, 1)
       else this.items[index].qty = next
     },

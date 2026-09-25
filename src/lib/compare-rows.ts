@@ -60,7 +60,8 @@ const BADGES: Record<NonNullable<Product['badge']>, string> = {
 const UNIVERSAL: CompareRow[] = [
   { label: 'Price', get: (p) => p.priceMinor, money: true, direction: 'lower' },
   { label: 'Brand', get: (p) => brandName(p.brand), direction: null },
-  { label: 'Rating', get: (p) => p.rating, unit: ' / 5', direction: 'higher' },
+  // Unreviewed is no rating, not a zero one: a dash, and nothing to rank.
+  { label: 'Rating', get: (p) => (p.reviewCount ? p.rating : null), unit: ' / 5', direction: 'higher' },
   {
     label: 'Reviews',
     get: (p) => (p.reviewCount ? p.reviewCount.toLocaleString('en-US') : null),

@@ -65,7 +65,7 @@ const assurances = [
     <!-- Colourways -->
     <div v-if="product.colorways.length > 1" class="mt-6">
       <p class="text-sm font-medium">
-        Finish: <span class="font-normal text-text-secondary">{{ variant.name }}</span>
+        Finish: <span class="font-normal text-text-secondary">{{ variant?.name }}</span>
       </p>
       <div class="mt-2 flex gap-2">
         <button
@@ -74,11 +74,11 @@ const assurances = [
           type="button"
           class="h-9 w-9 rounded-full border-2 transition-transform"
           :class="
-            variant.name === option.name ? 'scale-110 border-accent' : 'border-white/20 hover:border-white/50'
+            variant?.name === option.name ? 'scale-110 border-accent' : 'border-white/20 hover:border-white/50'
           "
           :style="{ backgroundColor: option.hex }"
           :aria-label="`Select ${option.name}`"
-          :aria-pressed="variant.name === option.name"
+          :aria-pressed="variant?.name === option.name"
           @click="variant = option"
         />
       </div>

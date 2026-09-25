@@ -1,6 +1,7 @@
 # NEXUS
 
 **Live: https://nexus-tech-collective.mingzhe030228.workers.dev**
+**Merchant console: https://nexus-console.mingzhe030228.workers.dev**
 
 A multi-brand consumer-electronics storefront built as an AI-engineering
 showcase: 18 brands, 45 products across five categories, real manufacturer
@@ -32,15 +33,19 @@ A walk through the whole seller-side loop, in order:
 2. **Approve.** Sign in to the console as the seeded platform admin (there is
    no self-registration for platform staff — see `scripts/seed-platform-admin.mjs`),
    enrol TOTP if this is its first sign-in, then approve the application on
-   `/applications` with a storefront address (a slug).
+   `/platform/applications` with a storefront address (a slug). The same
+   account sees platform-wide sales on `/platform`, can suspend or restore any
+   merchant on `/platform/merchants`, and reads the audit log on
+   `/platform/audit`.
 3. **Sign in as the merchant.** TOTP enrolment is mandatory here too — an
    authenticator app is required, there is no way to skip it.
 4. **Manage a catalogue.** Add a product, then set its price and stock.
-   Publishing is refused for now, on purpose: the console cannot upload photos
-   yet, and the storefront cannot render a product without them. The
-   storefront is also a build-time snapshot of the catalogue, so a published
-   product would show up only after the next storefront build, not the moment
-   you publish it.
+   Publishing needs a price, three highlights and at least one photo, because
+   the storefront cannot render a product without them. The storefront paints
+   from a build-time snapshot of the catalogue and then reads the live one once
+   per page load (`GET /api/products`, which the browser may cache for 30
+   seconds), so a published product shows up on a refresh within about 30
+   seconds, not at the next build.
 
 Payments are simulated with Stripe's published test card numbers, not a real
 gateway — see [`src/lib/payment.ts`](src/lib/payment.ts) — and nothing here
@@ -206,6 +211,34 @@ The lessons were all about tool contracts, not prompts. The model passes
 zero once made it claim the XPS 16 "has a smaller battery" when Dell publishes
 none — omitted fields now return `"not published"`.
 
+### 4. Live indexing, and a guard for when it lags
+
+A product a merchant publishes reaches all three layers within seconds, not at
+the next build. When a console save leaves a product published and something
+its passage is made of changed (title, brand, category, price, highlights,
+specs), `nexus-console` embeds `passageFor()` with the same model and pooling as
+the query side and upserts it under the product id, with the metadata
+`scripts/build-vectorize.mjs` writes (`worker/src/indexing.ts`); unpublishing or
+archiving deletes it. This runs in `ctx.waitUntil` and swallows its own errors,
+so it never fails or slows a save. The assistant's name lookup, comparison and
+numeric filter read D1 directly, with figures from the same `extractFacts()` the
+graph is built with, and the search box embeds on-device any live product the
+shipped vector file lacks.
+
+The index is a copy, so it is never trusted on its own: every hit from
+Vectorize (and every graph row fed to `/api/ask`) is checked against D1 in one
+query — published, and sold by an active merchant — before a model sees it.
+That makes unpublishing or suspending a merchant take effect on the next
+question even if a delete lagged or failed, with no hook in the routes that
+change status. Staging and production each have their own index
+(`nexus-products-staging`, `nexus-products`), since both are now written to.
+
+What stays offline: the Neo4j graph. Pairing and charger edges
+(`find_accessories`) and the numeric passages `/api/ask` adds come from
+`scripts/build-graph.mjs`, so a new product appears there only after a rebuild.
+A full index rebuild is still `node scripts/build-vectorize.mjs` followed by
+`wrangler vectorize upsert`, and overwrites live entries harmlessly.
+
 ## Architecture
 
 ```
@@ -278,6 +311,15 @@ sign-in produces a session that can only prove a second factor —
 scope, merchantId }` — so a handler that wants to touch merchant or platform
 data has no argument to call with until the type says the session is active.
 The dangerous state is not rejected, it is unrepresentable.
+
+The dashboard figures follow the same rule. A merchant's orders, revenue and
+top products are filtered on `order_lines.merchant_id` inside `scopedTo`, so an
+order two merchants sold into shows each of them only their own lines and their
+own sum — never the other seller's goods or the order total. Suspending and
+restoring a merchant, and reading the audit log, exist only on the repository
+`platformWide` returns; a merchant's repository has no such methods to call.
+Totals are lists of `{ currency, minor }`: order lines take their currency from
+the product they were priced from, and two currencies are never added together.
 
 ## Asset pipeline
 
@@ -358,8 +400,9 @@ rather than trusted from the request. What is genuinely still missing:
   their password has no self-serve way back in; a customer does.
 - **Merchant staff beyond the owner.** One login per merchant; no inviting a
   teammate.
-- **Orders in the console.** A merchant manages products there; order history
-  is not yet surfaced on that side.
+- **Fulfilment in the console.** A merchant sees their own lines of every paid
+  order and where to ship them, but cannot mark anything shipped: orders have a
+  payment status and no fulfilment status yet.
 - **A route-layer isolation sweep and both timing residuals** noted in the
   registration code's own comments — known, deferred, not silently ignored.
 

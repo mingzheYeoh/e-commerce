@@ -37,7 +37,9 @@ const FLAGSHIP = 'DJI-MV4-115'
  * migrations/0010-display-order.sql.
  */
 export const QUERY =
-  `SELECT * FROM products WHERE status = 'published' ORDER BY display_order, created_at DESC, id`
+  `SELECT p.* FROM products p JOIN merchants m ON m.id = p.merchant_id
+      WHERE p.status = 'published' AND m.status = 'active'
+      ORDER BY p.display_order, p.created_at DESC, p.id`
 
 /** One D1 row as the storefront's Product. */
 export const toProduct = (r) => ({

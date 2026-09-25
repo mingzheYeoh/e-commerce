@@ -28,22 +28,23 @@ for this one table.
 
 ## Where each one has been applied
 
-Verified against `sqlite_master` on 2026-09-21.
+Verified against `sqlite_master` on 2026-09-21; production caught up on 2026-09-24.
 
 | | production `nexus-orders` | staging `nexus-orders-staging` |
 |---|---|---|
 | initial (`schema.sql`) | ✅ orders, order_lines | ✅ |
 | `0001` order-line variant | ✅ | ✅ |
-| `0002` addresses and accounts | ❌ | ✅ |
-| `0003` auth hardening | ❌ | ✅ |
-| `0004` recovery tokens | ❌ | ✅ |
-| `0005` account settings | ❌ | ✅ |
+| `0002` addresses and accounts | ✅ 2026-09-24 | ✅ |
+| `0003` auth hardening | ✅ 2026-09-24 | ✅ |
+| `0004` recovery tokens | ✅ 2026-09-24 | ✅ |
+| `0005` account settings | ✅ 2026-09-24 | ✅ |
 | `0006` tenancy | ✅ | ✅ re-applied 2026-09-21 |
-| `0007` catalogue columns | ❌ | ✅ |
-| `0008` seed catalogue | ❌ | ✅ |
-| `0009` order lines product id | ❌ | ✅ applied 2026-09-21 |
-| `0010` display order | ❌ | ✅ applied 2026-09-21, rebuilt 2026-09-22 |
-| `0011` staff sessions | ❌ | ✅ applied 2026-09-22 |
+| `0007` catalogue columns | ✅ 2026-09-24 | ✅ |
+| `0008` seed catalogue | ✅ 2026-09-24 | ✅ |
+| `0009` order lines product id | ✅ 2026-09-24 | ✅ applied 2026-09-21 |
+| `0010` display order | ✅ 2026-09-24 | ✅ applied 2026-09-21, rebuilt 2026-09-22 |
+| `0011` staff sessions | ✅ 2026-09-24 | ✅ applied 2026-09-22 |
+| `0012` audit merchant seq index | ❌ | ❌ |
 
 Production currently holds six tables: `orders`, `order_lines`, and the four
 from `0006`. It has never had `users`, `sessions`, `email_tokens` or
@@ -54,7 +55,20 @@ work — `/api/auth/me` returns 404 there and `/api/health` carries no `auth`
 key — so the code and the schema agree with each other. Production is behind
 staging by the whole accounts phase, not broken by it.
 
+## Pending
+
+**`0012` is not applied anywhere yet** — neither production nor staging. It
+is an index only, so it is safe in either order relative to the console worker
+that reads it: without it the audit log viewer still works, it just sorts the
+whole of a merchant's log for every page filtered to that merchant.
+
 ## Before production next deploys
+
+**Done 2026-09-24**, in this order: 0002–0005, 0007, 0008 (products = 45
+confirmed), 0010, 0011, then 0009 immediately followed by the nexus-api
+deploy. 0009 carried both existing order lines across (`NX-7H3QK` →
+`iphone-18-pro`, `NX-EELGJ` → `xps-16`). R2 bucket `nexus-media` created.
+The list below is kept because it explains why the order was what it was.
 
 1. **Apply `0002` through `0005` first.** The moment a worker with
    `/api/auth/*` reaches production, every one of those routes queries a table

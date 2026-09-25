@@ -25,7 +25,23 @@ import {
   type StaffResult,
   type StaffSession,
 } from './staff-auth'
-import { id, scopedTo, type NewProduct, type ProductPatch, type ProductRow, type Repository } from './tenancy'
+import {
+  id,
+  ORDER_CAP,
+  scopedTo,
+  platformWide,
+  utcDay,
+  type AuditPage,
+  type MerchantSummary,
+  type NewProduct,
+  type Overview,
+  type OrderDetail,
+  type OrderSummary,
+  type PlatformRepository,
+  type ProductPatch,
+  type ProductRow,
+  type Repository,
+} from './tenancy'
 import { guard, type IpDefences } from './auth'
 import {
   MAX_LARGE_BYTES,
@@ -40,6 +56,7 @@ import {
   newPhotoName,
   type Media,
 } from './photos'
+import { reindex } from './indexing'
 
 /*
  * Re-exported because Cloudflare resolves a Durable Object class by name from
@@ -53,6 +70,10 @@ export interface ConsoleEnv extends StaffEnv, IpDefences {
   MEDIA: R2Bucket
   /** Where nexus-api serves MEDIA from, ending in '/'. Photo URLs are this plus a key. */
   MEDIA_BASE: string
+  /** Embeds a product's passage when it goes on sale or changes (indexing.ts). */
+  AI: Ai
+  /** The index nexus-api retrieves from. One per environment, never shared. */
+  VECTORIZE: VectorizeIndex
 }
 
 const json = (body: unknown, status = 200, headers: Record<string, string> = {}) =>
@@ -105,10 +126,121 @@ async function merchantRepo(env: ConsoleEnv, request: Request): Promise<Reposito
   }
 }
 
+/** The platform repository for platform staff, or the refusal to send. */
+async function platformRepo(env: ConsoleEnv, request: Request): Promise<PlatformRepository | Response> {
+  const session = await actor(env, request)
+  if (session instanceof Response) return session
+  if (session.scope !== 'platform') return json({ error: 'not a platform account' }, 403)
+  return platformWide(env, session.staffId)
+}
+
+/* ---------------------------------------------------------------- orders io */
+
+const DAY = /^\d{4}-\d{2}-\d{2}$/
+/**
+ * A real calendar date between 2000 and 2100. 2026-02-30 matches the pattern
+ * and is not one; 9999-12-31 is one, but SQLite's date(to, '+1 day') past
+ * year 9999 is NULL, and a NULL bound silently matches nothing.
+ */
+const isDay = (v: string) =>
+  DAY.test(v) && v >= '2000-01-01' && v <= '2100-12-31' && new Date(`${v}T00:00:00Z`).toISOString().startsWith(v)
+
+/** from/to as inclusive UTC dates, defaulting to the last 30 days. */
+function orderRange(url: URL): { from: string; to: string } | string {
+  const from = url.searchParams.get('from') || utcDay(29)
+  const to = url.searchParams.get('to') || utcDay(0)
+  if (!isDay(from) || !isDay(to)) return 'Dates are YYYY-MM-DD, between 2000 and 2100.'
+  if (from > to) return 'The start date is after the end date.'
+  return { from, to }
+}
+
+/** Orders carry a name and a delivery address: no shared cache may keep them. */
+const PRIVATE = { 'cache-control': 'no-store' }
+
+const orderSummary = (o: OrderSummary) => ({
+  id: o.id,
+  placedAt: o.created_at,
+  method: o.method,
+  status: o.payment_status,
+  items: o.items,
+  totals: o.totals,
+})
+
+const orderDetail = (o: OrderDetail) => ({
+  id: o.id,
+  placedAt: o.created_at,
+  method: o.method,
+  status: o.payment_status,
+  shipTo: {
+    name: o.ship_name,
+    line1: o.ship_line1,
+    line2: o.ship_line2,
+    city: o.ship_city,
+    state: o.ship_state,
+    postal: o.ship_postal,
+    country: o.ship_country,
+  },
+  lines: o.lines.map((l) => ({
+    productId: l.product_id,
+    sku: l.sku,
+    title: l.title,
+    finish: l.variant || null,
+    qty: l.qty,
+    unitMinor: l.unit_price_cents,
+    currency: l.currency,
+  })),
+  totals: o.totals,
+})
+
+const overviewOut = (o: Overview) => ({
+  ...o,
+  top: o.top.map((t) => ({ productId: t.product_id, title: t.title, currency: t.currency, minor: t.minor, qty: t.qty })),
+  lowStock: o.lowStock.map((p) => ({ id: p.id, title: p.title, stockCount: p.stock_count })),
+})
+
+/** The platform page shows neither top products nor low stock, so neither is sent. */
+const platformOverviewOut = ({ revenue, orders, trend, products }: Overview) => ({ revenue, orders, trend, products })
+
+const merchantOut = (m: MerchantSummary) => ({
+  id: m.merchant_id,
+  name: m.name,
+  slug: m.slug,
+  status: m.status,
+  createdAt: m.created_at,
+  productCount: m.product_count,
+  revenue: m.revenue,
+})
+
+const auditOut = (a: AuditPage) => ({
+  merchantId: a.merchant_id,
+  next: a.next,
+  merchants: a.merchants,
+  entries: a.entries.map((e) => ({
+    seq: e.seq,
+    id: e.id,
+    at: e.at,
+    actorId: e.actor_id,
+    actorEmail: e.actor_email,
+    actorScope: e.actor_scope,
+    merchantId: e.merchant_id,
+    merchantName: e.merchant_name,
+    action: e.action,
+    subject: e.subject,
+  })),
+})
+
 /* ------------------------------------------------------------- products io */
 
+/**
+ * Merchant text as it will be stored: whitespace collapsed and square brackets
+ * turned round. These fields reach the AI's context, where a passage header is
+ * `[id] title` on its own line — a newline and a bracket inside a spec value
+ * could otherwise forge another merchant's product entry next to the real ones.
+ */
+const clean = (v: string) => v.replace(/\s+/g, ' ').replace(/\[/g, '(').replace(/\]/g, ')').trim()
+
 const text = (v: unknown, max: number): string | null =>
-  typeof v === 'string' && v.trim() && v.trim().length <= max ? v.trim() : null
+  typeof v === 'string' && clean(v) && clean(v).length <= max ? clean(v) : null
 
 /** A whole, non-negative number: what price_minor and stock_count accept. */
 const whole = (v: unknown): number | null =>
@@ -182,8 +314,8 @@ function productPatch(body: unknown): ProductPatch | string {
     const lines: string[] = []
     for (const v of p.specsSummary) {
       if (typeof v !== 'string') return 'Highlights are text.'
-      if (v.trim().length > 60) return 'Each highlight is 60 characters or fewer.'
-      if (v.trim()) lines.push(v.trim())
+      if (clean(v).length > 60) return 'Each highlight is 60 characters or fewer.'
+      if (clean(v)) lines.push(clean(v))
     }
     patch.specsSummary = lines
   }
@@ -193,7 +325,7 @@ function productPatch(body: unknown): ProductPatch | string {
     for (const r of p.specs) {
       const { label, value } = fields(r)
       if (typeof label !== 'string' || typeof value !== 'string') return 'A specification row is a label and a value.'
-      const [l, v] = [label.trim(), value.trim()]
+      const [l, v] = [clean(label), clean(value)]
       if (!l && !v) continue
       if (!l || !v) return 'Every specification row needs both a name and a value.'
       if (l.length > 40 || v.length > 120) return 'Specification names are 40 characters and values 120 at most.'
@@ -255,8 +387,10 @@ const PHOTOS = /^\/api\/merchant\/products\/([^/]+)\/photos$/
 const PHOTO = /^\/api\/merchant\/products\/([^/]+)\/photos\/([^/]+)$/
 const PHOTO_MAIN = /^\/api\/merchant\/products\/([^/]+)\/photos\/([^/]+)\/main$/
 const APPROVE = /^\/api\/platform\/merchants\/([^/]+)\/approve$/
+const ORDER = /^\/api\/merchant\/orders\/([^/]+)$/
+const TRANSITION = /^\/api\/platform\/merchants\/([^/]+)\/(suspend|restore)$/
 
-async function route(request: Request, env: ConsoleEnv, url: URL): Promise<Response> {
+async function route(request: Request, env: ConsoleEnv, url: URL, ctx: ExecutionContext): Promise<Response> {
   const path = url.pathname
   const method = request.method
 
@@ -342,7 +476,11 @@ async function route(request: Request, env: ConsoleEnv, url: URL): Promise<Respo
       if (why) return json({ error: why }, 409)
     }
     const row = await repo.products.update(productId, patch)
-    return row ? json(product(row)) : json({ error: 'not found' }, 404)
+    if (!row) return json({ error: 'not found' }, 404)
+    // After the response and never in its way: the AI index is a copy of D1,
+    // and rag.ts checks every hit against D1 while the copy catches up.
+    ctx.waitUntil(reindex(env, existing, row))
+    return json(product(row))
   }
 
   /* ----------------------------------------------------- product photos */
@@ -438,7 +576,94 @@ async function route(request: Request, env: ConsoleEnv, url: URL): Promise<Respo
     return json(product(row))
   }
 
+  /* --------------------------------------------- merchant orders, overview */
+
+  if (path === '/api/merchant/overview' && method === 'GET') {
+    const repo = await merchantRepo(env, request)
+    if (repo instanceof Response) return repo
+    return json(overviewOut(await repo.stats.overview()))
+  }
+
+  if (path === '/api/merchant/orders' && method === 'GET') {
+    const repo = await merchantRepo(env, request)
+    if (repo instanceof Response) return repo
+    const range = orderRange(url)
+    if (typeof range === 'string') return json({ error: range }, 400)
+    const orders = await repo.orders.list(range)
+    // The repository returns one past the cap exactly so this can be said
+    // rather than a partial list passing for the whole range.
+    return json(
+      { ...range, truncated: orders.length > ORDER_CAP, orders: orders.slice(0, ORDER_CAP).map(orderSummary) },
+      200,
+      PRIVATE,
+    )
+  }
+
+  const orderId = path.match(ORDER)?.[1]
+  if (orderId && method === 'GET') {
+    const repo = await merchantRepo(env, request)
+    if (repo instanceof Response) return repo
+    // An order with none of this merchant's lines is a 404, the same answer
+    // as no such order: "exists, not yours" would confirm the id.
+    const order = await repo.orders.get(orderId)
+    return order ? json(orderDetail(order), 200, PRIVATE) : json({ error: 'not found' }, 404)
+  }
+
   /* ------------------------------------------------------------ platform */
+
+  if (path === '/api/platform/overview' && method === 'GET') {
+    const repo = await platformRepo(env, request)
+    if (repo instanceof Response) return repo
+    // Ranking and the pending/active/suspended counts are read off the one
+    // merchant list rather than asked for again.
+    const [overview, merchants] = await Promise.all([repo.stats.overview(), repo.merchants.list()])
+    return json({ overview: platformOverviewOut(overview), merchants: merchants.map(merchantOut) })
+  }
+
+  if (path === '/api/platform/merchants/all' && method === 'GET') {
+    const repo = await platformRepo(env, request)
+    if (repo instanceof Response) return repo
+    return json({ merchants: (await repo.merchants.list()).map(merchantOut) })
+  }
+
+  const transition = path.match(TRANSITION)
+  if (transition && method === 'POST') {
+    const repo = await platformRepo(env, request)
+    if (repo instanceof Response) return repo
+    const [, merchantId, action] = transition
+    try {
+      return json(action === 'suspend' ? await repo.merchants.suspend(merchantId) : await repo.merchants.restore(merchantId))
+    } catch (err) {
+      // Pending, already in the target state, or no such merchant. Approval
+      // is the only way out of pending, so this route never is.
+      if (/is not (active|suspended)/.test(String(err))) {
+        return json(
+          { error: action === 'suspend' ? 'Only an active merchant can be suspended.' : 'Only a suspended merchant can be restored.' },
+          409,
+        )
+      }
+      throw err
+    }
+  }
+
+  if (path === '/api/platform/audit' && method === 'GET') {
+    const repo = await platformRepo(env, request)
+    if (repo instanceof Response) return repo
+    const merchantId = url.searchParams.get('merchant') || null
+    // A positive whole number of at most 15 digits, so always a safe integer.
+    const cursor = url.searchParams.get('before')
+    if (cursor !== null && !/^[1-9]\d{0,14}$/.test(cursor)) {
+      return json({ error: 'before is the next value of the page before.' }, 400)
+    }
+    const before = cursor === null ? null : Number(cursor)
+    if (merchantId !== null && merchantId.length > 64) return json({ error: 'not a merchant id' }, 400)
+    try {
+      return json(auditOut(await repo.audit.list({ merchantId, before })))
+    } catch (err) {
+      if (/does not exist/.test(String(err))) return json({ error: 'No merchant with that id.' }, 404)
+      throw err
+    }
+  }
 
   const approveId = path.match(APPROVE)?.[1]
   if ((path === '/api/platform/merchants' && method === 'GET') || (approveId && method === 'POST')) {
@@ -473,7 +698,8 @@ async function route(request: Request, env: ConsoleEnv, url: URL): Promise<Respo
   }
 
   /* Whether the defences are bound, since an absent one allows everything
-     silently. Presence only. */
+     silently — and the AI bindings, whose absence only a log line would
+     otherwise mention. Presence only. */
   if (path === '/api/health' && method === 'GET') {
     return json({
       ok: true,
@@ -481,6 +707,8 @@ async function route(request: Request, env: ConsoleEnv, url: URL): Promise<Respo
       loginRateLimit: Boolean(env.LOGIN_LIMITER),
       signupRateLimit: Boolean(env.SIGNUP_LIMITER),
       durableThrottle: Boolean(env.IP_THROTTLE),
+      ai: Boolean(env.AI),
+      vectorize: Boolean(env.VECTORIZE),
     })
   }
 
@@ -488,7 +716,7 @@ async function route(request: Request, env: ConsoleEnv, url: URL): Promise<Respo
 }
 
 export default {
-  async fetch(request: Request, env: ConsoleEnv): Promise<Response> {
+  async fetch(request: Request, env: ConsoleEnv, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url)
 
     /*
@@ -509,7 +737,7 @@ export default {
     }
 
     try {
-      return await route(request, env, url)
+      return await route(request, env, url, ctx)
     } catch (err) {
       // Logged, not returned: internal detail in an error body is how binding
       // names and stack traces end up in someone else's console.

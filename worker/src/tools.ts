@@ -1,19 +1,29 @@
 /**
  * The tools the shopping assistant may call.
  *
- * Every one is backed by the graph or by vector search, and every one returns
+ * Every one is backed by D1, vector search or the graph, and every one returns
  * real product ids. None of them let the model invent a product: it can only
  * select from what a query returned, which is what keeps a conversational
  * assistant from confidently recommending hardware that does not exist.
+ *
+ * Names, comparisons and numeric filters read the live catalogue in D1, with
+ * figures pulled from the spec text by the same extractor the graph is built
+ * with, so a product a merchant published a minute ago can be found, compared
+ * and filtered. Only find_accessories still walks the graph, which is rebuilt
+ * offline: a product listed since has no pairing edges until the next rebuild.
  *
  * Arguments arrive as JSON the model wrote, so each handler validates rather
  * than trusts — a model will happily pass a string where a number belongs, or a
  * property name that was never offered.
  */
+import { extractFacts } from '../../src/lib/extract-facts'
 import { facts, query, type GraphEnv } from './graph'
-import { embedOne, type Env as RagEnv } from './rag'
+import { embedOne, SLACK, type Env as RagEnv } from './rag'
+import { liveIds, liveProducts } from './catalogue'
 
 export type ToolEnv = RagEnv & GraphEnv
+
+type LiveProduct = Awaited<ReturnType<typeof liveProducts>>[number]
 
 /** Numeric properties a shopper can filter on; anything else is refused. */
 const NUMERIC = [
@@ -56,26 +66,32 @@ const squash = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '')
  * Accepting a name is not leniency for its own sake — it is the difference
  * between a tool that works on the first call and one that needs the model to
  * guess an internal convention.
+ *
+ * Matched against the live catalogue, so an unpublished product or a suspended
+ * merchant's is simply not there to be named.
  */
-async function resolveIds(env: ToolEnv, wanted: string[]): Promise<string[]> {
-  const rows = await query(env, 'MATCH (p:Product) RETURN p.id AS id, p.title AS title')
-  const catalogue = rows.map((r) => ({
-    id: String(r.id),
-    id2: squash(String(r.id)),
-    title2: squash(String(r.title)),
-  }))
+function resolve(catalogue: LiveProduct[], wanted: string[]): LiveProduct[] {
+  const keyed = catalogue.map((p) => ({ p, id2: squash(p.id), title2: squash(p.title) }))
 
-  const out: string[] = []
+  const out: LiveProduct[] = []
   for (const raw of wanted) {
     const needle = squash(raw)
     if (!needle) continue
     const hit =
-      catalogue.find((c) => c.id2 === needle || c.title2 === needle) ??
-      catalogue.find((c) => c.title2.startsWith(needle) || c.id2.startsWith(needle)) ??
-      catalogue.find((c) => c.title2.includes(needle) || needle.includes(c.id2))
-    if (hit && !out.includes(hit.id)) out.push(hit.id)
+      keyed.find((c) => c.id2 === needle || c.title2 === needle) ??
+      keyed.find((c) => c.title2.startsWith(needle) || c.id2.startsWith(needle)) ??
+      keyed.find((c) => c.title2.includes(needle) || needle.includes(c.id2))
+    if (hit && !out.includes(hit.p)) out.push(hit.p)
   }
   return out
+}
+
+/** Dollars, like the graph's `price` and the index's metadata: it is rendered as `$${price}`. */
+const dollars = (p: LiveProduct) => p.priceMinor / 100
+
+/** A numeric figure for one product, or undefined when its specs do not state one. */
+function figure(p: LiveProduct, property: (typeof NUMERIC)[number]): number | undefined {
+  return property === 'price' ? dollars(p) : extractFacts(p)[property]
 }
 
 /* -------------------------------------------------------------- definitions */
@@ -180,12 +196,17 @@ async function searchProducts(env: ToolEnv, args: Record<string, unknown>): Prom
   const vector = await embedOne(env, q)
   if (!vector) return { summary: 'search is unavailable', ids: [] }
 
-  const hits = await env.VECTORIZE.query(vector, { topK: 5, returnMetadata: 'all' })
-  const rows = hits.matches.map((m) => ({
-    id: String(m.id),
-    title: String(m.metadata?.title ?? m.id),
-    price: m.metadata?.price,
-  }))
+  const hits = await env.VECTORIZE.query(vector, { topK: 5 + SLACK, returnMetadata: 'all' })
+  // The index may still hold something unpublished or a suspended merchant's.
+  const live = await liveIds(env, hits.matches.map((m) => String(m.id)))
+  const rows = hits.matches
+    .filter((m) => live.has(String(m.id)))
+    .slice(0, 5)
+    .map((m) => ({
+      id: String(m.id),
+      title: String(m.metadata?.title ?? m.id),
+      price: m.metadata?.price,
+    }))
   return {
     summary: rows.length
       ? rows.map((r) => `${r.id} — ${r.title}, $${r.price}`).join('\n')
@@ -195,8 +216,8 @@ async function searchProducts(env: ToolEnv, args: Record<string, unknown>): Prom
 }
 
 async function filterProducts(env: ToolEnv, args: Record<string, unknown>): Promise<ToolResult> {
-  const property = asString(args.property)
-  if (!(NUMERIC as readonly string[]).includes(property)) {
+  const property = asString(args.property) as (typeof NUMERIC)[number]
+  if (!NUMERIC.includes(property)) {
     // Told, not silently ignored: the model can retry with a valid property.
     return { summary: `unknown property "${property}". Valid: ${NUMERIC.join(', ')}`, ids: [] }
   }
@@ -206,31 +227,28 @@ async function filterProducts(env: ToolEnv, args: Record<string, unknown>): Prom
   if (min === null && max === null) return { summary: 'filter_products needs min or max', ids: [] }
 
   const category = asString(args.category)
-  const where = [
-    `p.${property} IS NOT NULL`,
-    min !== null ? `p.${property} >= $min` : '',
-    max !== null ? `p.${property} <= $max` : '',
-  ].filter(Boolean)
+  // The graph query this replaces: property present, within the bounds,
+  // highest first, twelve at most. A figure the specs do not state is absent,
+  // not zero, so it never passes a bound.
+  const rows = (await liveProducts(env))
+    .filter((p) => !category || p.category === category)
+    .map((p) => ({ p, value: figure(p, property) }))
+    .filter((r): r is { p: LiveProduct; value: number } =>
+      r.value !== undefined && (min === null || r.value >= min) && (max === null || r.value <= max),
+    )
+    .sort((a, b) => b.value - a.value)
+    .slice(0, 12)
 
-  // The property is interpolated only after passing the allow-list above; the
-  // values are always bound.
-  const cypher = category
-    ? `MATCH (p:Product)-[:IN_CATEGORY]->(c:Category {id: $category})
-       WHERE ${where.join(' AND ')}
-       RETURN p.id AS id, p.title AS title, p.${property} AS value, p.price AS price
-       ORDER BY p.${property} DESC LIMIT 12`
-    : `MATCH (p:Product) WHERE ${where.join(' AND ')}
-       RETURN p.id AS id, p.title AS title, p.${property} AS value, p.price AS price
-       ORDER BY p.${property} DESC LIMIT 12`
-
-  const rows = await query(env, cypher, { min, max, category })
   return {
     summary: rows.length
-      ? rows.map((r) => `${r.id} — ${r.title}, ${property} ${r.value}, $${r.price}`).join('\n')
+      ? rows.map((r) => `${r.p.id} — ${r.p.title}, ${property} ${r.value}, $${dollars(r.p)}`).join('\n')
       : `nothing matched that limit on ${property}`,
-    ids: rows.map((r) => String(r.id)),
+    ids: rows.map((r) => r.p.id),
   }
 }
+
+/** The figures compare_products lays side by side, in the order the graph query returned them. */
+const COMPARED = ['price', 'batteryHours', 'chargeWatts', 'screenInches', 'refreshHz', 'megapixels', 'storageGb'] as const
 
 async function compareProducts(env: ToolEnv, args: Record<string, unknown>): Promise<ToolResult> {
   const wanted = asString(args.ids)
@@ -240,20 +258,10 @@ async function compareProducts(env: ToolEnv, args: Record<string, unknown>): Pro
     .slice(0, 4)
   if (wanted.length < 2) return { summary: 'compare_products needs at least two products', ids: [] }
 
-  const ids = await resolveIds(env, wanted)
-  if (ids.length < 2) {
+  const found = resolve(await liveProducts(env), wanted)
+  if (found.length < 2) {
     return { summary: `could not find these in the catalogue: ${wanted.join(', ')}`, ids: [] }
   }
-
-  const rows = await query(
-    env,
-    `MATCH (p:Product) WHERE p.id IN $ids
-     RETURN p.id AS id, p.title AS title, p.price AS price, p.batteryHours AS batteryHours,
-            p.chargeWatts AS chargeWatts, p.screenInches AS screenInches,
-            p.refreshHz AS refreshHz, p.megapixels AS megapixels, p.storageGb AS storageGb`,
-    { ids },
-  )
-  if (!rows.length) return { summary: `no products found for: ${ids.join(', ')}`, ids: [] }
 
   /**
    * A missing figure is stated, not omitted.
@@ -263,42 +271,45 @@ async function compareProducts(env: ToolEnv, args: Record<string, unknown>): Pro
    * in fact Dell does not publish a runtime and the graph holds nothing. Saying
    * "not published" costs a few tokens and removes the invitation to guess.
    */
-  const summary = rows
-    .map((r) => {
-      const stats = Object.entries(r)
-        .filter(([k]) => k !== 'id' && k !== 'title')
-        .map(([k, v]) => `${k} ${v === null || v === undefined ? 'not published' : v}`)
-        .join(', ')
-      return `${r.id} — ${r.title}: ${stats}`
+  const summary = found
+    .map((p) => {
+      const stats = COMPARED.map((k) => `${k} ${figure(p, k) ?? 'not published'}`).join(', ')
+      return `${p.id} — ${p.title}: ${stats}`
     })
     .join('\n')
-  return { summary, ids: rows.map((r) => String(r.id)) }
+  return { summary, ids: found.map((p) => p.id) }
 }
 
 async function findAccessories(env: ToolEnv, args: Record<string, unknown>): Promise<ToolResult> {
   const raw = asString(args.id)
   if (!raw) return { summary: 'find_accessories needs a product', ids: [] }
-  const [id] = await resolveIds(env, [raw])
-  if (!id) return { summary: `no product in the catalogue matches "${raw}"`, ids: [] }
+  const [product] = resolve(await liveProducts(env), [raw])
+  if (!product) return { summary: `no product in the catalogue matches "${raw}"`, ids: [] }
+  const id = product.id
 
-  const [chargers, pairs] = await Promise.all([facts.powerFor(env, id), facts.rivals(env, id, 0)])
-  void pairs
-
-  const paired = await query(
-    env,
-    `MATCH (a:Product)-[:PAIRS_WITH]->(p:Product {id: $id})
-     RETURN a.id AS id, a.title AS title, a.price AS price
-     ORDER BY a.price LIMIT 6`,
-    { id },
-  )
+  // Graph-only: pairing edges come from scripts/build-graph.mjs, so a product
+  // listed since the last rebuild has none yet and gets "nothing pairs".
+  const [chargers, paired] = await Promise.all([
+    facts.powerFor(env, id),
+    query(
+      env,
+      `MATCH (a:Product)-[:PAIRS_WITH]->(p:Product {id: $id})
+       RETURN a.id AS id, a.title AS title, a.price AS price
+       ORDER BY a.price LIMIT 6`,
+      { id },
+    ),
+  ])
+  // The graph is as old as its last rebuild; D1 says what is on sale now.
+  const live = await liveIds(env, [...chargers, ...paired].map((r) => String(r.id)))
+  const [liveChargers, livePaired] = [chargers, paired].map((rows) => rows.filter((r) => live.has(String(r.id))))
 
   const lines = [
-    ...chargers.map((c) => `${c.id} — ${c.title}, charges at ${c.watts}W`),
-    ...paired.map((p) => `${p.id} — ${p.title}, $${p.price}`),
+    ...liveChargers.map((c) => `${c.id} — ${c.title}, charges at ${c.watts}W`),
+    ...livePaired.map((p) => `${p.id} — ${p.title}, $${p.price}`),
   ]
   return {
     summary: lines.length ? lines.join('\n') : `nothing pairs with ${id} in the catalogue`,
-    ids: [...chargers, ...paired].map((r) => String(r.id)),
+    ids: [...liveChargers, ...livePaired].map((r) => String(r.id)),
   }
 }
 

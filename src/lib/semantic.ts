@@ -36,9 +36,10 @@
  * here because this path answers in ~11 ms on-device against ~330 ms over the
  * network, and a search box that stutters is a worse search box.
  */
-import { products } from '@/data/products'
+import { catalogue, findProduct } from '@/stores/catalog'
 import { recommend } from './recommend'
 import { dot, fuseRanks } from './retrieval'
+import { documentFor } from './passages'
 import type { Product } from '@/types'
 
 const MODEL = 'Xenova/all-MiniLM-L6-v2'
@@ -119,14 +120,35 @@ export function ensureReady(): Promise<boolean> {
   return loading
 }
 
-const byId = new Map(products.map((p) => [p.id, p]))
+/**
+ * Vectors for live products the shipped file has never seen — published from
+ * the console since the build — embedded here with the same model and the
+ * same document text the build uses. Keyed by id and checked against the
+ * current text, so an edit re-embeds and nothing else does.
+ */
+const live = new Map<string, { doc: string; vector: Float32Array }>()
 
-/** Ranked product ids, most similar first. Empty if the model is not ready. */
+/**
+ * Ranked product ids, most similar first. Empty if the model is not ready.
+ *
+ * Only products missing from the shipped file are embedded, so the first
+ * query pays for the handful published since the build, never the catalogue.
+ * An edit to a product the file already covers keeps its build-time vector
+ * until the next build: the file cannot say which text it was made from.
+ */
 export async function semanticRank(query: string): Promise<string[]> {
   if (!(await ensureReady()) || !index || !vectors || !embedder) return []
   const q = await embedder(query)
-  return index.slugs
-    .map((id, i) => ({ id, score: dot(q, vectors!, i * index!.dims, index!.dims) }))
+  const shipped = new Set(index.slugs)
+  for (const p of catalogue.value) {
+    if (shipped.has(p.id)) continue
+    const doc = documentFor(p)
+    if (live.get(p.id)?.doc !== doc) live.set(p.id, { doc, vector: await embedder(doc) })
+  }
+  return [
+    ...index.slugs.map((id, i) => ({ id, score: dot(q, vectors!, i * index!.dims, index!.dims) })),
+    ...[...live].map(([id, { vector }]) => ({ id, score: dot(q, vector, 0, vector.length) })),
+  ]
     .sort((a, b) => b.score - a.score)
     .map((r) => r.id)
 }
@@ -145,13 +167,24 @@ export interface HybridResult {
  * now and better results a moment later, rather than a spinner.
  */
 export async function hybridSearch(query: string, limit = 6): Promise<HybridResult> {
-  const keyword = recommend(query, products.length).items.map((r) => r.product.id)
+  const keyword = recommend(query, catalogue.value.length).items.map((r) => r.product.id)
 
-  const semantic = state === 'ready' ? await semanticRank(query) : []
+  // The shipped vectors cover the build-time snapshot; semanticRank embeds any
+  // product published since. One unpublished since still has a vector and is
+  // dropped here, so a stale index can never surface a product the shop no
+  // longer sells.
+  const semantic = (state === 'ready' ? await semanticRank(query) : []).filter((id) =>
+    findProduct(id),
+  )
   if (!semantic.length) {
-    return { products: keyword.slice(0, limit).map((id) => byId.get(id)!), semantic: false }
+    // Looked up again after the await: the list may have been swapped meanwhile.
+    const hits = keyword.map((id) => findProduct(id)).filter((p): p is Product => p !== undefined)
+    return { products: hits.slice(0, limit), semantic: false }
   }
 
-  const fused = fuseRanks([keyword, semantic]).slice(0, limit)
-  return { products: fused.map((id) => byId.get(id)!).filter(Boolean), semantic: true }
+  const fused = fuseRanks([keyword, semantic])
+    .map((id) => findProduct(id))
+    .filter((p): p is Product => p !== undefined)
+    .slice(0, limit)
+  return { products: fused, semantic: true }
 }

@@ -21,7 +21,7 @@ database_id = "7aa62821-d17f-43a2-b605-2643780e9690"
 
 # Merchant product photos. nexus-console writes, nexus-api serves (/media/u/*).
 # One bucket per environment: a shared one would put staging's demo uploads
-# behind production URLs, which is the mistake the shared Vectorize index is.
+# behind production URLs, the mistake the shared Vectorize index once was.
 [[r2_buckets]]
 binding = "MEDIA"
 bucket_name = "nexus-media"
@@ -85,8 +85,9 @@ crons = ["17 4 * * *"]
 # omission does not warn, it deploys a worker missing a binding.
 #
 # Orders go to their own database so a test checkout never lands in the
-# production ledger. Vectorize and Workers AI are shared: both are read-only
-# from this service, and a second copy of the index would only drift.
+# production ledger. The Vectorize index is per environment too, now that
+# nexus-console writes to it on publish: a shared one put staging's demo
+# products into production answers. Workers AI holds no state, so it is shared.
 #
 # Secrets are per-environment too. Until these are set, staging answers with
 # the graph reported unavailable by /api/health, which is the degraded mode the
@@ -112,7 +113,7 @@ binding = "AI"
 
 [[env.staging.vectorize]]
 binding = "VECTORIZE"
-index_name = "nexus-products"
+index_name = "nexus-products-staging"
 
 [[env.staging.d1_databases]]
 binding = "ORDERS"

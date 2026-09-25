@@ -4,6 +4,8 @@ import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import App from './App.vue'
 import { router } from './router'
+import { refreshCatalogue } from './stores/catalog'
+import { useCompareStore } from './stores/compare'
 import './assets/css/main.css'
 
 gsap.registerPlugin(ScrollTrigger)
@@ -26,3 +28,14 @@ pinia.use(({ store }) => {
 })
 
 createApp(App).use(pinia).use(router).mount('#app')
+
+// After mount, so first paint comes from the build-time snapshot and never
+// waits on the network. Once per page load; every consumer reads the result.
+// The comparison may have held ids the snapshot did not know; with the live
+// list in hand, anything still unknown is gone and is dropped. A failed fetch
+// proves nothing about them, so they are kept.
+void refreshCatalogue().then((live) => {
+  if (!live) return
+  const compare = useCompareStore()
+  compare.setFromIds(compare.ids)
+})

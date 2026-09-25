@@ -12,7 +12,7 @@ import { RouterLink } from 'vue-router'
 import { Sparkles, CornerDownLeft, AlertCircle, Quote } from 'lucide-vue-next'
 import { ask, health, type AskResponse } from '@/lib/api'
 import { toSegments } from '@/lib/citations'
-import { products } from '@/data/products'
+import { findProduct } from '@/stores/catalog'
 import { useCurrency } from '@/composables/useCurrency'
 
 const { format } = useCurrency()
@@ -32,15 +32,14 @@ const EXAMPLES = [
   'Which headphones have noise cancellation under $400?',
 ]
 
-const byId = new Map(products.map((p) => [p.id, p]))
 
 /** Answer text split into prose and linkable citations. See lib/citations.ts. */
 const segments = computed(() =>
-  toSegments(answer.value?.answer ?? '', (id) => byId.get(id)?.title, answer.value?.citations ?? []),
+  toSegments(answer.value?.answer ?? '', (id) => findProduct(id)?.title, answer.value?.citations ?? []),
 )
 
 const sources = computed(() =>
-  (answer.value?.citations ?? []).map((id) => byId.get(id)).filter((p) => p !== undefined),
+  (answer.value?.citations ?? []).map((id) => findProduct(id)).filter((p) => p !== undefined),
 )
 
 async function submit() {

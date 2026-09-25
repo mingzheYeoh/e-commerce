@@ -5,7 +5,7 @@ import { totalCents, type OrderTotals, type ShipMethod } from '@/lib/money'
 import { findCountry, validSubdivision, validPostal, validPhone } from '@/lib/regions'
 import { methodAvailable, defaultMethodFor } from '@/lib/shipping'
 import { saveOrder, fetchOrder } from '@/lib/api'
-import { products } from '@/data/products'
+import { catalogue, catalogueReady } from './catalog'
 import { useUiStore } from './ui'
 
 /**
@@ -186,6 +186,19 @@ export const useCheckoutStore = defineStore('checkout', {
     async place(): Promise<{ ok: true; id: string } | { ok: false }> {
       const cart = useCartStore()
       this.error = ''
+      // Price and availability are checked against the live list, not a
+      // snapshot it is about to replace. `placing` covers the wait so the pay
+      // button cannot fire a second order while the fetch is in flight.
+      // The total the shopper is looking at when they press Pay. If the live
+      // list lands during the wait and moves a price, they review the new
+      // figure rather than being charged one they never saw.
+      const shown = this.totals.total
+      this.placing = true
+      try {
+        await catalogueReady()
+      } finally {
+        this.placing = false
+      }
 
       if (!cart.items.length) {
         this.error = 'Your cart is empty.'
@@ -193,6 +206,14 @@ export const useCheckoutStore = defineStore('checkout', {
       }
       if (!this.stepValid(1)) {
         this.error = 'Delivery details are incomplete.'
+        return { ok: false }
+      }
+      if (cart.hasUnavailable) {
+        this.error = 'Some items are no longer available. Remove them to continue.'
+        return { ok: false }
+      }
+      if (this.totals.total !== shown) {
+        this.error = 'Prices were updated. Please review your order before paying.'
         return { ok: false }
       }
 
@@ -216,7 +237,8 @@ export const useCheckoutStore = defineStore('checkout', {
         placedAt: new Date().toISOString(),
         address: { ...this.address },
         method: this.method,
-        lines: cart.items.map((line) => ({ ...line })),
+        // The live-priced lines, so the receipt shows what the server charges.
+        lines: cart.lines.map(({ available: _a, limited: _l, ...line }) => line),
         totals: this.totals,
         paymentCode: result.code,
       }
@@ -269,7 +291,7 @@ export const useCheckoutStore = defineStore('checkout', {
       // It came back from the server, so it is by definition the durable copy.
       this.synced[id] = true
 
-      const bySku = new Map(products.map((p) => [p.sku, p]))
+      const bySku = new Map(catalogue.value.map((p) => [p.sku, p]))
       return {
         id: remote.id,
         placedAt: remote.placedAt,
