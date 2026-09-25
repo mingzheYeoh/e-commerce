@@ -159,15 +159,20 @@ export async function placeOrder(
    * again. The answer carries the stored totals, so the receipt shows what the
    * server charged. Whether this id is the caller's own retry or a collision
    * with somebody else's order is the checkout's to decide (it knows whether
-   * it sent this id before); the totals are no more than GET /api/orders/:id
-   * already tells anyone holding the id.
+   * it sent this id before). The stored totals go back only to a request
+   * carrying the same email the order was placed with — a real retry resends
+   * the same form, and anyone else guessing ids learns only that one is taken.
    */
   const stored = await env.ORDERS.prepare(
-    `SELECT subtotal_cents, shipping_cents, tax_cents, total_cents FROM orders WHERE id = ?1`,
+    `SELECT email, subtotal_cents, shipping_cents, tax_cents, total_cents FROM orders WHERE id = ?1`,
   )
     .bind(id)
-    .first<{ subtotal_cents: number; shipping_cents: number; tax_cents: number; total_cents: number }>()
+    .first<{ email: string; subtotal_cents: number; shipping_cents: number; tax_cents: number; total_cents: number }>()
   if (stored) {
+    const sent = typeof p.address?.email === 'string' ? p.address.email.trim().toLowerCase() : ''
+    if (sent !== stored.email.trim().toLowerCase()) {
+      return { status: 409, body: { error: 'That order id is already taken.', code: 'duplicate' } }
+    }
     const totals = {
       subtotal: stored.subtotal_cents,
       shipping: stored.shipping_cents,
@@ -546,6 +551,10 @@ export async function getOrder(env: OrdersEnv, id: string, userId: string | null
   }>()
   if (!row) return null
   const owner = userId !== null && row.user_id === userId
+  // Anyone holding the id can open the receipt, and ids are short enough to
+  // guess, so only the account that placed it sees where it is going. Others
+  // get the first name and the town — enough for a shared link to make sense.
+  const street = (v: string | null) => (owner ? (v ?? '') : '')
 
   const { results } = await env.ORDERS.prepare(
     `SELECT sku, title, qty, unit_price_cents, variant FROM order_lines WHERE order_id = ?1`,
@@ -558,14 +567,14 @@ export async function getOrder(env: OrdersEnv, id: string, userId: string | null
     placedAt: row.created_at,
     email: maskEmail(row.email),
     address: {
-      name: row.ship_name,
-      phone: row.ship_phone ?? '',
+      name: owner ? row.ship_name : (row.ship_name.split(/\s+/)[0] ?? ''),
+      phone: street(row.ship_phone),
       country: row.ship_country ?? 'US',
-      line1: row.ship_line1,
-      line2: row.ship_line2 ?? '',
+      line1: street(row.ship_line1),
+      line2: street(row.ship_line2),
       city: row.ship_city,
       state: row.ship_state,
-      postal: row.ship_postal,
+      postal: street(row.ship_postal),
     },
     method: row.method,
     currency: row.currency,

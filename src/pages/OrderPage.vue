@@ -130,7 +130,9 @@ const placedOn = computed(() =>
                  and "MY" is not. -->
             <address class="mt-3 text-sm not-italic leading-relaxed text-text-secondary">
               {{ order.address.name }}<br />
-              {{ order.address.line1 }}<br />
+              <!-- Blank when this browser is not the account that placed it:
+                   the API keeps the street to the owner. -->
+              <template v-if="order.address.line1">{{ order.address.line1 }}<br /></template>
               <template v-if="order.address.line2">{{ order.address.line2 }}<br /></template>
               {{ order.address.city
               }}<template v-if="order.address.state">, {{ order.address.state }}</template>
