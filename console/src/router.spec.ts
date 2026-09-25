@@ -25,25 +25,37 @@ describe('redirectFor', () => {
     expect(redirectFor(session, '/products')).toBe('/enrol')
   })
 
-  it('sends an active merchant to /products and nowhere else', () => {
+  it('sends an active merchant to /overview, and lets it reach products and orders', () => {
     const session: StaffMe = {
       kind: 'active',
       scope: 'merchant',
       merchant: { name: 'Acme', slug: 'acme', status: 'active' },
     }
-    expect(redirectFor(session, '/products')).toBeNull()
-    expect(redirectFor(session, '/products/new')).toBeNull()
-    expect(redirectFor(session, '/products/abc123')).toBeNull()
-    expect(redirectFor(session, '/applications')).toBe('/products')
-    expect(redirectFor(session, '/signin')).toBe('/products')
-    expect(redirectFor(session, '/enrol')).toBe('/products')
+    for (const allowed of ['/overview', '/products', '/products/new', '/products/abc123', '/orders', '/orders/NX-4K2P9']) {
+      expect(redirectFor(session, allowed), allowed).toBeNull()
+    }
+    for (const elsewhere of ['/', '/applications', '/platform', '/platform/merchants', '/signin', '/enrol', '/productsx', '/ordersheet']) {
+      expect(redirectFor(session, elsewhere), elsewhere).toBe('/overview')
+    }
   })
 
-  it('sends an active platform admin to /applications and nowhere else', () => {
+  it('sends an active platform admin to /platform, and lets it reach everything beneath', () => {
     const session: StaffMe = { kind: 'active', scope: 'platform' }
-    expect(redirectFor(session, '/applications')).toBeNull()
-    expect(redirectFor(session, '/products')).toBe('/applications')
-    expect(redirectFor(session, '/products/new')).toBe('/applications')
-    expect(redirectFor(session, '/verify')).toBe('/applications')
+    for (const allowed of ['/platform', '/platform/merchants', '/platform/applications', '/platform/audit']) {
+      expect(redirectFor(session, allowed), allowed).toBeNull()
+    }
+    for (const elsewhere of ['/', '/overview', '/products', '/orders/x', '/verify', '/platformx']) {
+      expect(redirectFor(session, elsewhere), elsewhere).toBe('/platform')
+    }
+  })
+
+  it('sends an old /applications bookmark to where the page lives now', () => {
+    const platform: StaffMe = { kind: 'active', scope: 'platform' }
+    expect(redirectFor(platform, '/applications')).toBe('/platform/applications')
+    // Nobody else gets there by the old address either.
+    expect(redirectFor({ kind: null }, '/applications')).toBe('/signin')
+    expect(
+      redirectFor({ kind: 'active', scope: 'merchant', merchant: { name: 'A', slug: 'a', status: 'active' } }, '/applications'),
+    ).toBe('/overview')
   })
 })

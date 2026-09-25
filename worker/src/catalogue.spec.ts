@@ -266,6 +266,21 @@ describe('publishedProducts', () => {
     expect(ids).not.toEqual([...ids].sort())
   })
 
+  it("takes a suspended merchant's products off the storefront, and the generator agrees", async () => {
+    const mem = seeded()
+    const mine = (mem.raw.prepare(`SELECT COUNT(*) AS n FROM products WHERE merchant_id = 'mch_apple'`).get() as { n: number }).n
+    mem.raw.prepare(`UPDATE merchants SET status = 'suspended' WHERE id = 'mch_apple'`).run()
+
+    const rows = await publishedProducts({ ORDERS: mem.db })
+    expect(mine).toBeGreaterThan(0)
+    expect(rows).toHaveLength(45 - mine)
+    expect(rows.some((r) => r.merchantId === 'mch_apple')).toBe(false)
+    expect(mem.raw.prepare(QUERY).all().map((r) => (r as { id: string }).id)).toEqual(rows.map((r) => r.id))
+
+    mem.raw.prepare(`UPDATE merchants SET status = 'active' WHERE id = 'mch_apple'`).run()
+    expect(await publishedProducts({ ORDERS: mem.db })).toHaveLength(45)
+  })
+
   it('parses the JSON columns rather than handing back strings', async () => {
     const { db } = seeded()
     const [first] = await publishedProducts({ ORDERS: db })

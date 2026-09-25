@@ -6,7 +6,6 @@
 // exactly what their endpoint accepts.
 import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import AppHeader from '../components/AppHeader.vue'
 import { me, createProduct, isError } from '../api'
 import { parsePriceToMinor } from '../money'
 import { CATEGORIES } from '../categories'
@@ -53,9 +52,8 @@ async function submit() {
 </script>
 
 <template>
-  <div class="mx-auto max-w-2xl px-6 py-10">
-    <AppHeader />
-    <h1 class="mb-6 text-lg font-semibold text-text-primary">New product</h1>
+  <div class="max-w-2xl">
+    <h1 class="mb-6 font-display text-xl font-bold text-text-primary">New product</h1>
 
     <form class="card flex flex-col gap-4 p-6" @submit.prevent="submit">
       <div>

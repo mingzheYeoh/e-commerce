@@ -139,6 +139,96 @@ export type PendingMerchant = { id: string; name: string; createdAt: string; ema
 export const pendingMerchants = () =>
   call<{ merchants: PendingMerchant[] } | ErrorBody>('/api/platform/merchants')
 
+/** One currency's amount. Totals are lists of these: currencies are never added together. */
+export type Amount = { currency: string; minor: number }
+
+export type Overview = {
+  revenue: { today: Amount[]; week: Amount[]; month: Amount[] }
+  orders: { today: number; week: number; month: number }
+  trend: { day: string; revenue: Amount[] }[]
+  top: { productId: string; title: string; currency: string; minor: number; qty: number }[]
+  lowStock: { id: string; title: string; stockCount: number }[]
+  products: { draft: number; published: number; archived: number }
+}
+
+export type OrderSummary = { id: string; placedAt: string; method: string; status: string; items: number; totals: Amount[] }
+
+export type OrderDetail = {
+  id: string
+  placedAt: string
+  method: string
+  status: string
+  shipTo: { name: string; line1: string; line2: string; city: string; state: string; postal: string; country: string }
+  lines: { productId: string; sku: string; title: string; finish: string | null; qty: number; unitMinor: number; currency: string }[]
+  totals: Amount[]
+}
+
+export type MerchantStatus = 'pending' | 'active' | 'suspended'
+
+export type MerchantSummary = {
+  id: string
+  name: string
+  slug: string
+  status: MerchantStatus
+  createdAt: string
+  productCount: number
+  /** Last 30 days. */
+  revenue: Amount[]
+}
+
+export type AuditEntry = {
+  /** Insertion order; the last entry's is the page's `next` cursor. */
+  seq: number
+  id: string
+  at: string
+  actorId: string
+  actorEmail: string | null
+  actorScope: string
+  merchantId: string | null
+  merchantName: string | null
+  action: string
+  subject: string | null
+}
+
+export const merchantOverview = () => call<Overview | ErrorBody>('/api/merchant/overview')
+
+export const listOrders = (range: { from?: string; to?: string }) => {
+  const q = new URLSearchParams(Object.entries(range).filter(([, v]) => v) as [string, string][])
+  return call<{ from: string; to: string; truncated: boolean; orders: OrderSummary[] } | ErrorBody>(
+    `/api/merchant/orders?${q}`,
+  )
+}
+
+export const getOrder = (id: string) => call<OrderDetail | ErrorBody>(`/api/merchant/orders/${encodeURIComponent(id)}`)
+
+/** The platform overview carries no top products or low stock: its page shows neither. */
+export type PlatformOverview = Omit<Overview, 'top' | 'lowStock'>
+
+export const platformOverview = () =>
+  call<{ overview: PlatformOverview; merchants: MerchantSummary[] } | ErrorBody>('/api/platform/overview')
+
+export const allMerchants = () => call<{ merchants: MerchantSummary[] } | ErrorBody>('/api/platform/merchants/all')
+
+export const setMerchantStatus = (id: string, action: 'suspend' | 'restore') =>
+  call<{ merchant_id: string; status: MerchantStatus } | ErrorBody>(`/api/platform/merchants/${id}/${action}`, {
+    method: 'POST',
+  })
+
+/**
+ * One page of the log, newest first. `before` is the previous page's `next`.
+ * The page also carries every merchant's id and name for the filter, so the
+ * viewer never reads the (audited per merchant) merchant list to fill it.
+ */
+export const auditLog = (merchantId: string | null, before: number | null) => {
+  const q = new URLSearchParams()
+  if (merchantId) q.set('merchant', merchantId)
+  if (before !== null) q.set('before', String(before))
+  return call<
+    | { merchantId: string | null; next: number | null; merchants: { id: string; name: string }[]; entries: AuditEntry[] }
+    | ErrorBody
+  >(`/api/platform/audit?${q}`)
+}
+
 export const approveMerchant = (id: string, slug: string) =>
   call<{ id: string; status: string; slug: string } | ErrorBody>(`/api/platform/merchants/${id}/approve`, {
     method: 'POST',
