@@ -210,8 +210,8 @@ export default {
       }
 
       /*
-       * Orders. The browser has already written its own receipt by the time it
-       * calls this, so a failure here costs the shareable copy and nothing else.
+       * Orders. The checkout waits for this answer: only a 200 becomes a
+       * receipt, and a 409 (sold out) keeps the shopper on the checkout.
        */
       if (url.pathname === '/api/orders' && request.method === 'POST') {
         // Signing in is optional at checkout. When there is a session the order
@@ -222,9 +222,14 @@ export default {
       }
 
       if (url.pathname.startsWith('/api/orders/') && request.method === 'GET') {
-        const order = await getOrder(env, url.pathname.slice('/api/orders/'.length))
+        // The session decides whether delivery and refunds are included: only
+        // for the account the order was filed to (see getOrder).
+        const user = await sessionUser(env, request)
+        const order = await getOrder(env, url.pathname.slice('/api/orders/'.length), user?.id ?? null)
         return order
-          ? json(order, { headers })
+          ? // Private when it carries the owner's delivery details; a shared
+            // cache must never hand them to the next visitor.
+            json(order, { headers: order.parts ? { ...headers, 'cache-control': 'private, no-store' } : headers })
           : json({ error: 'not found' }, { status: 404, headers })
       }
 

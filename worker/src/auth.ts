@@ -713,10 +713,34 @@ export interface AccountOrder {
   currency: string
   paymentCode: string
   itemCount: number
+  /** Each seller's part: how far it got, and how to follow it once shipped. */
+  fulfilment: { status: string; carrier: string | null; tracking: string | null }[]
+  /** Refunded so far, one amount per currency. */
+  refunded: { currency: string; minor: number }[]
 }
 
 /** The signed-in shopper's own orders, newest first. */
 export async function accountOrders(env: AuthEnv, user: User): Promise<AccountOrder[]> {
+  // Delivery and refunds for every order of this account's in two statements,
+  // not two per order. Both join on orders.user_id, the same scope as the list.
+  const [parts, refunds] = await Promise.all([
+    env.ORDERS.prepare(
+      `SELECT f.order_id, f.status, f.carrier, f.tracking
+         FROM order_fulfilments f JOIN orders o ON o.id = f.order_id
+        WHERE o.user_id = ?1 ORDER BY f.order_id, f.merchant_id`,
+    )
+      .bind(user.id)
+      .all<{ order_id: string; status: string; carrier: string | null; tracking: string | null }>(),
+    env.ORDERS.prepare(
+      `SELECT r.order_id, COALESCE(p.currency, 'XXX') AS currency, SUM(r.amount_minor) AS minor
+         FROM refunds r JOIN orders o ON o.id = r.order_id LEFT JOIN products p ON p.id = r.product_id
+        WHERE o.user_id = ?1
+        GROUP BY r.order_id, COALESCE(p.currency, 'XXX') ORDER BY currency`,
+    )
+      .bind(user.id)
+      .all<{ order_id: string; currency: string; minor: number }>(),
+  ])
+
   const { results } = await env.ORDERS.prepare(
     `SELECT o.id, o.created_at, o.total_cents, o.currency, o.payment_status,
             (SELECT COALESCE(SUM(qty), 0) FROM order_lines WHERE order_id = o.id) AS items
@@ -742,6 +766,12 @@ export async function accountOrders(env: AuthEnv, user: User): Promise<AccountOr
     currency: r.currency,
     paymentCode: r.payment_status,
     itemCount: r.items,
+    fulfilment: (parts.results ?? [])
+      .filter((f) => f.order_id === r.id)
+      .map(({ status, carrier, tracking }) => ({ status, carrier, tracking })),
+    refunded: (refunds.results ?? [])
+      .filter((f) => f.order_id === r.id)
+      .map(({ currency, minor }) => ({ currency, minor })),
   }))
 }
 
