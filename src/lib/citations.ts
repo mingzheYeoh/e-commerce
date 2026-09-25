@@ -65,7 +65,8 @@ export function toSegments(
   const out: Segment[] = []
   let last = 0
 
-  for (const m of text.matchAll(/\[([a-z0-9-]+)\]/gi)) {
+  // `_` for console-minted ids (`prd_…`), which the seeded catalogue never had.
+  for (const m of text.matchAll(/\[([a-z0-9_-]+)\]/gi)) {
     const title = titleOf(m[1])
     // An id naming something that was never retrieved stays as literal text: a
     // link to a product that may not exist is worse than a visible artefact.

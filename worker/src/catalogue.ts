@@ -16,6 +16,7 @@
  * audit trail, that is a reason to change tenancy.ts's rules, not to route a
  * public GET through a staff-only door.
  */
+import type { PassageSource } from '../../src/lib/passages'
 
 export interface CatalogueProduct {
   id: string
@@ -97,4 +98,60 @@ export async function publishedProducts(env: { ORDERS: D1Database }): Promise<Ca
     colorways: parse(r.colorways, []),
     media: parse(r.media, {}),
   }))
+}
+
+/* ------------------------------------------------ what the AI layers may name */
+
+/**
+ * Published, and sold by a merchant who is active.
+ *
+ * The Vectorize index and the graph are copies of this table, made at other
+ * moments, so every AI read is checked against it at query time (rag.ts,
+ * tools.ts). That is what makes an unpublish or a suspension take effect on
+ * the very next question with no hook in the routes that change status, and
+ * what makes an index delete that failed cost a filtered hit rather than a
+ * product the shop no longer sells showing up in an answer.
+ */
+const LIVE = `FROM products p JOIN merchants m ON m.id = p.merchant_id
+  WHERE p.status = 'published' AND m.status = 'active'`
+
+/** Which of these ids are live right now. One query however many there are. */
+export async function liveIds(env: { ORDERS: D1Database }, ids: string[]): Promise<Set<string>> {
+  if (!ids.length) return new Set()
+  const { results } = await env.ORDERS.prepare(
+    // One JSON binding rather than a placeholder per id, so a large topK never
+    // meets D1's cap on bound parameters.
+    `SELECT p.id ${LIVE} AND p.id IN (SELECT value FROM json_each(?1))`,
+  )
+    .bind(JSON.stringify(ids))
+    .all<{ id: string }>()
+  return new Set((results ?? []).map((r) => r.id))
+}
+
+/**
+ * A products row as the passage builder and fact extractor read it: the same
+ * mapping as scripts/build-catalog.mjs `toProduct`, so a product indexed at
+ * publish time gets byte-for-byte the passage the offline builder would write.
+ */
+export const productOf = (
+  r: Pick<Row, 'id' | 'title' | 'brand' | 'category' | 'price_minor' | 'specs_summary' | 'specs'>,
+): PassageSource & { id: string } => ({
+  id: r.id,
+  title: r.title,
+  brand: r.brand,
+  // The console accepts only the storefront's categories; the same trust the
+  // build-time generator and the storefront's own mapping extend.
+  category: r.category as PassageSource['category'],
+  priceMinor: r.price_minor,
+  specsSummary: parse(r.specs_summary, []),
+  specs: parse(r.specs, []),
+})
+
+// ponytail: every tool call reads the whole live catalogue. Fine for hundreds
+// of products; a name index (FTS5) and per-fact columns when it is thousands.
+export async function liveProducts(env: { ORDERS: D1Database }) {
+  const { results } = await env.ORDERS.prepare(
+    `SELECT p.* ${LIVE} ORDER BY p.display_order, p.created_at DESC, p.id`,
+  ).all<Row>()
+  return (results ?? []).map(productOf)
 }

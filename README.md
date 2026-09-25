@@ -211,6 +211,34 @@ The lessons were all about tool contracts, not prompts. The model passes
 zero once made it claim the XPS 16 "has a smaller battery" when Dell publishes
 none — omitted fields now return `"not published"`.
 
+### 4. Live indexing, and a guard for when it lags
+
+A product a merchant publishes reaches all three layers within seconds, not at
+the next build. When a console save leaves a product published and something
+its passage is made of changed (title, brand, category, price, highlights,
+specs), `nexus-console` embeds `passageFor()` with the same model and pooling as
+the query side and upserts it under the product id, with the metadata
+`scripts/build-vectorize.mjs` writes (`worker/src/indexing.ts`); unpublishing or
+archiving deletes it. This runs in `ctx.waitUntil` and swallows its own errors,
+so it never fails or slows a save. The assistant's name lookup, comparison and
+numeric filter read D1 directly, with figures from the same `extractFacts()` the
+graph is built with, and the search box embeds on-device any live product the
+shipped vector file lacks.
+
+The index is a copy, so it is never trusted on its own: every hit from
+Vectorize (and every graph row fed to `/api/ask`) is checked against D1 in one
+query — published, and sold by an active merchant — before a model sees it.
+That makes unpublishing or suspending a merchant take effect on the next
+question even if a delete lagged or failed, with no hook in the routes that
+change status. Staging and production each have their own index
+(`nexus-products-staging`, `nexus-products`), since both are now written to.
+
+What stays offline: the Neo4j graph. Pairing and charger edges
+(`find_accessories`) and the numeric passages `/api/ask` adds come from
+`scripts/build-graph.mjs`, so a new product appears there only after a rebuild.
+A full index rebuild is still `node scripts/build-vectorize.mjs` followed by
+`wrangler vectorize upsert`, and overwrites live entries harmlessly.
+
 ## Architecture
 
 ```

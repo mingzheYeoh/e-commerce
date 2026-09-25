@@ -56,6 +56,7 @@ import {
   newPhotoName,
   type Media,
 } from './photos'
+import { reindex } from './indexing'
 
 /*
  * Re-exported because Cloudflare resolves a Durable Object class by name from
@@ -69,6 +70,10 @@ export interface ConsoleEnv extends StaffEnv, IpDefences {
   MEDIA: R2Bucket
   /** Where nexus-api serves MEDIA from, ending in '/'. Photo URLs are this plus a key. */
   MEDIA_BASE: string
+  /** Embeds a product's passage when it goes on sale or changes (indexing.ts). */
+  AI: Ai
+  /** The index nexus-api retrieves from. One per environment, never shared. */
+  VECTORIZE: VectorizeIndex
 }
 
 const json = (body: unknown, status = 200, headers: Record<string, string> = {}) =>
@@ -226,8 +231,16 @@ const auditOut = (a: AuditPage) => ({
 
 /* ------------------------------------------------------------- products io */
 
+/**
+ * Merchant text as it will be stored: whitespace collapsed and square brackets
+ * turned round. These fields reach the AI's context, where a passage header is
+ * `[id] title` on its own line — a newline and a bracket inside a spec value
+ * could otherwise forge another merchant's product entry next to the real ones.
+ */
+const clean = (v: string) => v.replace(/\s+/g, ' ').replace(/\[/g, '(').replace(/\]/g, ')').trim()
+
 const text = (v: unknown, max: number): string | null =>
-  typeof v === 'string' && v.trim() && v.trim().length <= max ? v.trim() : null
+  typeof v === 'string' && clean(v) && clean(v).length <= max ? clean(v) : null
 
 /** A whole, non-negative number: what price_minor and stock_count accept. */
 const whole = (v: unknown): number | null =>
@@ -301,8 +314,8 @@ function productPatch(body: unknown): ProductPatch | string {
     const lines: string[] = []
     for (const v of p.specsSummary) {
       if (typeof v !== 'string') return 'Highlights are text.'
-      if (v.trim().length > 60) return 'Each highlight is 60 characters or fewer.'
-      if (v.trim()) lines.push(v.trim())
+      if (clean(v).length > 60) return 'Each highlight is 60 characters or fewer.'
+      if (clean(v)) lines.push(clean(v))
     }
     patch.specsSummary = lines
   }
@@ -312,7 +325,7 @@ function productPatch(body: unknown): ProductPatch | string {
     for (const r of p.specs) {
       const { label, value } = fields(r)
       if (typeof label !== 'string' || typeof value !== 'string') return 'A specification row is a label and a value.'
-      const [l, v] = [label.trim(), value.trim()]
+      const [l, v] = [clean(label), clean(value)]
       if (!l && !v) continue
       if (!l || !v) return 'Every specification row needs both a name and a value.'
       if (l.length > 40 || v.length > 120) return 'Specification names are 40 characters and values 120 at most.'
@@ -377,7 +390,7 @@ const APPROVE = /^\/api\/platform\/merchants\/([^/]+)\/approve$/
 const ORDER = /^\/api\/merchant\/orders\/([^/]+)$/
 const TRANSITION = /^\/api\/platform\/merchants\/([^/]+)\/(suspend|restore)$/
 
-async function route(request: Request, env: ConsoleEnv, url: URL): Promise<Response> {
+async function route(request: Request, env: ConsoleEnv, url: URL, ctx: ExecutionContext): Promise<Response> {
   const path = url.pathname
   const method = request.method
 
@@ -463,7 +476,11 @@ async function route(request: Request, env: ConsoleEnv, url: URL): Promise<Respo
       if (why) return json({ error: why }, 409)
     }
     const row = await repo.products.update(productId, patch)
-    return row ? json(product(row)) : json({ error: 'not found' }, 404)
+    if (!row) return json({ error: 'not found' }, 404)
+    // After the response and never in its way: the AI index is a copy of D1,
+    // and rag.ts checks every hit against D1 while the copy catches up.
+    ctx.waitUntil(reindex(env, existing, row))
+    return json(product(row))
   }
 
   /* ----------------------------------------------------- product photos */
@@ -681,7 +698,8 @@ async function route(request: Request, env: ConsoleEnv, url: URL): Promise<Respo
   }
 
   /* Whether the defences are bound, since an absent one allows everything
-     silently. Presence only. */
+     silently — and the AI bindings, whose absence only a log line would
+     otherwise mention. Presence only. */
   if (path === '/api/health' && method === 'GET') {
     return json({
       ok: true,
@@ -689,6 +707,8 @@ async function route(request: Request, env: ConsoleEnv, url: URL): Promise<Respo
       loginRateLimit: Boolean(env.LOGIN_LIMITER),
       signupRateLimit: Boolean(env.SIGNUP_LIMITER),
       durableThrottle: Boolean(env.IP_THROTTLE),
+      ai: Boolean(env.AI),
+      vectorize: Boolean(env.VECTORIZE),
     })
   }
 
@@ -696,7 +716,7 @@ async function route(request: Request, env: ConsoleEnv, url: URL): Promise<Respo
 }
 
 export default {
-  async fetch(request: Request, env: ConsoleEnv): Promise<Response> {
+  async fetch(request: Request, env: ConsoleEnv, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url)
 
     /*
@@ -717,7 +737,7 @@ export default {
     }
 
     try {
-      return await route(request, env, url)
+      return await route(request, env, url, ctx)
     } catch (err) {
       // Logged, not returned: internal detail in an error body is how binding
       // names and stack traces end up in someone else's console.
