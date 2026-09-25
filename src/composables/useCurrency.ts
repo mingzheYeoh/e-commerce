@@ -38,5 +38,21 @@ export function useCurrency() {
   /** Dollars in USD -> display string. Convenience for fixture prices. */
   const formatPrice = (price: number): string => format(Math.round(price * 100))
 
-  return { format, formatPrice, code: computed(() => ui.currency), symbol: computed(() => SYMBOLS[ui.currency]) }
+  /**
+   * An amount that carries its own currency, such as a refund on a merchant's
+   * line. USD goes through `format` like every other figure on the page; any
+   * other currency is shown as itself, since there is no rate from it here.
+   */
+  const formatAmount = ({ currency, minor }: { currency: string; minor: number }): string =>
+    currency === 'USD'
+      ? format(minor)
+      : new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(minor / 100)
+
+  return {
+    format,
+    formatPrice,
+    formatAmount,
+    code: computed(() => ui.currency),
+    symbol: computed(() => SYMBOLS[ui.currency]),
+  }
 }
