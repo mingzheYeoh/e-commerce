@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import AppHeader from '../components/AppHeader.vue'
 import { listProducts, isError, type Product } from '../api'
 import { formatMinor } from '../money'
 
@@ -19,10 +18,9 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="mx-auto max-w-4xl px-6 py-10">
-    <AppHeader />
+  <div class="max-w-4xl">
     <div class="mb-6 flex items-center justify-between">
-      <h1 class="text-lg font-semibold text-text-primary">Products</h1>
+      <h1 class="font-display text-xl font-bold text-text-primary">Products</h1>
       <router-link to="/products/new" class="btn-primary">New product</router-link>
     </div>
 
@@ -31,7 +29,7 @@ onMounted(async () => {
     <p v-else-if="products.length === 0" class="card p-6 text-text-secondary">
       No products yet. Create your first one to get started.
     </p>
-    <div v-else class="card overflow-hidden">
+    <div v-else class="card overflow-x-auto">
       <table class="w-full text-left text-sm">
         <thead class="border-b border-border-hairline">
           <tr class="label">

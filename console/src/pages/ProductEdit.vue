@@ -3,7 +3,6 @@
 // picks the one whose id matches the route — the contract the worker gives
 // us, not a route added to it.
 import { computed, onMounted, ref } from 'vue'
-import AppHeader from '../components/AppHeader.vue'
 import {
   listProducts,
   updateProduct,
@@ -152,9 +151,8 @@ async function photoAction(url: string, action: 'main' | 'delete') {
 </script>
 
 <template>
-  <div class="mx-auto max-w-2xl px-6 py-10">
-    <AppHeader />
-    <h1 class="mb-6 text-lg font-semibold text-text-primary">Edit product</h1>
+  <div class="max-w-2xl">
+    <h1 class="mb-6 font-display text-xl font-bold text-text-primary">Edit product</h1>
 
     <p v-if="loading" class="text-text-secondary">Loading…</p>
     <p v-else-if="notFound" class="card p-6 text-text-secondary">
