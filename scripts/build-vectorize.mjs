@@ -12,7 +12,12 @@
  *
  *   node scripts/build-vectorize.mjs
  *   wrangler vectorize create nexus-products --dimensions=384 --metric=cosine
- *   wrangler vectorize insert nexus-products --file=dist-vectorize/products.ndjson
+ *   wrangler vectorize upsert nexus-products --file=dist-vectorize/products.ndjson
+ *
+ * Staging's index is nexus-products-staging. nexus-console also writes to the
+ * index, one product at a time as merchants publish (worker/src/indexing.ts),
+ * with the same id, passage and metadata shape as below — keep the two in
+ * step. Upsert rather than insert, so a rebuild overwrites either kind.
  */
 import fs from 'node:fs/promises'
 import os from 'node:os'
@@ -75,4 +80,4 @@ const bytes = (await fs.stat(OUT)).size
 console.log(`wrote ${count} vectors x ${dims} dims -> ${OUT} (${(bytes / 1024).toFixed(0)} KB)`)
 console.log('\nnext:')
 console.log('  wrangler vectorize create nexus-products --dimensions=384 --metric=cosine')
-console.log(`  wrangler vectorize insert nexus-products --file=${OUT}`)
+console.log(`  wrangler vectorize upsert nexus-products --file=${OUT}   # staging: nexus-products-staging`)

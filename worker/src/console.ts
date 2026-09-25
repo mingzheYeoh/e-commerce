@@ -40,6 +40,7 @@ import {
   newPhotoName,
   type Media,
 } from './photos'
+import { reindex } from './indexing'
 
 /*
  * Re-exported because Cloudflare resolves a Durable Object class by name from
@@ -53,6 +54,10 @@ export interface ConsoleEnv extends StaffEnv, IpDefences {
   MEDIA: R2Bucket
   /** Where nexus-api serves MEDIA from, ending in '/'. Photo URLs are this plus a key. */
   MEDIA_BASE: string
+  /** Embeds a product's passage when it goes on sale or changes (indexing.ts). */
+  AI: Ai
+  /** The index nexus-api retrieves from. One per environment, never shared. */
+  VECTORIZE: VectorizeIndex
 }
 
 const json = (body: unknown, status = 200, headers: Record<string, string> = {}) =>
@@ -256,7 +261,7 @@ const PHOTO = /^\/api\/merchant\/products\/([^/]+)\/photos\/([^/]+)$/
 const PHOTO_MAIN = /^\/api\/merchant\/products\/([^/]+)\/photos\/([^/]+)\/main$/
 const APPROVE = /^\/api\/platform\/merchants\/([^/]+)\/approve$/
 
-async function route(request: Request, env: ConsoleEnv, url: URL): Promise<Response> {
+async function route(request: Request, env: ConsoleEnv, url: URL, ctx: ExecutionContext): Promise<Response> {
   const path = url.pathname
   const method = request.method
 
@@ -342,7 +347,11 @@ async function route(request: Request, env: ConsoleEnv, url: URL): Promise<Respo
       if (why) return json({ error: why }, 409)
     }
     const row = await repo.products.update(productId, patch)
-    return row ? json(product(row)) : json({ error: 'not found' }, 404)
+    if (!row) return json({ error: 'not found' }, 404)
+    // After the response and never in its way: the AI index is a copy of D1,
+    // and rag.ts checks every hit against D1 while the copy catches up.
+    ctx.waitUntil(reindex(env, existing, row))
+    return json(product(row))
   }
 
   /* ----------------------------------------------------- product photos */
@@ -473,7 +482,8 @@ async function route(request: Request, env: ConsoleEnv, url: URL): Promise<Respo
   }
 
   /* Whether the defences are bound, since an absent one allows everything
-     silently. Presence only. */
+     silently — and the AI bindings, whose absence only a log line would
+     otherwise mention. Presence only. */
   if (path === '/api/health' && method === 'GET') {
     return json({
       ok: true,
@@ -481,6 +491,8 @@ async function route(request: Request, env: ConsoleEnv, url: URL): Promise<Respo
       loginRateLimit: Boolean(env.LOGIN_LIMITER),
       signupRateLimit: Boolean(env.SIGNUP_LIMITER),
       durableThrottle: Boolean(env.IP_THROTTLE),
+      ai: Boolean(env.AI),
+      vectorize: Boolean(env.VECTORIZE),
     })
   }
 
@@ -488,7 +500,7 @@ async function route(request: Request, env: ConsoleEnv, url: URL): Promise<Respo
 }
 
 export default {
-  async fetch(request: Request, env: ConsoleEnv): Promise<Response> {
+  async fetch(request: Request, env: ConsoleEnv, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url)
 
     /*
@@ -509,7 +521,7 @@ export default {
     }
 
     try {
-      return await route(request, env, url)
+      return await route(request, env, url, ctx)
     } catch (err) {
       // Logged, not returned: internal detail in an error body is how binding
       // names and stack traces end up in someone else's console.
