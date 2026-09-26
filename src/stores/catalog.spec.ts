@@ -119,7 +119,7 @@ describe('a product that leaves the live catalogue', () => {
       name: 'Ada', email: 'ada@example.com', country: 'US', line1: '1 Main St',
       city: 'Portland', state: 'OR', postal: '97201',
     })
-    checkout.card.number = '4242 4242 4242 4242'
+    Object.assign(checkout.card, { number: '4242 4242 4242 4242', expiry: '12/49', cvc: '123' })
     expect(await checkout.place()).toEqual({ ok: false })
     expect(checkout.error).toMatch(/no longer available/)
     expect(cart.items, 'a refusal keeps the bag').toHaveLength(2)
@@ -144,7 +144,8 @@ const readyCheckout = () => {
     name: 'Ada', email: 'ada@example.com', country: 'US', line1: '1 Main St',
     city: 'Portland', state: 'OR', postal: '97201',
   })
-  checkout.card.number = '4242 4242 4242 4242'
+  // A card that passes every check, expiry and CVC included, so only the catalogue decides.
+  Object.assign(checkout.card, { number: '4242 4242 4242 4242', expiry: '12/49', cvc: '123' })
   return checkout
 }
 

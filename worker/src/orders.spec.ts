@@ -68,7 +68,12 @@ describe('placeOrder', () => {
 
     expect(res.status).toBe(200)
     // Oregon levies no sales tax, and this product clears the free-shipping bar.
-    expect(res.body).toEqual({ id: 'NX-4K2P9', total: unitCents, totals: { subtotal: unitCents, shipping: 0, tax: 0, total: unitCents } })
+    expect(res.body).toEqual({
+      id: 'NX-4K2P9',
+      total: unitCents,
+      totals: { subtotal: unitCents, shipping: 0, tax: 0, total: unitCents },
+      payment: { method: 'card', channel: '', ref: expect.stringMatching(/^SIM-CARD-/) },
+    })
     expect(rows('orders')).toHaveLength(1)
     expect(rows('order_lines')).toHaveLength(1)
   })
@@ -481,7 +486,13 @@ describe('placeOrder addresses', () => {
     expect((await placeOrder({ ORDERS: db }, payload())).status).toBe(200)
     expect(await placeOrder({ ORDERS: db }, payload())).toEqual({
       status: 200,
-      body: { id: 'NX-4K2P9', total: unitCents, totals: { subtotal: unitCents, shipping: 0, tax: 0, total: unitCents }, existing: true },
+      body: {
+        id: 'NX-4K2P9',
+        total: unitCents,
+        totals: { subtotal: unitCents, shipping: 0, tax: 0, total: unitCents },
+        payment: { method: 'card', channel: '', ref: rows('orders')[0].payment_ref },
+        existing: true,
+      },
     })
     expect(rows('orders')).toHaveLength(1)
   })
@@ -628,6 +639,102 @@ describe('placeOrder and commission', () => {
       { order_id: 'NX-4K2P9', commission_bps: 800 },
       { order_id: 'NX-5M3RT', commission_bps: 1250 },
     ])
+  })
+})
+
+describe('placeOrder and payment', () => {
+  const REF = /^SIM-FPX-[A-HJ-NP-Z2-9]{6}$/
+
+  it('records an FPX payment by bank name, with a reference the server minted', async () => {
+    const { db, rows } = seeded()
+    const res = await placeOrder({ ORDERS: db }, { ...payload(), paymentMethod: 'fpx', paymentChannel: 'Maybank2u' })
+    expect(res.status).toBe(200)
+    const body = res.body as { payment: { method: string; channel: string; ref: string } }
+    expect(body.payment).toEqual({ method: 'fpx', channel: 'Maybank2u', ref: expect.stringMatching(REF) })
+    expect(rows('orders')[0]).toMatchObject({ payment_method: 'fpx', payment_channel: 'Maybank2u', payment_ref: body.payment.ref })
+  })
+
+  it('takes no reference from the caller', async () => {
+    const { db, rows } = seeded()
+    await placeOrder({ ORDERS: db }, { ...payload(), paymentMethod: 'ewallet', paymentChannel: 'GrabPay', paymentRef: 'SIM-EWALLET-AAAAAA' })
+    expect(rows('orders')[0].payment_ref).toMatch(/^SIM-EWALLET-[A-HJ-NP-Z2-9]{6}$/)
+    expect(rows('orders')[0].payment_ref).not.toBe('SIM-EWALLET-AAAAAA')
+  })
+
+  it('refuses a channel that is not on the list for its method, and stores nothing', async () => {
+    const { db, rows } = seeded()
+    const cases = [
+      { paymentMethod: 'fpx', paymentChannel: 'Some Other Bank' },
+      { paymentMethod: 'fpx', paymentChannel: 'GrabPay' },
+      { paymentMethod: 'card', paymentChannel: 'Discover' },
+      { paymentMethod: 'ewallet', paymentChannel: '' },
+      { paymentMethod: 'crypto', paymentChannel: 'Visa' },
+    ]
+    for (const c of cases) {
+      expect((await placeOrder({ ORDERS: db }, { ...payload(), ...c })).status, JSON.stringify(c)).toBe(400)
+    }
+    expect(rows('orders')).toEqual([])
+  })
+
+  it('records a card by its brand alone', async () => {
+    const { db, rows } = seeded()
+    await placeOrder({ ORDERS: db }, { ...payload(), paymentMethod: 'card', paymentChannel: 'Visa' })
+    expect(rows('orders')[0]).toMatchObject({ payment_method: 'card', payment_channel: 'Visa' })
+    expect(rows('orders')[0].payment_ref).toMatch(/^SIM-CARD-/)
+  })
+
+  it('files a request from a storefront that predates payment methods as a card', async () => {
+    // Cached pages post neither field until the new storefront deploys.
+    const { db, rows } = seeded()
+    expect((await placeOrder({ ORDERS: db }, payload())).status).toBe(200)
+    expect(rows('orders')[0]).toMatchObject({ payment_method: 'card', payment_channel: '' })
+  })
+
+  it('refuses a declined FPX or e-wallet attempt: only an approval is ever posted', async () => {
+    const { db, rows } = seeded()
+    const res = await placeOrder({ ORDERS: db }, { ...payload({ paymentCode: 'card_declined' }), paymentMethod: 'fpx', paymentChannel: 'BSN' })
+    expect(res.status).toBe(400)
+    expect(rows('orders')).toEqual([])
+  })
+
+  it('answers a retry with the reference first stored', async () => {
+    const { db } = seeded()
+    const first = await placeOrder({ ORDERS: db }, { ...payload(), paymentMethod: 'fpx', paymentChannel: 'UOB' })
+    const again = await placeOrder({ ORDERS: db }, { ...payload(), paymentMethod: 'fpx', paymentChannel: 'UOB' })
+    expect(again.body).toMatchObject({ existing: true, payment: (first.body as { payment: unknown }).payment })
+  })
+})
+
+describe('getOrder details', () => {
+  it("gives every line its product, seller and, for the account that placed it, that seller's status", async () => {
+    const { db, raw } = seeded()
+    await placeOrder(
+      { ORDERS: db },
+      { ...payload({ lines: [{ productId: FLAGSHIP.id, qty: 2, finish: 'Silver' }] }), paymentMethod: 'fpx', paymentChannel: 'Maybank2u' },
+      'usr_owner',
+    )
+    raw.prepare(`UPDATE order_fulfilments SET status = 'delivered', carrier = 'UPS', tracking = '1Z', shipped_at = datetime('now'), delivered_at = datetime('now')`).run()
+    const owner = await getOrder({ ORDERS: db }, 'NX-4K2P9', 'usr_owner')
+    expect(owner!.lines).toEqual([
+      {
+        productId: FLAGSHIP.id,
+        sku: FLAGSHIP.sku,
+        title: FLAGSHIP.title,
+        qty: 2,
+        unitPriceCents: FLAGSHIP.price,
+        finish: 'Silver',
+        seller: 'Nexus',
+        status: 'delivered',
+      },
+    ])
+    expect(owner!.payment).toEqual({ method: 'fpx', channel: 'Maybank2u', ref: expect.stringMatching(/^SIM-FPX-/) })
+
+    for (const viewer of [null, 'usr_stranger']) {
+      const seen = (await getOrder({ ORDERS: db }, 'NX-4K2P9', viewer))!
+      expect(seen.lines[0]).toMatchObject({ productId: FLAGSHIP.id, seller: 'Nexus', status: null })
+      expect(seen.payment).toEqual({ method: 'fpx', channel: 'Maybank2u', ref: null })
+      expect(seen.address.line1).toBe('')
+    }
   })
 })
 
