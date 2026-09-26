@@ -21,6 +21,8 @@ const props = defineProps<{
   method: ShipMethod
   country?: string
   state?: string
+  /** Amounts only, where the lines are already listed in full beside it (the order page). */
+  hideLines?: boolean
 }>()
 
 const { format } = useCurrency()
@@ -84,7 +86,7 @@ const taxNote = computed(() => {
   <aside class="rounded-card border border-border-hairline bg-surface-1 p-5">
     <h2 class="text-sm font-semibold">Order summary</h2>
 
-    <ul class="mt-4 space-y-3 border-b border-border-hairline pb-4">
+    <ul v-if="!hideLines" class="mt-4 space-y-3 border-b border-border-hairline pb-4">
       <li v-for="line in lines" :key="lineKey(line)" class="flex items-center gap-3">
         <img :src="line.thumb" :alt="line.title" width="40" height="40" class="h-10 w-10 shrink-0 rounded object-cover" />
         <span class="min-w-0 flex-1">
