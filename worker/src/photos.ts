@@ -84,6 +84,48 @@ export function isWebp(bytes: Uint8Array): boolean {
   return bytes.length >= 12 && tag(0) === 'RIFF' && tag(8) === 'WEBP'
 }
 
+/**
+ * The webp files a multipart upload carries, in `parts` order, or the refusal.
+ *
+ * Checked before anything is stored, cheapest first. The declared length
+ * comes before formData(), which buffers the whole body — an isolate has
+ * 128MB against a 100MB request limit, so the cap has to hold before it runs
+ * (browsers always send content-length for a FormData fetch). Then each
+ * part's size, then its bytes: never the file name or declared type, which
+ * are both the client's word.
+ */
+export async function readWebpForm(
+  request: Request,
+  parts: { field: string; max: number }[],
+): Promise<ArrayBuffer[] | { status: 400 | 413 | 415; error: string }> {
+  const tooLarge = { status: 413 as const, error: 'That photo is too large, even after resizing.' }
+  const length = Number(request.headers.get('content-length'))
+  if (!length || length > parts.reduce((n, p) => n + p.max, 0) + 64_000) return tooLarge
+  const form = await request.formData().catch(() => null)
+  const files = parts.map((p) => form?.get(p.field))
+  if (!files.every((f): f is File => f instanceof File)) {
+    return { status: 400, error: `Send the photo as ${parts.map((p) => p.field).join(' and ')}.` }
+  }
+  if (files.some((f, i) => f.size > parts[i].max)) return tooLarge
+  const bytes = await Promise.all(files.map((f) => f.arrayBuffer()))
+  if (!bytes.every((b) => isWebp(new Uint8Array(b)))) return { status: 415, error: 'Photos are uploaded as webp.' }
+  return bytes
+}
+
+/**
+ * A private photo (a return's) as a response. Never stored by anything in
+ * between: it is only ever sent to someone the route has just authorised.
+ */
+export const privatePhoto = (object: R2ObjectBody) =>
+  new Response(object.body, {
+    headers: {
+      'content-type': 'image/webp',
+      'cache-control': 'private, no-store',
+      // Only the first twelve bytes were checked at upload.
+      'x-content-type-options': 'nosniff',
+    },
+  })
+
 /** The media JSON for these names, in this order. Empty names → '{}', the column default. */
 export function mediaFor(base: string, merchantId: string, productId: string, names: string[]): string {
   if (names.length === 0) return '{}'

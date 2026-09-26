@@ -71,11 +71,11 @@ import {
   MAX_THUMB_BYTES,
   isPhotoKey,
   isPhotoName,
-  isWebp,
   keyFor,
   mediaFor,
   namesIn,
   newPhotoName,
+  readWebpForm,
   type Media,
 } from './photos'
 import { reindex } from './indexing'
@@ -873,27 +873,12 @@ async function route(request: Request, env: ConsoleEnv, url: URL, ctx: Execution
     if (!names) return json({ error: "This product's photos are not managed in the console." }, 409)
     if (names.length >= MAX_PHOTOS) return json({ error: `A product has at most ${MAX_PHOTOS} photos.` }, 409)
 
-    // formData() buffers the whole body, and an isolate has 128MB against a
-    // 100MB request limit, so the cap has to be enforced before it runs.
-    // Browsers always send content-length for a FormData fetch.
-    const length = Number(request.headers.get('content-length'))
-    if (!length || length > MAX_LARGE_BYTES + MAX_THUMB_BYTES + 64_000) {
-      return json({ error: 'That photo is too large, even after resizing.' }, 413)
-    }
-    const form = await request.formData().catch(() => null)
-    const large = form?.get('large')
-    const thumb = form?.get('thumb')
-    if (!(large instanceof File) || !(thumb instanceof File)) {
-      return json({ error: 'Send the photo as two files, large and thumb.' }, 400)
-    }
-    if (large.size > MAX_LARGE_BYTES || thumb.size > MAX_THUMB_BYTES) {
-      return json({ error: 'That photo is too large, even after resizing.' }, 413)
-    }
-    const [largeBytes, thumbBytes] = await Promise.all([large.arrayBuffer(), thumb.arrayBuffer()])
-    // The bytes, not the file name or the declared type: both are the client's word.
-    if (!isWebp(new Uint8Array(largeBytes)) || !isWebp(new Uint8Array(thumbBytes))) {
-      return json({ error: 'Photos are uploaded as webp.' }, 415)
-    }
+    const read = await readWebpForm(request, [
+      { field: 'large', max: MAX_LARGE_BYTES },
+      { field: 'thumb', max: MAX_THUMB_BYTES },
+    ])
+    if (!Array.isArray(read)) return json({ error: read.error }, read.status)
+    const [largeBytes, thumbBytes] = read
 
     const name = newPhotoName()
     const keys = [keyFor(existing.merchant_id, existing.id, name, 1600), keyFor(existing.merchant_id, existing.id, name, 400)]
