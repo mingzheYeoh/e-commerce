@@ -1,11 +1,11 @@
 import { defineStore } from 'pinia'
-import { useCartStore, type CartLine } from './cart'
-import { charge } from '@/lib/payment'
+import { useCartStore, lineKey, type CartLine } from './cart'
+import { chargeCard, cardProblem, settle, CHANNELS, type PayMethod, type SimOutcome } from '@/lib/payment'
 import { totalCents, type OrderTotals, type ShipMethod } from '@/lib/money'
 import { findCountry, validSubdivision, validPostal, validPhone } from '@/lib/regions'
 import { methodAvailable, defaultMethodFor } from '@/lib/shipping'
-import { saveOrder, fetchOrder, type OrderPart } from '@/lib/api'
-import { catalogue, catalogueReady } from './catalog'
+import { saveOrder, fetchOrder, type OrderPart, type OrderPayment, type RemoteOrder } from '@/lib/api'
+import { catalogue, catalogueReady, findProduct } from './catalog'
 import { useUiStore } from './ui'
 
 /**
@@ -34,15 +34,24 @@ export interface Address {
   postal: string
 }
 
+/** A line of a placed order: what was bought, and — once the server says — who sells it and how far it got. */
+export type OrderLine = CartLine & {
+  seller?: string
+  /** That seller's part. Null or absent unless the signed-in account placed the order. */
+  status?: OrderPart['status'] | null
+}
+
 export interface Order {
   id: string
   placedAt: string
   address: Address
   method: ShipMethod
-  lines: CartLine[]
+  lines: OrderLine[]
   /** Frozen at purchase. Recomputing later would rewrite history on a price change. */
   totals: OrderTotals
   paymentCode: string
+  /** How it was paid. Absent on a receipt stored before payment methods. */
+  payment?: OrderPayment
 }
 
 const ORDERS_KEY = 'nexus:orders'
@@ -101,6 +110,10 @@ export const useCheckoutStore = defineStore('checkout', {
       postal: '',
     } as Address,
     method: 'standard' as ShipMethod,
+    payMethod: 'card' as PayMethod,
+    /** The FPX bank or e-wallet chosen. A card's brand is read off its number instead. */
+    channel: '',
+    /** Never sent anywhere: only the brand the number implies leaves this store. */
     card: { number: '', expiry: '', cvc: '' },
     placing: false,
     error: '',
@@ -148,7 +161,16 @@ export const useCheckoutStore = defineStore('checkout', {
       // Not just "a method is selected" — it has to be one this destination
       // actually has, which a change of country can invalidate.
       if (step === 2) return methodAvailable(this.method, a.country)
-      return this.card.number.replace(/[\s-]/g, '').length >= 12
+      if (this.payMethod === 'card') return cardProblem(this.card) === null
+      return CHANNELS[this.payMethod].includes(this.channel)
+    },
+
+    /** A bank chosen for FPX is not a wallet, so switching method starts the choice again. */
+    setPayMethod(method: PayMethod) {
+      if (this.payMethod === method) return
+      this.payMethod = method
+      this.channel = ''
+      this.error = ''
     },
 
     /** Furthest step the shopper has earned, so a deep link cannot skip ahead. */
@@ -196,7 +218,12 @@ export const useCheckoutStore = defineStore('checkout', {
       return this.orders.find((o) => o.id === id)
     },
 
-    async place(): Promise<{ ok: true; id: string } | { ok: false }> {
+    /**
+     * Pays and places the order. For FPX and e-wallets `outcome` is what the
+     * simulator screen reported; anything but an approval stops here, the way
+     * a declined card does, and posts nothing.
+     */
+    async place(outcome?: SimOutcome): Promise<{ ok: true; id: string } | { ok: false }> {
       // A second press while the first is still in flight is not a second order.
       if (this.placing) return { ok: false }
       const cart = useCartStore()
@@ -237,7 +264,10 @@ export const useCheckoutStore = defineStore('checkout', {
       // pending state untestable and the UI feel wrong.
       await new Promise((r) => setTimeout(r, 400))
 
-      const result = charge(this.card.number)
+      const card = this.payMethod === 'card' ? chargeCard(this.card) : null
+      const result = card ?? settle(outcome ?? 'cancelled')
+      // A card's brand, or the bank or wallet chosen. The number never leaves.
+      const channel = card ? (card.brand ?? '') : this.channel
 
       if (!result.ok) {
         this.placing = false
@@ -257,6 +287,8 @@ export const useCheckoutStore = defineStore('checkout', {
         // sku and the server would be guessing which one was bought.
         lines: cart.lines.map((l) => ({ productId: l.productId, qty: l.qty, finish: l.finish })),
         paymentCode: result.code,
+        paymentMethod: this.payMethod,
+        paymentChannel: channel,
         currency: useUiStore().currency,
       }
       /*
@@ -321,6 +353,9 @@ export const useCheckoutStore = defineStore('checkout', {
         // would work out now.
         totals: (saved.ok && saved.totals) || this.totals,
         paymentCode: result.code,
+        // The server's record, with the reference it minted; for a retry, the
+        // payment the stored order was placed with.
+        payment: (saved.ok && saved.payment) || { method: this.payMethod, channel, ref: null },
       }
 
       this.orders = [order, ...this.orders].slice(0, 20)
@@ -337,60 +372,76 @@ export const useCheckoutStore = defineStore('checkout', {
     },
 
     /**
-     * Each seller's delivery and refunds for this order, or null. Only the
-     * signed-in account that placed it gets them: the server decides, from
-     * the session cookie.
-     */
-    async loadParts(id: string): Promise<OrderPart[] | null> {
-      return (await fetchOrder(id))?.parts ?? null
-    },
-
-    /**
      * The order behind a confirmation URL.
      *
      * Local first: the browser that placed it holds the full record, including
      * the unmasked email. Falling back to the API is what makes the link
      * shareable rather than a bookmark that only works on one machine.
+     *
+     * `remote`, when the caller already fetched it, saves a second request and
+     * adds what only the server knows to a local receipt: each line's seller
+     * and delivery status, and the payment reference. Without it a local
+     * receipt is answered with no request at all.
      */
-    async loadOrder(id: string): Promise<Order | null> {
+    async loadOrder(id: string, remote?: RemoteOrder | null): Promise<Order | null> {
       const local = this.findOrder(id)
-      if (local) return local
+      if (local) {
+        if (!remote) return local
+        const server = new Map(remote.lines.map((l) => [lineKey({ productId: l.productId ?? '', finish: l.finish }), l]))
+        return {
+          ...local,
+          lines: local.lines.map((l) => {
+            const s = server.get(lineKey(l))
+            return s ? { ...l, seller: s.seller, status: s.status } : l
+          }),
+          payment: remote.payment?.ref ? remote.payment : (local.payment ?? remote.payment),
+        }
+      }
 
-      const remote = await fetchOrder(id)
-      if (!remote) return null
+      const found = remote === undefined ? await fetchOrder(id) : remote
+      if (!found) return null
       // It came back from the server, so it is by definition the durable copy.
       this.synced[id] = true
-
-      const bySku = new Map(catalogue.value.map((p) => [p.sku, p]))
-      return {
-        id: remote.id,
-        placedAt: remote.placedAt,
-        address: { ...remote.address, email: remote.email },
-        method: remote.method as ShipMethod,
-        lines: remote.lines.map((l) => {
-          // Imagery is catalogue data, not order data, so it is looked up
-          // rather than stored — a product that has since been delisted simply
-          // renders without a thumbnail.
-          const p = bySku.get(l.sku)
-          return {
-            // A stored order keeps the sku, not the catalogue id, so this is the
-            // one place a sku lookup is still all there is. It feeds the render
-            // key and nothing that costs money, and a delisted product falls
-            // back to its sku rather than to a key every such line shares.
-            productId: p?.id ?? l.sku,
-            sku: l.sku,
-            title: l.title,
-            finish: l.finish,
-            brand: p?.brand ?? '',
-            thumb: p?.media.thumb ?? '',
-            unitPriceCents: l.unitPriceCents,
-            qty: l.qty,
-            stockCount: p?.stockCount ?? 0,
-          }
-        }),
-        totals: remote.totals,
-        paymentCode: remote.paymentCode,
-      }
+      return fromRemote(found)
     },
   },
 })
+
+/**
+ * A server's copy of an order as the storefront renders it.
+ *
+ * Imagery is catalogue data, not order data, so it is looked up rather than
+ * stored — a product that has since been delisted simply renders without a
+ * thumbnail.
+ */
+export function fromRemote(remote: RemoteOrder): Order {
+  const bySku = new Map(catalogue.value.map((p) => [p.sku, p]))
+  return {
+    id: remote.id,
+    placedAt: remote.placedAt,
+    address: { ...remote.address, email: remote.email },
+    method: remote.method as ShipMethod,
+    lines: remote.lines.map((l) => {
+      // By id where the server sent one. An older API sent only the sku, and
+      // a delisted product then falls back to its sku as the key rather than
+      // to a key every such line shares.
+      const p = l.productId ? findProduct(l.productId) : bySku.get(l.sku)
+      return {
+        productId: l.productId ?? p?.id ?? l.sku,
+        sku: l.sku,
+        title: l.title,
+        finish: l.finish,
+        brand: p?.brand ?? '',
+        thumb: p?.media.thumb ?? '',
+        unitPriceCents: l.unitPriceCents,
+        qty: l.qty,
+        stockCount: p?.stockCount ?? 0,
+        seller: l.seller,
+        status: l.status,
+      }
+    }),
+    totals: remote.totals,
+    paymentCode: remote.paymentCode,
+    payment: remote.payment,
+  }
+}
