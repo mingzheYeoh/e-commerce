@@ -439,6 +439,20 @@ async function twoTenants() {
   addLine(raw, 'o_shared', 'p_a', 'mch_a', 'Mine', 1, 100)
   addLine(raw, 'o_shared', 'LEAK_p_b', 'mch_b', 'LEAK_LINE', 1, 200)
   addLine(raw, 'LEAK_o_b', 'LEAK_p_b', 'mch_b', 'LEAK_LINE', 1, 200)
+  // A shopper's review of B's product and a return on B's part: customer
+  // uploads carry the marker too, so the sweep covers the new groups.
+  raw
+    .prepare(`INSERT INTO users (id, email, name, password_hash, password_salt, iterations)
+              VALUES ('usr_ada', 'ada@example.com', 'Ada Lovelace', 'h', 's', 1)`)
+    .run()
+  raw
+    .prepare(`INSERT INTO reviews (id, user_id, product_id, merchant_id, rating, body)
+              VALUES ('LEAK_rev_b', 'usr_ada', 'LEAK_p_b', 'mch_b', 2, 'LEAK_REVIEW')`)
+    .run()
+  raw
+    .prepare(`INSERT INTO return_requests (id, order_id, merchant_id, reason, note)
+              VALUES ('LEAK_ret_b', 'LEAK_o_b', 'mch_b', 'damaged', 'LEAK_NOTE')`)
+    .run()
   return { env: { ORDERS: db } as TenancyEnv, raw, rows }
 }
 
@@ -634,6 +648,15 @@ const CASES: Record<string, unknown[]> = {
   'fulfilment.cancel': ['LEAK_o_b'],
   'refunds.create': ['o_shared', { productId: 'LEAK_p_b', variant: '', qty: 1, reason: 'Sweep' }],
   'finance.balance': [],
+  // Customer uploads: B's review and B's return request, which A must neither
+  // read nor decide.
+  'reviews.list': [{}],
+  'returns.list': [{}],
+  'returns.get': ['LEAK_ret_b'],
+  'returns.approve': ['LEAK_ret_b', { amountMinor: 1, note: 'Sweep' }],
+  'returns.reject': ['LEAK_ret_b', { note: 'Sweep' }],
+  'moderation.hide': ['LEAK_rev_b'],
+  'moderation.unhide': ['LEAK_rev_b'],
   // Platform only: a merchant repository has no such groups, which the
   // completeness tests below pin. Suspend before restore, because the audit
   // sweep runs them in this order against an active mch_b.
@@ -671,10 +694,20 @@ const PLATFORM_ONLY = [
   'analytics.attention',
   'customers.list',
   'customers.get',
+  'moderation.hide',
+  'moderation.unhide',
 ]
 
 /** Methods the platform repository carries and refuses: they act for one merchant, which the platform is not. */
-const MERCHANT_ACTS = ['products.create', 'fulfilment.ship', 'fulfilment.deliver', 'fulfilment.cancel']
+const MERCHANT_ACTS = [
+  'products.create',
+  'fulfilment.ship',
+  'fulfilment.deliver',
+  'fulfilment.cancel',
+  // The platform reads returns; deciding one is the merchant's call.
+  'returns.approve',
+  'returns.reject',
+]
 
 const call = (repo: Repository, dotted: string, args: unknown[]) => {
   const [group, name] = dotted.split('.')
@@ -846,7 +879,7 @@ describe('completeness', () => {
     const mine = await scopedTo(env, 'mch_a', 'stf_1')
     expect('merchants' in mine).toBe(false)
     expect('audit' in mine).toBe(false)
-    for (const group of ['payments', 'analytics', 'customers']) expect(group in mine, group).toBe(false)
+    for (const group of ['payments', 'analytics', 'customers', 'moderation']) expect(group in mine, group).toBe(false)
   })
 })
 
@@ -1116,6 +1149,8 @@ describe('suspending a merchant', () => {
       'parts.cancel',
       'payouts.create',
       'refunds.create',
+      'returns.approve',
+      'returns.reject',
     ])
   })
 })
@@ -1944,8 +1979,8 @@ describe('the inventory and the queue', () => {
     const { a, b } = await backOffice()
     // A: o3, o4, o7 pending (o1 shipped, o2 cancelled). pa1 at 3 is low; pa_sgd
     // at 0 is out; the draft at 0 is not on sale.
-    expect(await a.stats.queue()).toEqual({ to_ship: 3, low_stock: 1, out_of_stock: 1 })
-    expect(await b.stats.queue()).toEqual({ to_ship: 2, low_stock: 0, out_of_stock: 0 })
+    expect(await a.stats.queue()).toEqual({ to_ship: 3, low_stock: 1, out_of_stock: 1, returns_open: 0 })
+    expect(await b.stats.queue()).toEqual({ to_ship: 2, low_stock: 0, out_of_stock: 0, returns_open: 0 })
   })
 })
 
@@ -2469,6 +2504,178 @@ describe('customers', () => {
       { action: 'customers.list', merchant_id: null, subject: null },
       { action: 'customers.get', merchant_id: 'mch_a', subject: 'usr_1' },
       { action: 'customers.get', merchant_id: 'mch_b', subject: 'usr_1' },
+    ])
+  })
+})
+
+/* ------------------------------------------------------------ customer uploads */
+
+/**
+ * twoTenants, with A's part of o_shared delivered and a return filed on it.
+ * A's lines in o_shared: 'Mine' 1 x 100 MYR, and 'Second' 1 x 300 MYR.
+ */
+async function returnable() {
+  const t = await twoTenants()
+  t.raw
+    .prepare(
+      `INSERT INTO products (id, merchant_id, sku, title, brand, category, price_minor, currency, status)
+       VALUES ('p_a2','mch_a','SKU-A2','Second','APPLE','phones',300,'MYR','published')`,
+    )
+    .run()
+  addLine(t.raw, 'o_shared', 'p_a2', 'mch_a', 'Second', 1, 300)
+  t.raw
+    .prepare(
+      `INSERT INTO order_fulfilments (order_id, merchant_id, status, carrier, tracking, shipped_at, delivered_at)
+       VALUES ('o_shared', 'mch_a', 'delivered', 'UPS', '1Z', datetime('now'), datetime('now'))`,
+    )
+    .run()
+  t.raw
+    .prepare(`INSERT INTO return_requests (id, order_id, merchant_id, reason, note) VALUES ('ret_a', 'o_shared', 'mch_a', 'damaged', 'Cracked screen')`)
+    .run()
+  t.raw.prepare(`INSERT INTO return_photos (return_id, name) VALUES ('ret_a', 'ph_one')`).run()
+  return { ...t, a: await scopedTo(t.env, 'mch_a', 'stf_a') }
+}
+
+describe('return requests', () => {
+  it('shows a merchant its own requests with the part, what is left to refund and the photo names', async () => {
+    const { a } = await returnable()
+    expect((await a.returns.list({})).map((r) => r.id)).toEqual(['ret_a'])
+    expect(await a.returns.list({ status: 'approved' })).toEqual([])
+    const detail = await a.returns.get('ret_a')
+    expect(detail).toMatchObject({
+      id: 'ret_a',
+      order_id: 'o_shared',
+      merchant_id: 'mch_a',
+      reason: 'damaged',
+      note: 'Cracked screen',
+      status: 'open',
+      currency: 'MYR',
+      refundable: 400,
+      photos: ['ph_one'],
+    })
+    expect(detail!.delivered_at).toBeTruthy()
+    expect(detail!.lines.map((l) => [l.title, l.paid, l.refunded_minor])).toEqual([
+      ['Mine', 100, 0],
+      ['Second', 300, 0],
+    ])
+  })
+
+  it('approves through the refund path: refunds, their audit rows and the decision land together', async () => {
+    const { a, rows } = await returnable()
+    const approved = await a.returns.approve('ret_a', { amountMinor: 350, note: 'Sorry about that' })
+    expect(approved).toMatchObject({ status: 'approved', refund_minor: 350, decision_note: 'Sorry about that', refundable: 50 })
+    // Spread across the part's lines in order, money only, each naming the return.
+    expect(rows('refunds').map((r) => [r.product_id, r.qty, r.amount_minor, r.actor_scope])).toEqual([
+      ['p_a', 0, 100, 'merchant'],
+      ['p_a2', 0, 250, 'merchant'],
+    ])
+    expect(rows('refunds').every((r) => String(r.reason).includes('ret_a'))).toBe(true)
+    expect(rows('audit_log').map((r) => r.action).sort()).toEqual(['refunds.create', 'refunds.create', 'returns.approve'])
+    await expect(a.returns.approve('ret_a', { amountMinor: 1, note: '' })).rejects.toBeInstanceOf(Conflict)
+    await expect(a.returns.reject('ret_a', { note: 'No' })).rejects.toBeInstanceOf(Conflict)
+  })
+
+  it('refuses more than the part has left to refund, and writes nothing', async () => {
+    const { a, rows } = await returnable()
+    await a.refunds.create('o_shared', { productId: 'p_a2', variant: '', qty: 0, amountMinor: 300, reason: 'Goodwill' })
+    await expect(a.returns.approve('ret_a', { amountMinor: 101, note: '' })).rejects.toThrow(/Only 1\.00 MYR/)
+    await expect(a.returns.approve('ret_a', { amountMinor: 0, note: '' })).rejects.toBeInstanceOf(Invalid)
+    expect(rows('refunds')).toHaveLength(1)
+    expect(rows('return_requests').find((r) => r.id === 'ret_a')!.status).toBe('open')
+  })
+
+  it('rolls the whole approval back when a refund lands on the part in the meantime', async () => {
+    // The checks read before the batch; the same cap guard refunds.create
+    // ends with reads inside it.
+    const { env, raw, rows } = await returnable()
+    const racing: TenancyEnv = {
+      ORDERS: new Proxy(env.ORDERS, {
+        get(target, prop) {
+          if (prop !== 'batch') return Reflect.get(target, prop)
+          return (stmts: D1PreparedStatement[]) => {
+            raw
+              .prepare(
+                `INSERT INTO refunds (id, order_id, merchant_id, product_id, variant, qty, amount_minor, reason, actor_id, actor_scope)
+                 VALUES ('rfd_race', 'o_shared', 'mch_a', 'p_a', '', 0, 100, 'race', 'stf_x', 'merchant')`,
+              )
+              .run()
+            return target.batch(stmts)
+          }
+        },
+      }),
+    }
+    const a = await scopedTo(racing, 'mch_a', 'stf_a')
+    await expect(a.returns.approve('ret_a', { amountMinor: 400, note: '' })).rejects.toThrow(/in the meantime/)
+    expect(rows('refunds').map((r) => r.id)).toEqual(['rfd_race'])
+    expect(rows('return_requests').find((r) => r.id === 'ret_a')!.status).toBe('open')
+    expect(rows('audit_log')).toEqual([])
+  })
+
+  it('rejects only with a note, audited, and then it is decided', async () => {
+    const { a, rows } = await returnable()
+    await expect(a.returns.reject('ret_a', { note: '' })).rejects.toBeInstanceOf(Invalid)
+    const rejected = await a.returns.reject('ret_a', { note: 'Outside policy' })
+    expect(rejected).toMatchObject({ status: 'rejected', decision_note: 'Outside policy', refund_minor: null })
+    expect(rows('audit_log').map((r) => [r.action, r.merchant_id, r.subject])).toEqual([['returns.reject', 'mch_a', 'ret_a']])
+    expect(rows('refunds')).toEqual([])
+  })
+
+  it('counts open requests in the queue, per merchant', async () => {
+    const { a, env } = await returnable()
+    expect((await a.stats.queue()).returns_open).toBe(1)
+    expect((await (await scopedTo(env, 'mch_b', 'stf_b')).stats.queue()).returns_open).toBe(1)
+    await a.returns.reject('ret_a', { note: 'No' })
+    expect((await a.stats.queue()).returns_open).toBe(0)
+  })
+
+  it('lets the platform read every request, and records that it did', async () => {
+    const { env, rows } = await returnable()
+    const platform = await platformWide(env, 'stf_p')
+    expect((await platform.returns.list({})).map((r) => r.id).sort()).toEqual(['LEAK_ret_b', 'ret_a'])
+    expect(rows('audit_log').map((r) => r.merchant_id).sort()).toEqual(['mch_a', 'mch_b'])
+  })
+})
+
+describe('reviews in the console', () => {
+  it('shows a merchant the reviews of its own products only, author as first name and initial', async () => {
+    const { env, raw } = await twoTenants()
+    raw
+      .prepare(`INSERT INTO reviews (id, user_id, product_id, merchant_id, rating, body) VALUES ('rev_a', 'usr_ada', 'p_a', 'mch_a', 5, 'Great')`)
+      .run()
+    raw.prepare(`INSERT INTO review_photos (review_id, name) VALUES ('rev_a', 'ph_x')`).run()
+    const mine = await (await scopedTo(env, 'mch_a', 'stf_a')).reviews.list({})
+    expect(mine).toEqual([
+      expect.objectContaining({
+        id: 'rev_a',
+        product_id: 'p_a',
+        product_title: 'Mine',
+        merchant_id: 'mch_a',
+        rating: 5,
+        body: 'Great',
+        hidden: false,
+        author: 'Ada L.',
+        photos: ['ph_x'],
+      }),
+    ])
+    // Never the shopper's email or full name.
+    expect(JSON.stringify(mine)).not.toMatch(/ada@example|Lovelace/)
+  })
+
+  it('lets the platform hide and unhide a review, each recorded against its merchant', async () => {
+    const { env, rows } = await twoTenants()
+    const platform = await platformWide(env, 'stf_p')
+    expect(await platform.moderation.hide('LEAK_rev_b')).toEqual({ id: 'LEAK_rev_b', merchant_id: 'mch_b', hidden: true })
+    expect(rows('reviews')[0].hidden).toBe(1)
+    expect(await platform.moderation.unhide('LEAK_rev_b')).toEqual({ id: 'LEAK_rev_b', merchant_id: 'mch_b', hidden: false })
+    expect(await platform.moderation.hide('rev_nobody')).toBeNull()
+    expect(
+      rows('audit_log')
+        .filter((r) => String(r.action).startsWith('moderation.'))
+        .map((r) => [r.action, r.merchant_id, r.subject]),
+    ).toEqual([
+      ['moderation.hide', 'mch_b', 'LEAK_rev_b'],
+      ['moderation.unhide', 'mch_b', 'LEAK_rev_b'],
+      ['moderation.hide', null, 'rev_nobody'],
     ])
   })
 })

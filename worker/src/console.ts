@@ -990,7 +990,11 @@ async function route(request: Request, env: ConsoleEnv, url: URL, ctx: Execution
     const repo = await merchantRepo(env, request)
     if (repo instanceof Response) return repo
     const q = await repo.stats.queue()
-    return json({ toShip: q.to_ship, lowStock: q.low_stock, outOfStock: q.out_of_stock, lowStockAt: LOW_STOCK }, 200, PRIVATE)
+    return json(
+      { toShip: q.to_ship, lowStock: q.low_stock, outOfStock: q.out_of_stock, lowStockAt: LOW_STOCK, returnsOpen: q.returns_open },
+      200,
+      PRIVATE,
+    )
   }
 
   if (path === '/api/merchant/reports/sales' && method === 'GET') {

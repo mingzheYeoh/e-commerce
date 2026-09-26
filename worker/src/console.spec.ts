@@ -1044,7 +1044,7 @@ describe('the console worker: the back office', () => {
   it('reports, stocks, queues and states the merchant alone, by hand-checked figures', async () => {
     // Mine: o_shared, 2 × 1000 USD, pending. Paid out 500. 8% of 2000 is 160.
     const s = await office()
-    expect((await s.get('/api/merchant/queue')).body).toEqual({ toShip: 1, lowStock: 1, outOfStock: 0, lowStockAt: 5 })
+    expect((await s.get('/api/merchant/queue')).body).toEqual({ toShip: 1, lowStock: 1, outOfStock: 0, lowStockAt: 5, returnsOpen: 0 })
 
     const report = (await s.get('/api/merchant/reports/sales')).body as { totals: unknown[]; products: unknown[] }
     expect(report.totals).toEqual([
