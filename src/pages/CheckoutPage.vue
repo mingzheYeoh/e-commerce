@@ -7,9 +7,11 @@
  * lands on the first incomplete step instead of a payment form with no address
  * behind it.
  */
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, ref, type Component } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
-import { Check, Lock, AlertCircle, CreditCard } from 'lucide-vue-next'
+import { Check, Lock, AlertCircle, CreditCard, Landmark, Wallet } from 'lucide-vue-next'
+import { CHANNELS, METHOD_LABEL, cardBrand, cardProblem, type PayMethod, type SimOutcome } from '@/lib/payment'
+import PaymentSimulator from '@/components/checkout/PaymentSimulator.vue'
 import { useCartStore } from '@/stores/cart'
 import { useAuthStore } from '@/stores/auth'
 import { useCheckoutStore } from '@/stores/checkout'
@@ -63,8 +65,40 @@ onMounted(() => {
   }
 })
 
-async function place() {
-  const result = await checkout.place()
+const PAY_OPTIONS: { id: PayMethod; icon: Component }[] = [
+  { id: 'card', icon: CreditCard },
+  { id: 'fpx', icon: Landmark },
+  { id: 'ewallet', icon: Wallet },
+]
+
+const brand = computed(() => cardBrand(checkout.card.number))
+/** Said once every field has something in it; nagging mid-typing helps nobody. */
+const cardHint = computed(() => {
+  const c = checkout.card
+  return c.number.trim() && c.expiry.trim() && c.cvc.trim() ? (cardProblem(c) ?? '') : ''
+})
+
+function fillTestCard(number: string) {
+  checkout.card.number = number
+  // Any future month works; filled in so the published numbers are one click.
+  if (!checkout.card.expiry) checkout.card.expiry = '12/30'
+  if (!checkout.card.cvc) checkout.card.cvc = '123'
+}
+
+/** FPX and e-wallets go through the simulator screen first; a card is decided here. */
+const simulating = ref(false)
+
+async function pay() {
+  if (checkout.payMethod === 'card') return finish(await checkout.place())
+  simulating.value = true
+}
+
+async function simulated(outcome: SimOutcome) {
+  simulating.value = false
+  finish(await checkout.place(outcome))
+}
+
+function finish(result: { ok: boolean; id?: string }) {
   if (result.ok) router.push(`/order/${result.id}`)
 }
 </script>
@@ -240,39 +274,80 @@ async function place() {
           </form>
 
           <!-- 3. Payment -->
-          <form v-else class="space-y-4" @submit.prevent="place">
+          <form v-else class="space-y-4" @submit.prevent="pay">
             <h2 class="flex items-center gap-2 font-semibold">
               <Lock class="h-3.5 w-3.5 text-accent-green" aria-hidden="true" />
               Payment
             </h2>
 
-            <!-- Said plainly, because a card field that looks real deserves to
-                 be labelled when it is not. -->
+            <!-- Said plainly, because a payment form that looks real deserves
+                 to be labelled when it is not. -->
             <div class="rounded border border-border-hairline bg-surface-2/60 p-3 text-xs text-text-secondary">
-              <p class="font-medium text-text-primary">This is a demo. No card is charged.</p>
-              <p class="mt-1">
-                Use <button type="button" class="code text-accent underline" @click="checkout.card.number = '4242 4242 4242 4242'">4242 4242 4242 4242</button> to succeed,
-                or <button type="button" class="code text-accent underline" @click="checkout.card.number = '4000 0000 0000 0002'">4000 0000 0000 0002</button> to see a decline.
+              <p class="font-medium text-text-primary">This is a demo. Nothing is charged and no bank is contacted.</p>
+              <p v-if="checkout.payMethod === 'card'" class="mt-1">
+                Use <button type="button" class="code text-accent underline" @click="fillTestCard('4242 4242 4242 4242')">4242 4242 4242 4242</button> to succeed,
+                or <button type="button" class="code text-accent underline" @click="fillTestCard('4000 0000 0000 0002')">4000 0000 0000 0002</button> to see a decline.
               </p>
+              <p v-else class="mt-1">The next screen lets you choose what the {{ checkout.payMethod === 'fpx' ? 'bank' : 'wallet' }} would answer.</p>
             </div>
 
-            <label class="block">
-              <span class="mb-1.5 block text-sm text-text-secondary">Card number</span>
-              <div class="relative">
-                <CreditCard class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-muted" aria-hidden="true" />
-                <input v-model="checkout.card.number" inputmode="numeric" placeholder="4242 4242 4242 4242" class="input pl-9" />
+            <!-- Methods and banks as plain names with generic icons: no logos. -->
+            <fieldset>
+              <legend class="mb-1.5 block text-sm text-text-secondary">Pay with</legend>
+              <div class="grid gap-2 sm:grid-cols-3">
+                <label
+                  v-for="option in PAY_OPTIONS"
+                  :key="option.id"
+                  class="flex cursor-pointer items-center gap-2 rounded border p-3 text-sm transition-colors"
+                  :class="checkout.payMethod === option.id ? 'border-accent bg-accent/5' : 'border-border-hairline hover:border-border-strong'"
+                >
+                  <input
+                    type="radio"
+                    name="pay-method"
+                    :value="option.id"
+                    :checked="checkout.payMethod === option.id"
+                    class="accent-accent"
+                    @change="checkout.setPayMethod(option.id)"
+                  />
+                  <component :is="option.icon" class="h-4 w-4 text-text-secondary" aria-hidden="true" />
+                  {{ METHOD_LABEL[option.id] }}
+                </label>
               </div>
+            </fieldset>
+
+            <template v-if="checkout.payMethod === 'card'">
+              <label class="block">
+                <span class="mb-1.5 flex justify-between text-sm text-text-secondary">
+                  Card number
+                  <span v-if="brand" class="text-text-primary">{{ brand }}</span>
+                </span>
+                <div class="relative">
+                  <CreditCard class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-muted" aria-hidden="true" />
+                  <input v-model="checkout.card.number" inputmode="numeric" autocomplete="cc-number" placeholder="4242 4242 4242 4242" class="input pl-9" />
+                </div>
+              </label>
+              <div class="grid grid-cols-2 gap-4">
+                <label class="block">
+                  <span class="mb-1.5 block text-sm text-text-secondary">Expiry (MM/YY)</span>
+                  <input v-model="checkout.card.expiry" autocomplete="cc-exp" placeholder="12/29" class="input" />
+                </label>
+                <label class="block">
+                  <span class="mb-1.5 block text-sm text-text-secondary">CVC</span>
+                  <input v-model="checkout.card.cvc" inputmode="numeric" autocomplete="cc-csc" :placeholder="brand === 'Amex' ? '1234' : '123'" class="input" />
+                </label>
+              </div>
+              <p v-if="cardHint" class="text-xs text-accent-amber">{{ cardHint }}</p>
+            </template>
+
+            <label v-else class="block">
+              <span class="mb-1.5 block text-sm text-text-secondary">
+                {{ checkout.payMethod === 'fpx' ? 'Your bank' : 'Your e-wallet' }}
+              </span>
+              <select v-model="checkout.channel" required class="input">
+                <option value="" disabled>Select…</option>
+                <option v-for="name in CHANNELS[checkout.payMethod]" :key="name" :value="name">{{ name }}</option>
+              </select>
             </label>
-            <div class="grid grid-cols-2 gap-4">
-              <label class="block">
-                <span class="mb-1.5 block text-sm text-text-secondary">Expiry</span>
-                <input v-model="checkout.card.expiry" placeholder="12/29" class="input" />
-              </label>
-              <label class="block">
-                <span class="mb-1.5 block text-sm text-text-secondary">CVC</span>
-                <input v-model="checkout.card.cvc" placeholder="123" class="input" />
-              </label>
-            </div>
 
             <p
               v-if="checkout.error || cart.hasUnavailable"
@@ -291,6 +366,14 @@ async function place() {
             </div>
           </form>
         </div>
+
+        <PaymentSimulator
+          v-if="simulating && checkout.payMethod !== 'card'"
+          :method="checkout.payMethod"
+          :channel="checkout.channel"
+          :amount="format(checkout.totals.total)"
+          @done="simulated"
+        />
 
         <div class="lg:sticky lg:top-24 lg:self-start">
           <OrderSummary

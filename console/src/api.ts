@@ -487,6 +487,10 @@ export type PaymentEntry = {
   goods: number | null
   shipping: number | null
   tax: number | null
+  /** A charge's, all simulated: card, fpx or ewallet. Null on a refund or payout. */
+  paymentMethod: 'card' | 'fpx' | 'ewallet' | null
+  /** A charge's card brand, or bank or wallet name; '' for an order older than the column. */
+  paymentChannel: string | null
 }
 
 export type PaymentTotals = {

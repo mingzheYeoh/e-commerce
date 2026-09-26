@@ -1,6 +1,13 @@
 import { describe, it, expect } from 'vitest'
-import { readFileSync } from 'node:fs'
+import { readFileSync as readFs } from 'node:fs'
+import { fileURLToPath } from 'node:url'
+import path from 'node:path'
+import { DatabaseSync } from 'node:sqlite'
 import { memoryD1 } from '../test/d1-memory'
+
+/** Paths here are from the repo root, resolved from this file so the suite also runs from `worker/`. */
+const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..')
+const readFileSync = (p: string, encoding: 'utf8') => readFs(path.join(ROOT, p), encoding)
 
 describe('the migration and the schema', () => {
   it('keeps 0006-tenancy.sql and schema.sql identical', () => {
@@ -48,6 +55,26 @@ describe('the migration and the schema', () => {
     // The platform back office's indexes: the plans pinned below run against the file production runs.
     const norm = (p: string) => readFileSync(p, 'utf8').replace(/\r\n/g, '\n').trim()
     expect(norm('worker/schema.sql')).toContain(norm('worker/migrations/0014-platform-back-office-indexes.sql'))
+  })
+
+  it('keeps 0015 and its block in schema.sql identical', () => {
+    // The payment columns: the order tests store into the columns production gets.
+    const norm = (p: string) => readFileSync(p, 'utf8').replace(/\r\n/g, '\n').trim()
+    expect(norm('worker/schema.sql')).toContain(norm('worker/migrations/0015-payment-method.sql'))
+  })
+
+  it('files every order stored before 0015 as a card payment', () => {
+    // Replayed against the shape production has: orders without the columns.
+    const raw = new DatabaseSync(':memory:')
+    const run = (sql: string) => raw.prepare(sql).run()
+    run(`CREATE TABLE orders (id TEXT PRIMARY KEY)`)
+    run(`INSERT INTO orders (id) VALUES ('NX-AAAAA')`)
+    const migration = readFileSync('worker/migrations/0015-payment-method.sql', 'utf8')
+    for (const sql of migration.split(';')) if (sql.replace(/--[^\n]*/g, '').trim()) run(sql)
+    expect(raw.prepare(`SELECT payment_method, payment_channel, payment_ref FROM orders`).all()).toEqual([
+      { payment_method: 'card', payment_channel: '', payment_ref: '' },
+    ])
+    expect(() => run(`UPDATE orders SET payment_method = 'cheque'`)).toThrow(/CHECK/)
   })
 
   it('backfills one pending part per merchant of every paid order already stored, and none for a declined one', () => {

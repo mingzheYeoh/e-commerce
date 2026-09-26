@@ -28,7 +28,10 @@ async function render() {
 }
 
 describe('the order page', () => {
-  beforeEach(() => setActivePinia(createPinia()))
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    vi.mocked(fetchOrder).mockClear()
+  })
 
   it("shows the account that placed the order each seller's status, tracking and refunds", async () => {
     vi.mocked(fetchOrder).mockResolvedValue({
@@ -52,6 +55,25 @@ describe('the order page', () => {
     expect(text).toContain('Shipped')
     expect(text).toContain('UPS · tracking 1Z999AA1')
     expect(text).toContain('Refunded $25.00')
+  })
+
+  it('details every line and says how the order was paid, from one request', async () => {
+    vi.mocked(fetchOrder).mockResolvedValue({
+      ...remote,
+      totals: { subtotal: 5000, shipping: 895, tax: 400, total: 6295 },
+      payment: { method: 'fpx', channel: 'Maybank2u', ref: 'SIM-FPX-ABC234' },
+      lines: [{ productId: 'prd_gone', sku: 'S1', title: 'Phone', qty: 2, unitPriceCents: 2500, seller: 'Acme Audio', status: 'delivered' }],
+    })
+    const text = (await render()).text()
+    expect(text).toContain('Paid by FPX online banking · Maybank2u')
+    expect(text).toContain('SIM-FPX-ABC234')
+    expect(text).toContain('SKU S1')
+    expect(text).toContain('$25.00 × 2')
+    expect(text).toContain('Sold by Acme Audio')
+    expect(text).toContain('Delivered')
+    expect(text).toContain('no longer available')
+    for (const figure of ['$50.00', '$8.95', '$4.00', '$62.95']) expect(text).toContain(figure)
+    expect(fetchOrder).toHaveBeenCalledTimes(1)
   })
 
   it('shows anyone else the order without its shipments, as before', async () => {
