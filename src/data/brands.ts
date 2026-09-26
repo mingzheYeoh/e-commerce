@@ -18,7 +18,7 @@ export const brands: Brand[] = [
     name: 'Apple',
     tagline: 'Silicon, displays and personal audio',
     get productCount() { return countFor('APPLE') },
-    previewImage: '/media/brands/apple.webp',
+    previewImage: 'https://media.nexusohm.com/brands/apple.webp',
     accent: '#A1A1A6',
   },
   {
@@ -26,7 +26,7 @@ export const brands: Brand[] = [
     name: 'Samsung',
     tagline: 'Mobile, displays and memory',
     get productCount() { return countFor('SAMSUNG') },
-    previewImage: '/media/brands/samsung.webp',
+    previewImage: 'https://media.nexusohm.com/brands/samsung.webp',
     accent: '#5B7CE8',
   },
   {
@@ -34,7 +34,7 @@ export const brands: Brand[] = [
     name: 'Sony',
     tagline: 'Imaging sensors and reference audio',
     get productCount() { return countFor('SONY') },
-    previewImage: '/media/brands/sony.webp',
+    previewImage: 'https://media.nexusohm.com/brands/sony.webp',
     accent: '#C9CDD4',
   },
   {
@@ -42,7 +42,7 @@ export const brands: Brand[] = [
     name: 'Bose',
     tagline: 'Noise cancellation and portable sound',
     get productCount() { return countFor('BOSE') },
-    previewImage: '/media/brands/bose.webp',
+    previewImage: 'https://media.nexusohm.com/brands/bose.webp',
     accent: '#D6DAE0',
   },
   {
@@ -50,7 +50,7 @@ export const brands: Brand[] = [
     name: 'Sennheiser',
     tagline: 'Studio monitoring and open-back reference',
     get productCount() { return countFor('SENNHEISER') },
-    previewImage: '/media/brands/sennheiser.webp',
+    previewImage: 'https://media.nexusohm.com/brands/sennheiser.webp',
     accent: '#5E8BD9',
   },
   {
@@ -58,7 +58,7 @@ export const brands: Brand[] = [
     name: 'DJI',
     tagline: 'Aerial imaging and stabilisation',
     get productCount() { return countFor('DJI') },
-    previewImage: '/media/brands/dji.webp',
+    previewImage: 'https://media.nexusohm.com/brands/dji.webp',
     accent: '#5FB7E8',
   },
   {
@@ -66,7 +66,7 @@ export const brands: Brand[] = [
     name: 'Logitech',
     tagline: 'Input devices and conferencing',
     get productCount() { return countFor('LOGITECH') },
-    previewImage: '/media/brands/logitech.webp',
+    previewImage: 'https://media.nexusohm.com/brands/logitech.webp',
     accent: '#63B8DC',
   },
   {
@@ -74,7 +74,7 @@ export const brands: Brand[] = [
     name: 'Razer',
     tagline: 'Gaming peripherals and laptops',
     get productCount() { return countFor('RAZER') },
-    previewImage: '/media/brands/razer.webp',
+    previewImage: 'https://media.nexusohm.com/brands/razer.webp',
     accent: '#6FBF5C',
   },
   {
@@ -82,7 +82,7 @@ export const brands: Brand[] = [
     name: 'Anker',
     tagline: 'Power delivery and everyday audio',
     get productCount() { return countFor('ANKER') },
-    previewImage: '/media/brands/anker.webp',
+    previewImage: 'https://media.nexusohm.com/brands/anker.webp',
     accent: '#4FA8CC',
   },
   {
@@ -90,7 +90,7 @@ export const brands: Brand[] = [
     name: 'Nothing',
     tagline: 'Transparent consumer hardware',
     get productCount() { return countFor('NOTHING') },
-    previewImage: '/media/brands/nothing.webp',
+    previewImage: 'https://media.nexusohm.com/brands/nothing.webp',
     accent: '#E3E3E6',
   },
   {
@@ -98,7 +98,7 @@ export const brands: Brand[] = [
     name: 'Google',
     tagline: 'Tensor silicon and computational photography',
     get productCount() { return countFor('GOOGLE') },
-    previewImage: '/media/brands/google.webp',
+    previewImage: 'https://media.nexusohm.com/brands/google.webp',
     accent: '#4C8DF6',
   },
   {
@@ -106,7 +106,7 @@ export const brands: Brand[] = [
     name: 'OnePlus',
     tagline: 'Fast charging and high-refresh displays',
     get productCount() { return countFor('ONEPLUS') },
-    previewImage: '/media/brands/oneplus.webp',
+    previewImage: 'https://media.nexusohm.com/brands/oneplus.webp',
     accent: '#C8453C',
   },
   {
@@ -114,7 +114,7 @@ export const brands: Brand[] = [
     name: 'Xiaomi',
     tagline: 'Flagship hardware at aggressive pricing',
     get productCount() { return countFor('XIAOMI') },
-    previewImage: '/media/brands/xiaomi.webp',
+    previewImage: 'https://media.nexusohm.com/brands/xiaomi.webp',
     accent: '#E8770F',
   },
   {
@@ -122,7 +122,7 @@ export const brands: Brand[] = [
     name: 'Dell',
     tagline: 'InfinityEdge displays and workstation silicon',
     get productCount() { return countFor('DELL') },
-    previewImage: '/media/brands/dell.webp',
+    previewImage: 'https://media.nexusohm.com/brands/dell.webp',
     accent: '#3A8DDE',
   },
   {
@@ -130,7 +130,7 @@ export const brands: Brand[] = [
     name: 'Lenovo',
     tagline: 'ThinkPad keyboards and serviceable chassis',
     get productCount() { return countFor('LENOVO') },
-    previewImage: '/media/brands/lenovo.webp',
+    previewImage: 'https://media.nexusohm.com/brands/lenovo.webp',
     accent: '#D6483B',
   },
   {
@@ -138,7 +138,7 @@ export const brands: Brand[] = [
     name: 'ASUS',
     tagline: 'OLED panels and Copilot+ NPUs',
     get productCount() { return countFor('ASUS') },
-    previewImage: '/media/brands/asus.webp',
+    previewImage: 'https://media.nexusohm.com/brands/asus.webp',
     accent: '#5A7FBF',
   },
   {
@@ -146,7 +146,7 @@ export const brands: Brand[] = [
     name: 'Keychron',
     tagline: 'Custom mechanical keyboards',
     get productCount() { return countFor('KEYCHRON') },
-    previewImage: '/media/brands/keychron.webp',
+    previewImage: 'https://media.nexusohm.com/brands/keychron.webp',
     accent: '#D9A05B',
   },
   {
@@ -154,7 +154,7 @@ export const brands: Brand[] = [
     name: 'Teenage Engineering',
     tagline: 'Portable instruments and studio gear',
     get productCount() { return countFor('TEENAGE_ENGINEERING') },
-    previewImage: '/media/brands/teenage-engineering.webp',
+    previewImage: 'https://media.nexusohm.com/brands/teenage-engineering.webp',
     accent: '#D98A4F',
   },
 ]

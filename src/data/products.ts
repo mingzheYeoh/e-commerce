@@ -64,14 +64,14 @@ export const products: Product[] = [
       }
     ],
     "media": {
-      "heroImage": "/media/products/iphone-18-pro-1.webp",
-      "hoverImage": "/media/products/iphone-18-pro-2.webp",
-      "thumb": "/media/products/iphone-18-pro-thumb.webp",
+      "heroImage": "https://media.nexusohm.com/products/iphone-18-pro-1.webp",
+      "hoverImage": "https://media.nexusohm.com/products/iphone-18-pro-2.webp",
+      "thumb": "https://media.nexusohm.com/products/iphone-18-pro-thumb.webp",
       "gallery": [
-        "/media/products/iphone-18-pro-1.webp",
-        "/media/products/iphone-18-pro-2.webp",
-        "/media/products/iphone-18-pro-3.webp",
-        "/media/products/iphone-18-pro-4.webp"
+        "https://media.nexusohm.com/products/iphone-18-pro-1.webp",
+        "https://media.nexusohm.com/products/iphone-18-pro-2.webp",
+        "https://media.nexusohm.com/products/iphone-18-pro-3.webp",
+        "https://media.nexusohm.com/products/iphone-18-pro-4.webp"
       ]
     },
     "colorways": [
@@ -150,14 +150,14 @@ export const products: Product[] = [
       }
     ],
     "media": {
-      "heroImage": "/media/products/iphone-18-pro-max-1.webp",
-      "hoverImage": "/media/products/iphone-18-pro-max-2.webp",
-      "thumb": "/media/products/iphone-18-pro-max-thumb.webp",
+      "heroImage": "https://media.nexusohm.com/products/iphone-18-pro-max-1.webp",
+      "hoverImage": "https://media.nexusohm.com/products/iphone-18-pro-max-2.webp",
+      "thumb": "https://media.nexusohm.com/products/iphone-18-pro-max-thumb.webp",
       "gallery": [
-        "/media/products/iphone-18-pro-max-1.webp",
-        "/media/products/iphone-18-pro-max-2.webp",
-        "/media/products/iphone-18-pro-max-3.webp",
-        "/media/products/iphone-18-pro-max-4.webp"
+        "https://media.nexusohm.com/products/iphone-18-pro-max-1.webp",
+        "https://media.nexusohm.com/products/iphone-18-pro-max-2.webp",
+        "https://media.nexusohm.com/products/iphone-18-pro-max-3.webp",
+        "https://media.nexusohm.com/products/iphone-18-pro-max-4.webp"
       ]
     },
     "colorways": [
@@ -231,14 +231,14 @@ export const products: Product[] = [
       }
     ],
     "media": {
-      "heroImage": "/media/products/galaxy-s26-ultra-1.webp",
-      "hoverImage": "/media/products/galaxy-s26-ultra-2.webp",
-      "thumb": "/media/products/galaxy-s26-ultra-thumb.webp",
+      "heroImage": "https://media.nexusohm.com/products/galaxy-s26-ultra-1.webp",
+      "hoverImage": "https://media.nexusohm.com/products/galaxy-s26-ultra-2.webp",
+      "thumb": "https://media.nexusohm.com/products/galaxy-s26-ultra-thumb.webp",
       "gallery": [
-        "/media/products/galaxy-s26-ultra-1.webp",
-        "/media/products/galaxy-s26-ultra-2.webp",
-        "/media/products/galaxy-s26-ultra-3.webp",
-        "/media/products/galaxy-s26-ultra-4.webp"
+        "https://media.nexusohm.com/products/galaxy-s26-ultra-1.webp",
+        "https://media.nexusohm.com/products/galaxy-s26-ultra-2.webp",
+        "https://media.nexusohm.com/products/galaxy-s26-ultra-3.webp",
+        "https://media.nexusohm.com/products/galaxy-s26-ultra-4.webp"
       ]
     },
     "colorways": [
@@ -317,14 +317,14 @@ export const products: Product[] = [
       }
     ],
     "media": {
-      "heroImage": "/media/products/pixel-11-pro-1.webp",
-      "hoverImage": "/media/products/pixel-11-pro-2.webp",
-      "thumb": "/media/products/pixel-11-pro-thumb.webp",
+      "heroImage": "https://media.nexusohm.com/products/pixel-11-pro-1.webp",
+      "hoverImage": "https://media.nexusohm.com/products/pixel-11-pro-2.webp",
+      "thumb": "https://media.nexusohm.com/products/pixel-11-pro-thumb.webp",
       "gallery": [
-        "/media/products/pixel-11-pro-1.webp",
-        "/media/products/pixel-11-pro-2.webp",
-        "/media/products/pixel-11-pro-3.webp",
-        "/media/products/pixel-11-pro-4.webp"
+        "https://media.nexusohm.com/products/pixel-11-pro-1.webp",
+        "https://media.nexusohm.com/products/pixel-11-pro-2.webp",
+        "https://media.nexusohm.com/products/pixel-11-pro-3.webp",
+        "https://media.nexusohm.com/products/pixel-11-pro-4.webp"
       ]
     },
     "colorways": [
@@ -398,14 +398,14 @@ export const products: Product[] = [
       }
     ],
     "media": {
-      "heroImage": "/media/products/oneplus-15-1.webp",
-      "hoverImage": "/media/products/oneplus-15-2.webp",
-      "thumb": "/media/products/oneplus-15-thumb.webp",
+      "heroImage": "https://media.nexusohm.com/products/oneplus-15-1.webp",
+      "hoverImage": "https://media.nexusohm.com/products/oneplus-15-2.webp",
+      "thumb": "https://media.nexusohm.com/products/oneplus-15-thumb.webp",
       "gallery": [
-        "/media/products/oneplus-15-1.webp",
-        "/media/products/oneplus-15-2.webp",
-        "/media/products/oneplus-15-3.webp",
-        "/media/products/oneplus-15-4.webp"
+        "https://media.nexusohm.com/products/oneplus-15-1.webp",
+        "https://media.nexusohm.com/products/oneplus-15-2.webp",
+        "https://media.nexusohm.com/products/oneplus-15-3.webp",
+        "https://media.nexusohm.com/products/oneplus-15-4.webp"
       ]
     },
     "colorways": [
@@ -475,14 +475,14 @@ export const products: Product[] = [
       }
     ],
     "media": {
-      "heroImage": "/media/products/xiaomi-17-ultra-1.webp",
-      "hoverImage": "/media/products/xiaomi-17-ultra-2.webp",
-      "thumb": "/media/products/xiaomi-17-ultra-thumb.webp",
+      "heroImage": "https://media.nexusohm.com/products/xiaomi-17-ultra-1.webp",
+      "hoverImage": "https://media.nexusohm.com/products/xiaomi-17-ultra-2.webp",
+      "thumb": "https://media.nexusohm.com/products/xiaomi-17-ultra-thumb.webp",
       "gallery": [
-        "/media/products/xiaomi-17-ultra-1.webp",
-        "/media/products/xiaomi-17-ultra-2.webp",
-        "/media/products/xiaomi-17-ultra-3.webp",
-        "/media/products/xiaomi-17-ultra-4.webp"
+        "https://media.nexusohm.com/products/xiaomi-17-ultra-1.webp",
+        "https://media.nexusohm.com/products/xiaomi-17-ultra-2.webp",
+        "https://media.nexusohm.com/products/xiaomi-17-ultra-3.webp",
+        "https://media.nexusohm.com/products/xiaomi-17-ultra-4.webp"
       ]
     },
     "colorways": [
@@ -553,14 +553,14 @@ export const products: Product[] = [
       }
     ],
     "media": {
-      "heroImage": "/media/products/xps-16-1.webp",
-      "hoverImage": "/media/products/xps-16-2.webp",
-      "thumb": "/media/products/xps-16-thumb.webp",
+      "heroImage": "https://media.nexusohm.com/products/xps-16-1.webp",
+      "hoverImage": "https://media.nexusohm.com/products/xps-16-2.webp",
+      "thumb": "https://media.nexusohm.com/products/xps-16-thumb.webp",
       "gallery": [
-        "/media/products/xps-16-1.webp",
-        "/media/products/xps-16-2.webp",
-        "/media/products/xps-16-3.webp",
-        "/media/products/xps-16-4.webp"
+        "https://media.nexusohm.com/products/xps-16-1.webp",
+        "https://media.nexusohm.com/products/xps-16-2.webp",
+        "https://media.nexusohm.com/products/xps-16-3.webp",
+        "https://media.nexusohm.com/products/xps-16-4.webp"
       ]
     },
     "colorways": [
@@ -630,14 +630,14 @@ export const products: Product[] = [
       }
     ],
     "media": {
-      "heroImage": "/media/products/thinkpad-x1-carbon-1.webp",
-      "hoverImage": "/media/products/thinkpad-x1-carbon-2.webp",
-      "thumb": "/media/products/thinkpad-x1-carbon-thumb.webp",
+      "heroImage": "https://media.nexusohm.com/products/thinkpad-x1-carbon-1.webp",
+      "hoverImage": "https://media.nexusohm.com/products/thinkpad-x1-carbon-2.webp",
+      "thumb": "https://media.nexusohm.com/products/thinkpad-x1-carbon-thumb.webp",
       "gallery": [
-        "/media/products/thinkpad-x1-carbon-1.webp",
-        "/media/products/thinkpad-x1-carbon-2.webp",
-        "/media/products/thinkpad-x1-carbon-3.webp",
-        "/media/products/thinkpad-x1-carbon-4.webp"
+        "https://media.nexusohm.com/products/thinkpad-x1-carbon-1.webp",
+        "https://media.nexusohm.com/products/thinkpad-x1-carbon-2.webp",
+        "https://media.nexusohm.com/products/thinkpad-x1-carbon-3.webp",
+        "https://media.nexusohm.com/products/thinkpad-x1-carbon-4.webp"
       ]
     },
     "colorways": [
@@ -704,14 +704,14 @@ export const products: Product[] = [
       }
     ],
     "media": {
-      "heroImage": "/media/products/zenbook-s14-1.webp",
-      "hoverImage": "/media/products/zenbook-s14-2.webp",
-      "thumb": "/media/products/zenbook-s14-thumb.webp",
+      "heroImage": "https://media.nexusohm.com/products/zenbook-s14-1.webp",
+      "hoverImage": "https://media.nexusohm.com/products/zenbook-s14-2.webp",
+      "thumb": "https://media.nexusohm.com/products/zenbook-s14-thumb.webp",
       "gallery": [
-        "/media/products/zenbook-s14-1.webp",
-        "/media/products/zenbook-s14-2.webp",
-        "/media/products/zenbook-s14-3.webp",
-        "/media/products/zenbook-s14-4.webp"
+        "https://media.nexusohm.com/products/zenbook-s14-1.webp",
+        "https://media.nexusohm.com/products/zenbook-s14-2.webp",
+        "https://media.nexusohm.com/products/zenbook-s14-3.webp",
+        "https://media.nexusohm.com/products/zenbook-s14-4.webp"
       ]
     },
     "colorways": [
@@ -778,14 +778,14 @@ export const products: Product[] = [
       }
     ],
     "media": {
-      "heroImage": "/media/products/zenbook-duo-1.webp",
-      "hoverImage": "/media/products/zenbook-duo-2.webp",
-      "thumb": "/media/products/zenbook-duo-thumb.webp",
+      "heroImage": "https://media.nexusohm.com/products/zenbook-duo-1.webp",
+      "hoverImage": "https://media.nexusohm.com/products/zenbook-duo-2.webp",
+      "thumb": "https://media.nexusohm.com/products/zenbook-duo-thumb.webp",
       "gallery": [
-        "/media/products/zenbook-duo-1.webp",
-        "/media/products/zenbook-duo-2.webp",
-        "/media/products/zenbook-duo-3.webp",
-        "/media/products/zenbook-duo-4.webp"
+        "https://media.nexusohm.com/products/zenbook-duo-1.webp",
+        "https://media.nexusohm.com/products/zenbook-duo-2.webp",
+        "https://media.nexusohm.com/products/zenbook-duo-3.webp",
+        "https://media.nexusohm.com/products/zenbook-duo-4.webp"
       ]
     },
     "colorways": [
@@ -852,14 +852,14 @@ export const products: Product[] = [
       }
     ],
     "media": {
-      "heroImage": "/media/products/airpods-max-1.webp",
-      "hoverImage": "/media/products/airpods-max-2.webp",
-      "thumb": "/media/products/airpods-max-thumb.webp",
+      "heroImage": "https://media.nexusohm.com/products/airpods-max-1.webp",
+      "hoverImage": "https://media.nexusohm.com/products/airpods-max-2.webp",
+      "thumb": "https://media.nexusohm.com/products/airpods-max-thumb.webp",
       "gallery": [
-        "/media/products/airpods-max-1.webp",
-        "/media/products/airpods-max-2.webp",
-        "/media/products/airpods-max-3.webp",
-        "/media/products/airpods-max-4.webp"
+        "https://media.nexusohm.com/products/airpods-max-1.webp",
+        "https://media.nexusohm.com/products/airpods-max-2.webp",
+        "https://media.nexusohm.com/products/airpods-max-3.webp",
+        "https://media.nexusohm.com/products/airpods-max-4.webp"
       ]
     },
     "colorways": [
@@ -929,14 +929,14 @@ export const products: Product[] = [
       }
     ],
     "media": {
-      "heroImage": "/media/products/macbook-pro-1.webp",
-      "hoverImage": "/media/products/macbook-pro-2.webp",
-      "thumb": "/media/products/macbook-pro-thumb.webp",
+      "heroImage": "https://media.nexusohm.com/products/macbook-pro-1.webp",
+      "hoverImage": "https://media.nexusohm.com/products/macbook-pro-2.webp",
+      "thumb": "https://media.nexusohm.com/products/macbook-pro-thumb.webp",
       "gallery": [
-        "/media/products/macbook-pro-1.webp",
-        "/media/products/macbook-pro-2.webp",
-        "/media/products/macbook-pro-3.webp",
-        "/media/products/macbook-pro-4.webp"
+        "https://media.nexusohm.com/products/macbook-pro-1.webp",
+        "https://media.nexusohm.com/products/macbook-pro-2.webp",
+        "https://media.nexusohm.com/products/macbook-pro-3.webp",
+        "https://media.nexusohm.com/products/macbook-pro-4.webp"
       ]
     },
     "colorways": [
@@ -1002,14 +1002,14 @@ export const products: Product[] = [
       }
     ],
     "media": {
-      "heroImage": "/media/products/watch-ultra-1.webp",
-      "hoverImage": "/media/products/watch-ultra-2.webp",
-      "thumb": "/media/products/watch-ultra-thumb.webp",
+      "heroImage": "https://media.nexusohm.com/products/watch-ultra-1.webp",
+      "hoverImage": "https://media.nexusohm.com/products/watch-ultra-2.webp",
+      "thumb": "https://media.nexusohm.com/products/watch-ultra-thumb.webp",
       "gallery": [
-        "/media/products/watch-ultra-1.webp",
-        "/media/products/watch-ultra-2.webp",
-        "/media/products/watch-ultra-3.webp",
-        "/media/products/watch-ultra-4.webp"
+        "https://media.nexusohm.com/products/watch-ultra-1.webp",
+        "https://media.nexusohm.com/products/watch-ultra-2.webp",
+        "https://media.nexusohm.com/products/watch-ultra-3.webp",
+        "https://media.nexusohm.com/products/watch-ultra-4.webp"
       ]
     },
     "colorways": [
@@ -1076,14 +1076,14 @@ export const products: Product[] = [
       }
     ],
     "media": {
-      "heroImage": "/media/products/galaxy-s26-1.webp",
-      "hoverImage": "/media/products/galaxy-s26-2.webp",
-      "thumb": "/media/products/galaxy-s26-thumb.webp",
+      "heroImage": "https://media.nexusohm.com/products/galaxy-s26-1.webp",
+      "hoverImage": "https://media.nexusohm.com/products/galaxy-s26-2.webp",
+      "thumb": "https://media.nexusohm.com/products/galaxy-s26-thumb.webp",
       "gallery": [
-        "/media/products/galaxy-s26-1.webp",
-        "/media/products/galaxy-s26-2.webp",
-        "/media/products/galaxy-s26-3.webp",
-        "/media/products/galaxy-s26-4.webp"
+        "https://media.nexusohm.com/products/galaxy-s26-1.webp",
+        "https://media.nexusohm.com/products/galaxy-s26-2.webp",
+        "https://media.nexusohm.com/products/galaxy-s26-3.webp",
+        "https://media.nexusohm.com/products/galaxy-s26-4.webp"
       ]
     },
     "colorways": [
@@ -1153,14 +1153,14 @@ export const products: Product[] = [
       }
     ],
     "media": {
-      "heroImage": "/media/products/galaxy-buds-1.webp",
-      "hoverImage": "/media/products/galaxy-buds-2.webp",
-      "thumb": "/media/products/galaxy-buds-thumb.webp",
+      "heroImage": "https://media.nexusohm.com/products/galaxy-buds-1.webp",
+      "hoverImage": "https://media.nexusohm.com/products/galaxy-buds-2.webp",
+      "thumb": "https://media.nexusohm.com/products/galaxy-buds-thumb.webp",
       "gallery": [
-        "/media/products/galaxy-buds-1.webp",
-        "/media/products/galaxy-buds-2.webp",
-        "/media/products/galaxy-buds-3.webp",
-        "/media/products/galaxy-buds-4.webp"
+        "https://media.nexusohm.com/products/galaxy-buds-1.webp",
+        "https://media.nexusohm.com/products/galaxy-buds-2.webp",
+        "https://media.nexusohm.com/products/galaxy-buds-3.webp",
+        "https://media.nexusohm.com/products/galaxy-buds-4.webp"
       ]
     },
     "colorways": [
@@ -1226,14 +1226,14 @@ export const products: Product[] = [
       }
     ],
     "media": {
-      "heroImage": "/media/products/odyssey-oled-1.webp",
-      "hoverImage": "/media/products/odyssey-oled-2.webp",
-      "thumb": "/media/products/odyssey-oled-thumb.webp",
+      "heroImage": "https://media.nexusohm.com/products/odyssey-oled-1.webp",
+      "hoverImage": "https://media.nexusohm.com/products/odyssey-oled-2.webp",
+      "thumb": "https://media.nexusohm.com/products/odyssey-oled-thumb.webp",
       "gallery": [
-        "/media/products/odyssey-oled-1.webp",
-        "/media/products/odyssey-oled-2.webp",
-        "/media/products/odyssey-oled-3.webp",
-        "/media/products/odyssey-oled-4.webp"
+        "https://media.nexusohm.com/products/odyssey-oled-1.webp",
+        "https://media.nexusohm.com/products/odyssey-oled-2.webp",
+        "https://media.nexusohm.com/products/odyssey-oled-3.webp",
+        "https://media.nexusohm.com/products/odyssey-oled-4.webp"
       ]
     },
     "colorways": [
@@ -1295,14 +1295,14 @@ export const products: Product[] = [
       }
     ],
     "media": {
-      "heroImage": "/media/products/wh1000xm6-1.webp",
-      "hoverImage": "/media/products/wh1000xm6-2.webp",
-      "thumb": "/media/products/wh1000xm6-thumb.webp",
+      "heroImage": "https://media.nexusohm.com/products/wh1000xm6-1.webp",
+      "hoverImage": "https://media.nexusohm.com/products/wh1000xm6-2.webp",
+      "thumb": "https://media.nexusohm.com/products/wh1000xm6-thumb.webp",
       "gallery": [
-        "/media/products/wh1000xm6-1.webp",
-        "/media/products/wh1000xm6-2.webp",
-        "/media/products/wh1000xm6-3.webp",
-        "/media/products/wh1000xm6-4.webp"
+        "https://media.nexusohm.com/products/wh1000xm6-1.webp",
+        "https://media.nexusohm.com/products/wh1000xm6-2.webp",
+        "https://media.nexusohm.com/products/wh1000xm6-3.webp",
+        "https://media.nexusohm.com/products/wh1000xm6-4.webp"
       ]
     },
     "colorways": [
@@ -1368,14 +1368,14 @@ export const products: Product[] = [
       }
     ],
     "media": {
-      "heroImage": "/media/products/alpha-7cr-1.webp",
-      "hoverImage": "/media/products/alpha-7cr-2.webp",
-      "thumb": "/media/products/alpha-7cr-thumb.webp",
+      "heroImage": "https://media.nexusohm.com/products/alpha-7cr-1.webp",
+      "hoverImage": "https://media.nexusohm.com/products/alpha-7cr-2.webp",
+      "thumb": "https://media.nexusohm.com/products/alpha-7cr-thumb.webp",
       "gallery": [
-        "/media/products/alpha-7cr-1.webp",
-        "/media/products/alpha-7cr-2.webp",
-        "/media/products/alpha-7cr-3.webp",
-        "/media/products/alpha-7cr-4.webp"
+        "https://media.nexusohm.com/products/alpha-7cr-1.webp",
+        "https://media.nexusohm.com/products/alpha-7cr-2.webp",
+        "https://media.nexusohm.com/products/alpha-7cr-3.webp",
+        "https://media.nexusohm.com/products/alpha-7cr-4.webp"
       ]
     },
     "colorways": [
@@ -1442,14 +1442,14 @@ export const products: Product[] = [
       }
     ],
     "media": {
-      "heroImage": "/media/products/fx3-cinema-1.webp",
-      "hoverImage": "/media/products/fx3-cinema-2.webp",
-      "thumb": "/media/products/fx3-cinema-thumb.webp",
+      "heroImage": "https://media.nexusohm.com/products/fx3-cinema-1.webp",
+      "hoverImage": "https://media.nexusohm.com/products/fx3-cinema-2.webp",
+      "thumb": "https://media.nexusohm.com/products/fx3-cinema-thumb.webp",
       "gallery": [
-        "/media/products/fx3-cinema-1.webp",
-        "/media/products/fx3-cinema-2.webp",
-        "/media/products/fx3-cinema-3.webp",
-        "/media/products/fx3-cinema-4.webp"
+        "https://media.nexusohm.com/products/fx3-cinema-1.webp",
+        "https://media.nexusohm.com/products/fx3-cinema-2.webp",
+        "https://media.nexusohm.com/products/fx3-cinema-3.webp",
+        "https://media.nexusohm.com/products/fx3-cinema-4.webp"
       ]
     },
     "colorways": [
@@ -1511,14 +1511,14 @@ export const products: Product[] = [
       }
     ],
     "media": {
-      "heroImage": "/media/products/qc-ultra-1.webp",
-      "hoverImage": "/media/products/qc-ultra-2.webp",
-      "thumb": "/media/products/qc-ultra-thumb.webp",
+      "heroImage": "https://media.nexusohm.com/products/qc-ultra-1.webp",
+      "hoverImage": "https://media.nexusohm.com/products/qc-ultra-2.webp",
+      "thumb": "https://media.nexusohm.com/products/qc-ultra-thumb.webp",
       "gallery": [
-        "/media/products/qc-ultra-1.webp",
-        "/media/products/qc-ultra-2.webp",
-        "/media/products/qc-ultra-3.webp",
-        "/media/products/qc-ultra-4.webp"
+        "https://media.nexusohm.com/products/qc-ultra-1.webp",
+        "https://media.nexusohm.com/products/qc-ultra-2.webp",
+        "https://media.nexusohm.com/products/qc-ultra-3.webp",
+        "https://media.nexusohm.com/products/qc-ultra-4.webp"
       ]
     },
     "colorways": [
@@ -1584,14 +1584,14 @@ export const products: Product[] = [
       }
     ],
     "media": {
-      "heroImage": "/media/products/open-earbuds-1.webp",
-      "hoverImage": "/media/products/open-earbuds-2.webp",
-      "thumb": "/media/products/open-earbuds-thumb.webp",
+      "heroImage": "https://media.nexusohm.com/products/open-earbuds-1.webp",
+      "hoverImage": "https://media.nexusohm.com/products/open-earbuds-2.webp",
+      "thumb": "https://media.nexusohm.com/products/open-earbuds-thumb.webp",
       "gallery": [
-        "/media/products/open-earbuds-1.webp",
-        "/media/products/open-earbuds-2.webp",
-        "/media/products/open-earbuds-3.webp",
-        "/media/products/open-earbuds-4.webp"
+        "https://media.nexusohm.com/products/open-earbuds-1.webp",
+        "https://media.nexusohm.com/products/open-earbuds-2.webp",
+        "https://media.nexusohm.com/products/open-earbuds-3.webp",
+        "https://media.nexusohm.com/products/open-earbuds-4.webp"
       ]
     },
     "colorways": [
@@ -1657,14 +1657,14 @@ export const products: Product[] = [
       }
     ],
     "media": {
-      "heroImage": "/media/products/soundlink-max-1.webp",
-      "hoverImage": "/media/products/soundlink-max-2.webp",
-      "thumb": "/media/products/soundlink-max-thumb.webp",
+      "heroImage": "https://media.nexusohm.com/products/soundlink-max-1.webp",
+      "hoverImage": "https://media.nexusohm.com/products/soundlink-max-2.webp",
+      "thumb": "https://media.nexusohm.com/products/soundlink-max-thumb.webp",
       "gallery": [
-        "/media/products/soundlink-max-1.webp",
-        "/media/products/soundlink-max-2.webp",
-        "/media/products/soundlink-max-3.webp",
-        "/media/products/soundlink-max-4.webp"
+        "https://media.nexusohm.com/products/soundlink-max-1.webp",
+        "https://media.nexusohm.com/products/soundlink-max-2.webp",
+        "https://media.nexusohm.com/products/soundlink-max-3.webp",
+        "https://media.nexusohm.com/products/soundlink-max-4.webp"
       ]
     },
     "colorways": [
@@ -1731,14 +1731,14 @@ export const products: Product[] = [
       }
     ],
     "media": {
-      "heroImage": "/media/products/hd900s-1.webp",
-      "hoverImage": "/media/products/hd900s-2.webp",
-      "thumb": "/media/products/hd900s-thumb.webp",
+      "heroImage": "https://media.nexusohm.com/products/hd900s-1.webp",
+      "hoverImage": "https://media.nexusohm.com/products/hd900s-2.webp",
+      "thumb": "https://media.nexusohm.com/products/hd900s-thumb.webp",
       "gallery": [
-        "/media/products/hd900s-1.webp",
-        "/media/products/hd900s-2.webp",
-        "/media/products/hd900s-3.webp",
-        "/media/products/hd900s-4.webp"
+        "https://media.nexusohm.com/products/hd900s-1.webp",
+        "https://media.nexusohm.com/products/hd900s-2.webp",
+        "https://media.nexusohm.com/products/hd900s-3.webp",
+        "https://media.nexusohm.com/products/hd900s-4.webp"
       ]
     },
     "colorways": [
@@ -1805,14 +1805,14 @@ export const products: Product[] = [
       }
     ],
     "media": {
-      "heroImage": "/media/products/momentum-4-1.webp",
-      "hoverImage": "/media/products/momentum-4-2.webp",
-      "thumb": "/media/products/momentum-4-thumb.webp",
+      "heroImage": "https://media.nexusohm.com/products/momentum-4-1.webp",
+      "hoverImage": "https://media.nexusohm.com/products/momentum-4-2.webp",
+      "thumb": "https://media.nexusohm.com/products/momentum-4-thumb.webp",
       "gallery": [
-        "/media/products/momentum-4-1.webp",
-        "/media/products/momentum-4-2.webp",
-        "/media/products/momentum-4-3.webp",
-        "/media/products/momentum-4-4.webp"
+        "https://media.nexusohm.com/products/momentum-4-1.webp",
+        "https://media.nexusohm.com/products/momentum-4-2.webp",
+        "https://media.nexusohm.com/products/momentum-4-3.webp",
+        "https://media.nexusohm.com/products/momentum-4-4.webp"
       ]
     },
     "colorways": [
@@ -1879,14 +1879,14 @@ export const products: Product[] = [
       }
     ],
     "media": {
-      "heroImage": "/media/products/mavic-4-pro-1.webp",
-      "hoverImage": "/media/products/mavic-4-pro-2.webp",
-      "thumb": "/media/products/mavic-4-pro-thumb.webp",
+      "heroImage": "https://media.nexusohm.com/products/mavic-4-pro-1.webp",
+      "hoverImage": "https://media.nexusohm.com/products/mavic-4-pro-2.webp",
+      "thumb": "https://media.nexusohm.com/products/mavic-4-pro-thumb.webp",
       "gallery": [
-        "/media/products/mavic-4-pro-1.webp",
-        "/media/products/mavic-4-pro-2.webp",
-        "/media/products/mavic-4-pro-3.webp",
-        "/media/products/mavic-4-pro-4.webp"
+        "https://media.nexusohm.com/products/mavic-4-pro-1.webp",
+        "https://media.nexusohm.com/products/mavic-4-pro-2.webp",
+        "https://media.nexusohm.com/products/mavic-4-pro-3.webp",
+        "https://media.nexusohm.com/products/mavic-4-pro-4.webp"
       ]
     },
     "colorways": [
@@ -1948,14 +1948,14 @@ export const products: Product[] = [
       }
     ],
     "media": {
-      "heroImage": "/media/products/osmo-pocket-1.webp",
-      "hoverImage": "/media/products/osmo-pocket-2.webp",
-      "thumb": "/media/products/osmo-pocket-thumb.webp",
+      "heroImage": "https://media.nexusohm.com/products/osmo-pocket-1.webp",
+      "hoverImage": "https://media.nexusohm.com/products/osmo-pocket-2.webp",
+      "thumb": "https://media.nexusohm.com/products/osmo-pocket-thumb.webp",
       "gallery": [
-        "/media/products/osmo-pocket-1.webp",
-        "/media/products/osmo-pocket-2.webp",
-        "/media/products/osmo-pocket-3.webp",
-        "/media/products/osmo-pocket-4.webp"
+        "https://media.nexusohm.com/products/osmo-pocket-1.webp",
+        "https://media.nexusohm.com/products/osmo-pocket-2.webp",
+        "https://media.nexusohm.com/products/osmo-pocket-3.webp",
+        "https://media.nexusohm.com/products/osmo-pocket-4.webp"
       ]
     },
     "colorways": [
@@ -2017,14 +2017,14 @@ export const products: Product[] = [
       }
     ],
     "media": {
-      "heroImage": "/media/products/rs4-gimbal-1.webp",
-      "hoverImage": "/media/products/rs4-gimbal-2.webp",
-      "thumb": "/media/products/rs4-gimbal-thumb.webp",
+      "heroImage": "https://media.nexusohm.com/products/rs4-gimbal-1.webp",
+      "hoverImage": "https://media.nexusohm.com/products/rs4-gimbal-2.webp",
+      "thumb": "https://media.nexusohm.com/products/rs4-gimbal-thumb.webp",
       "gallery": [
-        "/media/products/rs4-gimbal-1.webp",
-        "/media/products/rs4-gimbal-2.webp",
-        "/media/products/rs4-gimbal-3.webp",
-        "/media/products/rs4-gimbal-4.webp"
+        "https://media.nexusohm.com/products/rs4-gimbal-1.webp",
+        "https://media.nexusohm.com/products/rs4-gimbal-2.webp",
+        "https://media.nexusohm.com/products/rs4-gimbal-3.webp",
+        "https://media.nexusohm.com/products/rs4-gimbal-4.webp"
       ]
     },
     "colorways": [
@@ -2086,14 +2086,14 @@ export const products: Product[] = [
       }
     ],
     "media": {
-      "heroImage": "/media/products/mx-master-1.webp",
-      "hoverImage": "/media/products/mx-master-2.webp",
-      "thumb": "/media/products/mx-master-thumb.webp",
+      "heroImage": "https://media.nexusohm.com/products/mx-master-1.webp",
+      "hoverImage": "https://media.nexusohm.com/products/mx-master-2.webp",
+      "thumb": "https://media.nexusohm.com/products/mx-master-thumb.webp",
       "gallery": [
-        "/media/products/mx-master-1.webp",
-        "/media/products/mx-master-2.webp",
-        "/media/products/mx-master-3.webp",
-        "/media/products/mx-master-4.webp"
+        "https://media.nexusohm.com/products/mx-master-1.webp",
+        "https://media.nexusohm.com/products/mx-master-2.webp",
+        "https://media.nexusohm.com/products/mx-master-3.webp",
+        "https://media.nexusohm.com/products/mx-master-4.webp"
       ]
     },
     "colorways": [
@@ -2159,14 +2159,14 @@ export const products: Product[] = [
       }
     ],
     "media": {
-      "heroImage": "/media/products/mx-mechanical-1.webp",
-      "hoverImage": "/media/products/mx-mechanical-2.webp",
-      "thumb": "/media/products/mx-mechanical-thumb.webp",
+      "heroImage": "https://media.nexusohm.com/products/mx-mechanical-1.webp",
+      "hoverImage": "https://media.nexusohm.com/products/mx-mechanical-2.webp",
+      "thumb": "https://media.nexusohm.com/products/mx-mechanical-thumb.webp",
       "gallery": [
-        "/media/products/mx-mechanical-1.webp",
-        "/media/products/mx-mechanical-2.webp",
-        "/media/products/mx-mechanical-3.webp",
-        "/media/products/mx-mechanical-4.webp"
+        "https://media.nexusohm.com/products/mx-mechanical-1.webp",
+        "https://media.nexusohm.com/products/mx-mechanical-2.webp",
+        "https://media.nexusohm.com/products/mx-mechanical-3.webp",
+        "https://media.nexusohm.com/products/mx-mechanical-4.webp"
       ]
     },
     "colorways": [
@@ -2228,14 +2228,14 @@ export const products: Product[] = [
       }
     ],
     "media": {
-      "heroImage": "/media/products/brio-webcam-1.webp",
-      "hoverImage": "/media/products/brio-webcam-2.webp",
-      "thumb": "/media/products/brio-webcam-thumb.webp",
+      "heroImage": "https://media.nexusohm.com/products/brio-webcam-1.webp",
+      "hoverImage": "https://media.nexusohm.com/products/brio-webcam-2.webp",
+      "thumb": "https://media.nexusohm.com/products/brio-webcam-thumb.webp",
       "gallery": [
-        "/media/products/brio-webcam-1.webp",
-        "/media/products/brio-webcam-2.webp",
-        "/media/products/brio-webcam-3.webp",
-        "/media/products/brio-webcam-4.webp"
+        "https://media.nexusohm.com/products/brio-webcam-1.webp",
+        "https://media.nexusohm.com/products/brio-webcam-2.webp",
+        "https://media.nexusohm.com/products/brio-webcam-3.webp",
+        "https://media.nexusohm.com/products/brio-webcam-4.webp"
       ]
     },
     "colorways": [
@@ -2297,14 +2297,14 @@ export const products: Product[] = [
       }
     ],
     "media": {
-      "heroImage": "/media/products/blackwidow-1.webp",
-      "hoverImage": "/media/products/blackwidow-2.webp",
-      "thumb": "/media/products/blackwidow-thumb.webp",
+      "heroImage": "https://media.nexusohm.com/products/blackwidow-1.webp",
+      "hoverImage": "https://media.nexusohm.com/products/blackwidow-2.webp",
+      "thumb": "https://media.nexusohm.com/products/blackwidow-thumb.webp",
       "gallery": [
-        "/media/products/blackwidow-1.webp",
-        "/media/products/blackwidow-2.webp",
-        "/media/products/blackwidow-3.webp",
-        "/media/products/blackwidow-4.webp"
+        "https://media.nexusohm.com/products/blackwidow-1.webp",
+        "https://media.nexusohm.com/products/blackwidow-2.webp",
+        "https://media.nexusohm.com/products/blackwidow-3.webp",
+        "https://media.nexusohm.com/products/blackwidow-4.webp"
       ]
     },
     "colorways": [
@@ -2366,14 +2366,14 @@ export const products: Product[] = [
       }
     ],
     "media": {
-      "heroImage": "/media/products/viper-v3-1.webp",
-      "hoverImage": "/media/products/viper-v3-2.webp",
-      "thumb": "/media/products/viper-v3-thumb.webp",
+      "heroImage": "https://media.nexusohm.com/products/viper-v3-1.webp",
+      "hoverImage": "https://media.nexusohm.com/products/viper-v3-2.webp",
+      "thumb": "https://media.nexusohm.com/products/viper-v3-thumb.webp",
       "gallery": [
-        "/media/products/viper-v3-1.webp",
-        "/media/products/viper-v3-2.webp",
-        "/media/products/viper-v3-3.webp",
-        "/media/products/viper-v3-4.webp"
+        "https://media.nexusohm.com/products/viper-v3-1.webp",
+        "https://media.nexusohm.com/products/viper-v3-2.webp",
+        "https://media.nexusohm.com/products/viper-v3-3.webp",
+        "https://media.nexusohm.com/products/viper-v3-4.webp"
       ]
     },
     "colorways": [
@@ -2439,14 +2439,14 @@ export const products: Product[] = [
       }
     ],
     "media": {
-      "heroImage": "/media/products/blade-16-1.webp",
-      "hoverImage": "/media/products/blade-16-2.webp",
-      "thumb": "/media/products/blade-16-thumb.webp",
+      "heroImage": "https://media.nexusohm.com/products/blade-16-1.webp",
+      "hoverImage": "https://media.nexusohm.com/products/blade-16-2.webp",
+      "thumb": "https://media.nexusohm.com/products/blade-16-thumb.webp",
       "gallery": [
-        "/media/products/blade-16-1.webp",
-        "/media/products/blade-16-2.webp",
-        "/media/products/blade-16-3.webp",
-        "/media/products/blade-16-4.webp"
+        "https://media.nexusohm.com/products/blade-16-1.webp",
+        "https://media.nexusohm.com/products/blade-16-2.webp",
+        "https://media.nexusohm.com/products/blade-16-3.webp",
+        "https://media.nexusohm.com/products/blade-16-4.webp"
       ]
     },
     "colorways": [
@@ -2508,14 +2508,14 @@ export const products: Product[] = [
       }
     ],
     "media": {
-      "heroImage": "/media/products/prime-powerbank-1.webp",
-      "hoverImage": "/media/products/prime-powerbank-2.webp",
-      "thumb": "/media/products/prime-powerbank-thumb.webp",
+      "heroImage": "https://media.nexusohm.com/products/prime-powerbank-1.webp",
+      "hoverImage": "https://media.nexusohm.com/products/prime-powerbank-2.webp",
+      "thumb": "https://media.nexusohm.com/products/prime-powerbank-thumb.webp",
       "gallery": [
-        "/media/products/prime-powerbank-1.webp",
-        "/media/products/prime-powerbank-2.webp",
-        "/media/products/prime-powerbank-3.webp",
-        "/media/products/prime-powerbank-4.webp"
+        "https://media.nexusohm.com/products/prime-powerbank-1.webp",
+        "https://media.nexusohm.com/products/prime-powerbank-2.webp",
+        "https://media.nexusohm.com/products/prime-powerbank-3.webp",
+        "https://media.nexusohm.com/products/prime-powerbank-4.webp"
       ]
     },
     "colorways": [
@@ -2582,14 +2582,14 @@ export const products: Product[] = [
       }
     ],
     "media": {
-      "heroImage": "/media/products/soundcore-liberty-1.webp",
-      "hoverImage": "/media/products/soundcore-liberty-2.webp",
-      "thumb": "/media/products/soundcore-liberty-thumb.webp",
+      "heroImage": "https://media.nexusohm.com/products/soundcore-liberty-1.webp",
+      "hoverImage": "https://media.nexusohm.com/products/soundcore-liberty-2.webp",
+      "thumb": "https://media.nexusohm.com/products/soundcore-liberty-thumb.webp",
       "gallery": [
-        "/media/products/soundcore-liberty-1.webp",
-        "/media/products/soundcore-liberty-2.webp",
-        "/media/products/soundcore-liberty-3.webp",
-        "/media/products/soundcore-liberty-4.webp"
+        "https://media.nexusohm.com/products/soundcore-liberty-1.webp",
+        "https://media.nexusohm.com/products/soundcore-liberty-2.webp",
+        "https://media.nexusohm.com/products/soundcore-liberty-3.webp",
+        "https://media.nexusohm.com/products/soundcore-liberty-4.webp"
       ]
     },
     "colorways": [
@@ -2655,14 +2655,14 @@ export const products: Product[] = [
       }
     ],
     "media": {
-      "heroImage": "/media/products/gan-charger-1.webp",
-      "hoverImage": "/media/products/gan-charger-2.webp",
-      "thumb": "/media/products/gan-charger-thumb.webp",
+      "heroImage": "https://media.nexusohm.com/products/gan-charger-1.webp",
+      "hoverImage": "https://media.nexusohm.com/products/gan-charger-2.webp",
+      "thumb": "https://media.nexusohm.com/products/gan-charger-thumb.webp",
       "gallery": [
-        "/media/products/gan-charger-1.webp",
-        "/media/products/gan-charger-2.webp",
-        "/media/products/gan-charger-3.webp",
-        "/media/products/gan-charger-4.webp"
+        "https://media.nexusohm.com/products/gan-charger-1.webp",
+        "https://media.nexusohm.com/products/gan-charger-2.webp",
+        "https://media.nexusohm.com/products/gan-charger-3.webp",
+        "https://media.nexusohm.com/products/gan-charger-4.webp"
       ]
     },
     "colorways": [
@@ -2728,14 +2728,14 @@ export const products: Product[] = [
       }
     ],
     "media": {
-      "heroImage": "/media/products/phone-3a-1.webp",
-      "hoverImage": "/media/products/phone-3a-2.webp",
-      "thumb": "/media/products/phone-3a-thumb.webp",
+      "heroImage": "https://media.nexusohm.com/products/phone-3a-1.webp",
+      "hoverImage": "https://media.nexusohm.com/products/phone-3a-2.webp",
+      "thumb": "https://media.nexusohm.com/products/phone-3a-thumb.webp",
       "gallery": [
-        "/media/products/phone-3a-1.webp",
-        "/media/products/phone-3a-2.webp",
-        "/media/products/phone-3a-3.webp",
-        "/media/products/phone-3a-4.webp"
+        "https://media.nexusohm.com/products/phone-3a-1.webp",
+        "https://media.nexusohm.com/products/phone-3a-2.webp",
+        "https://media.nexusohm.com/products/phone-3a-3.webp",
+        "https://media.nexusohm.com/products/phone-3a-4.webp"
       ]
     },
     "colorways": [
@@ -2801,14 +2801,14 @@ export const products: Product[] = [
       }
     ],
     "media": {
-      "heroImage": "/media/products/ear-open-1.webp",
-      "hoverImage": "/media/products/ear-open-2.webp",
-      "thumb": "/media/products/ear-open-thumb.webp",
+      "heroImage": "https://media.nexusohm.com/products/ear-open-1.webp",
+      "hoverImage": "https://media.nexusohm.com/products/ear-open-2.webp",
+      "thumb": "https://media.nexusohm.com/products/ear-open-thumb.webp",
       "gallery": [
-        "/media/products/ear-open-1.webp",
-        "/media/products/ear-open-2.webp",
-        "/media/products/ear-open-3.webp",
-        "/media/products/ear-open-4.webp"
+        "https://media.nexusohm.com/products/ear-open-1.webp",
+        "https://media.nexusohm.com/products/ear-open-2.webp",
+        "https://media.nexusohm.com/products/ear-open-3.webp",
+        "https://media.nexusohm.com/products/ear-open-4.webp"
       ]
     },
     "colorways": [
@@ -2874,14 +2874,14 @@ export const products: Product[] = [
       }
     ],
     "media": {
-      "heroImage": "/media/products/cmf-buds-1.webp",
-      "hoverImage": "/media/products/cmf-buds-2.webp",
-      "thumb": "/media/products/cmf-buds-thumb.webp",
+      "heroImage": "https://media.nexusohm.com/products/cmf-buds-1.webp",
+      "hoverImage": "https://media.nexusohm.com/products/cmf-buds-2.webp",
+      "thumb": "https://media.nexusohm.com/products/cmf-buds-thumb.webp",
       "gallery": [
-        "/media/products/cmf-buds-1.webp",
-        "/media/products/cmf-buds-2.webp",
-        "/media/products/cmf-buds-3.webp",
-        "/media/products/cmf-buds-4.webp"
+        "https://media.nexusohm.com/products/cmf-buds-1.webp",
+        "https://media.nexusohm.com/products/cmf-buds-2.webp",
+        "https://media.nexusohm.com/products/cmf-buds-3.webp",
+        "https://media.nexusohm.com/products/cmf-buds-4.webp"
       ]
     },
     "colorways": [
@@ -2948,14 +2948,14 @@ export const products: Product[] = [
       }
     ],
     "media": {
-      "heroImage": "/media/products/q3-max-1.webp",
-      "hoverImage": "/media/products/q3-max-2.webp",
-      "thumb": "/media/products/q3-max-thumb.webp",
+      "heroImage": "https://media.nexusohm.com/products/q3-max-1.webp",
+      "hoverImage": "https://media.nexusohm.com/products/q3-max-2.webp",
+      "thumb": "https://media.nexusohm.com/products/q3-max-thumb.webp",
       "gallery": [
-        "/media/products/q3-max-1.webp",
-        "/media/products/q3-max-2.webp",
-        "/media/products/q3-max-3.webp",
-        "/media/products/q3-max-4.webp"
+        "https://media.nexusohm.com/products/q3-max-1.webp",
+        "https://media.nexusohm.com/products/q3-max-2.webp",
+        "https://media.nexusohm.com/products/q3-max-3.webp",
+        "https://media.nexusohm.com/products/q3-max-4.webp"
       ]
     },
     "colorways": [
@@ -3021,14 +3021,14 @@ export const products: Product[] = [
       }
     ],
     "media": {
-      "heroImage": "/media/products/switch-set-1.webp",
-      "hoverImage": "/media/products/switch-set-2.webp",
-      "thumb": "/media/products/switch-set-thumb.webp",
+      "heroImage": "https://media.nexusohm.com/products/switch-set-1.webp",
+      "hoverImage": "https://media.nexusohm.com/products/switch-set-2.webp",
+      "thumb": "https://media.nexusohm.com/products/switch-set-thumb.webp",
       "gallery": [
-        "/media/products/switch-set-1.webp",
-        "/media/products/switch-set-2.webp",
-        "/media/products/switch-set-3.webp",
-        "/media/products/switch-set-4.webp"
+        "https://media.nexusohm.com/products/switch-set-1.webp",
+        "https://media.nexusohm.com/products/switch-set-2.webp",
+        "https://media.nexusohm.com/products/switch-set-3.webp",
+        "https://media.nexusohm.com/products/switch-set-4.webp"
       ]
     },
     "colorways": [
@@ -3090,14 +3090,14 @@ export const products: Product[] = [
       }
     ],
     "media": {
-      "heroImage": "/media/products/k-pro-mouse-1.webp",
-      "hoverImage": "/media/products/k-pro-mouse-2.webp",
-      "thumb": "/media/products/k-pro-mouse-thumb.webp",
+      "heroImage": "https://media.nexusohm.com/products/k-pro-mouse-1.webp",
+      "hoverImage": "https://media.nexusohm.com/products/k-pro-mouse-2.webp",
+      "thumb": "https://media.nexusohm.com/products/k-pro-mouse-thumb.webp",
       "gallery": [
-        "/media/products/k-pro-mouse-1.webp",
-        "/media/products/k-pro-mouse-2.webp",
-        "/media/products/k-pro-mouse-3.webp",
-        "/media/products/k-pro-mouse-4.webp"
+        "https://media.nexusohm.com/products/k-pro-mouse-1.webp",
+        "https://media.nexusohm.com/products/k-pro-mouse-2.webp",
+        "https://media.nexusohm.com/products/k-pro-mouse-3.webp",
+        "https://media.nexusohm.com/products/k-pro-mouse-4.webp"
       ]
     },
     "colorways": [
@@ -3164,14 +3164,14 @@ export const products: Product[] = [
       }
     ],
     "media": {
-      "heroImage": "/media/products/op1-field-1.webp",
-      "hoverImage": "/media/products/op1-field-2.webp",
-      "thumb": "/media/products/op1-field-thumb.webp",
+      "heroImage": "https://media.nexusohm.com/products/op1-field-1.webp",
+      "hoverImage": "https://media.nexusohm.com/products/op1-field-2.webp",
+      "thumb": "https://media.nexusohm.com/products/op1-field-thumb.webp",
       "gallery": [
-        "/media/products/op1-field-1.webp",
-        "/media/products/op1-field-2.webp",
-        "/media/products/op1-field-3.webp",
-        "/media/products/op1-field-4.webp"
+        "https://media.nexusohm.com/products/op1-field-1.webp",
+        "https://media.nexusohm.com/products/op1-field-2.webp",
+        "https://media.nexusohm.com/products/op1-field-3.webp",
+        "https://media.nexusohm.com/products/op1-field-4.webp"
       ]
     },
     "colorways": [
@@ -3237,14 +3237,14 @@ export const products: Product[] = [
       }
     ],
     "media": {
-      "heroImage": "/media/products/tp7-recorder-1.webp",
-      "hoverImage": "/media/products/tp7-recorder-2.webp",
-      "thumb": "/media/products/tp7-recorder-thumb.webp",
+      "heroImage": "https://media.nexusohm.com/products/tp7-recorder-1.webp",
+      "hoverImage": "https://media.nexusohm.com/products/tp7-recorder-2.webp",
+      "thumb": "https://media.nexusohm.com/products/tp7-recorder-thumb.webp",
       "gallery": [
-        "/media/products/tp7-recorder-1.webp",
-        "/media/products/tp7-recorder-2.webp",
-        "/media/products/tp7-recorder-3.webp",
-        "/media/products/tp7-recorder-4.webp"
+        "https://media.nexusohm.com/products/tp7-recorder-1.webp",
+        "https://media.nexusohm.com/products/tp7-recorder-2.webp",
+        "https://media.nexusohm.com/products/tp7-recorder-3.webp",
+        "https://media.nexusohm.com/products/tp7-recorder-4.webp"
       ]
     },
     "colorways": [
@@ -3306,14 +3306,14 @@ export const products: Product[] = [
       }
     ],
     "media": {
-      "heroImage": "/media/products/ob4-speaker-1.webp",
-      "hoverImage": "/media/products/ob4-speaker-2.webp",
-      "thumb": "/media/products/ob4-speaker-thumb.webp",
+      "heroImage": "https://media.nexusohm.com/products/ob4-speaker-1.webp",
+      "hoverImage": "https://media.nexusohm.com/products/ob4-speaker-2.webp",
+      "thumb": "https://media.nexusohm.com/products/ob4-speaker-thumb.webp",
       "gallery": [
-        "/media/products/ob4-speaker-1.webp",
-        "/media/products/ob4-speaker-2.webp",
-        "/media/products/ob4-speaker-3.webp",
-        "/media/products/ob4-speaker-4.webp"
+        "https://media.nexusohm.com/products/ob4-speaker-1.webp",
+        "https://media.nexusohm.com/products/ob4-speaker-2.webp",
+        "https://media.nexusohm.com/products/ob4-speaker-3.webp",
+        "https://media.nexusohm.com/products/ob4-speaker-4.webp"
       ]
     },
     "colorways": [

@@ -21,7 +21,7 @@ export const categories: Category[] = [
     blurb: 'Flagship handsets from Apple, Samsung, Google, OnePlus and Xiaomi.',
     get unitsInStock() { return stockIn('phones') },
     get fromPrice() { return cheapest('phones') },
-    image: '/media/categories/phones.webp',
+    image: 'https://media.nexusohm.com/categories/phones.webp',
     span: 'large',
   },
   {
@@ -30,7 +30,7 @@ export const categories: Category[] = [
     blurb: 'Headphones, earbuds, speakers and studio instruments.',
     get unitsInStock() { return stockIn('audio') },
     get fromPrice() { return cheapest('audio') },
-    image: '/media/categories/audio.webp',
+    image: 'https://media.nexusohm.com/categories/audio.webp',
     span: 'large',
   },
   {
@@ -39,7 +39,7 @@ export const categories: Category[] = [
     blurb: 'Mechanical keyboards, precision mice and monitors.',
     get unitsInStock() { return stockIn('peripherals') },
     get fromPrice() { return cheapest('peripherals') },
-    image: '/media/categories/peripherals.webp',
+    image: 'https://media.nexusohm.com/categories/peripherals.webp',
     span: 'square',
   },
   {
@@ -48,7 +48,7 @@ export const categories: Category[] = [
     blurb: 'Mirrorless bodies, drones, gimbals and webcams.',
     get unitsInStock() { return stockIn('imaging') },
     get fromPrice() { return cheapest('imaging') },
-    image: '/media/categories/imaging.webp',
+    image: 'https://media.nexusohm.com/categories/imaging.webp',
     span: 'square',
   },
   {
@@ -57,7 +57,7 @@ export const categories: Category[] = [
     blurb: 'Laptops, smartwatches, tablets and charging.',
     get unitsInStock() { return stockIn('computing') },
     get fromPrice() { return cheapest('computing') },
-    image: '/media/categories/computing.webp',
+    image: 'https://media.nexusohm.com/categories/computing.webp',
     span: 'wide',
   },
 ]
