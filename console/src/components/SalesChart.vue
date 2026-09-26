@@ -10,7 +10,9 @@ import { formatMinor } from '../money'
 
 // `bucket: 'week'` marks each entry as the week starting on its day (Reports
 // over long ranges); the overview's daily chart leaves it out.
-const props = defineProps<{ days: { day: string; minor: number }[]; currency: string; bucket?: 'day' | 'week' }>()
+// `count` charts a tally (sign-ups) rather than money: `currency` is then only its label.
+const props = defineProps<{ days: { day: string; minor: number }[]; currency: string; bucket?: 'day' | 'week'; count?: boolean }>()
+const shownValue = (v: number) => (props.count ? v.toLocaleString() : formatMinor(v, props.currency))
 
 const W = 300
 const H = 100
@@ -45,16 +47,16 @@ const latest = computed(() =>
         <span class="mr-2 rounded border border-border-hairline px-1.5 py-0.5 font-mono text-[10px] text-text-muted">{{ currency }}</span>
         {{ shown ? dayLabel(shown.day) : '' }}{{ hover === null ? latest : '' }}
       </span>
-      <span class="nums text-sm font-semibold text-text-primary">{{ shown ? formatMinor(shown.minor, currency) : '' }}</span>
+      <span class="nums text-sm font-semibold text-text-primary">{{ shown ? shownValue(shown.minor) : '' }}</span>
     </figcaption>
     <div>
-      <span class="nums mb-1 block text-[11px] text-text-muted">{{ formatMinor(max, currency) }}</span>
+      <span class="nums mb-1 block text-[11px] text-text-muted">{{ shownValue(max) }}</span>
       <svg
         :viewBox="`0 0 ${W} ${H}`"
         preserveAspectRatio="none"
         class="block h-40 w-full"
         role="img"
-        :aria-label="`Sales in ${currency} by ${bucket ?? 'day'}, ${days.length} ${bucket ?? 'day'}s`"
+        :aria-label="`${count ? currency : `Sales in ${currency}`} by ${bucket ?? 'day'}, ${days.length} ${bucket ?? 'day'}s`"
         @mouseleave="hover = null"
       >
         <line x1="0" :x2="W" y1="0.25" y2="0.25" class="stroke-border-hairline" stroke-dasharray="2 2" vector-effect="non-scaling-stroke" />
@@ -70,7 +72,7 @@ const latest = computed(() =>
           />
           <!-- The hit target is the whole column, not the bar: a zero day is still hoverable. -->
           <rect :x="i * slot" y="0" :width="slot" :height="H" fill="transparent" @mouseenter="hover = i" @click="hover = i">
-            <title>{{ dayLabel(b.day) }}: {{ formatMinor(b.minor, currency) }}</title>
+            <title>{{ dayLabel(b.day) }}: {{ shownValue(b.minor) }}</title>
           </rect>
         </g>
       </svg>
@@ -80,10 +82,10 @@ const latest = computed(() =>
       <span>{{ days.length ? dateLabel(days[days.length - 1].day) : '' }}</span>
     </div>
     <table class="sr-only">
-      <caption>Sales by {{ bucket ?? 'day' }}, {{ currency }}</caption>
+      <caption>{{ count ? currency : `Sales, ${currency}` }} by {{ bucket ?? 'day' }}</caption>
       <tr v-for="d in days" :key="d.day">
         <th scope="row">{{ d.day }}</th>
-        <td>{{ formatMinor(d.minor, currency) }}</td>
+        <td>{{ shownValue(d.minor) }}</td>
       </tr>
     </table>
   </figure>

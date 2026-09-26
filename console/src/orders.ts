@@ -11,3 +11,10 @@ export const FULFILMENT: Record<string, { label: string; badge: string }> = {
 
 /** SQLite's UTC `YYYY-MM-DD HH:MM:SS`, as written, minus the seconds. */
 export const placed = (at: string) => at.slice(0, 16)
+
+/** Mean time to ship, from seconds: hours under two days, days past that. */
+export const shipTime = (seconds: number | null) =>
+  seconds === null ? '—' : seconds < 172_800 ? `${(seconds / 3600).toFixed(1)} h` : `${(seconds / 86_400).toFixed(1)} d`
+
+/** A share as a percentage, or a dash when there is nothing to divide by. */
+export const rate = (part: number, whole: number) => (whole ? `${((part / whole) * 100).toFixed(1)}%` : '—')

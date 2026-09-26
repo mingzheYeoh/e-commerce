@@ -12,9 +12,11 @@ import {
   Boxes,
   Menu,
   Package,
+  Receipt,
   ScrollText,
   ShoppingBag,
   Store,
+  Users,
   Wallet,
   X,
 } from 'lucide-vue-next'
@@ -40,6 +42,10 @@ const NAV: Record<'merchant' | 'platform', NavItem[]> = {
   ],
   platform: [
     { to: '/platform', label: 'Overview', icon: LayoutDashboard, exact: true },
+    { to: '/platform/orders', label: 'Orders', icon: ShoppingBag },
+    { to: '/platform/payments', label: 'Payments', icon: Receipt },
+    { to: '/platform/reports', label: 'Reports', icon: ChartColumn },
+    { to: '/platform/customers', label: 'Customers', icon: Users },
     { to: '/platform/merchants', label: 'Merchants', icon: Store },
     { to: '/platform/applications', label: 'Applications', icon: ClipboardCheck },
     { to: '/platform/audit', label: 'Audit log', icon: ScrollText },
