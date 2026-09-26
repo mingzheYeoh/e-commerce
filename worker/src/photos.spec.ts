@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, it, expect } from 'vitest'
 import worker, { type Env } from './index'
-import { isPhotoKey, isWebp, keyFor, mediaFor, namesIn } from './photos'
+import { avatarKey, isPhotoKey, isReturnKey, isWebp, keyFor, mediaFor, namesIn, returnKey, reviewKey, reviewPhotoUrls } from './photos'
 import { memoryR2, webpBytes } from '../test/r2-memory'
 
 const BASE = 'https://api.test/media/u/'
@@ -37,6 +37,31 @@ describe('photo media', () => {
     expect(isPhotoKey(keyFor('mch_a1', 'prd_b2', 'ph_c3', 1600))).toBe(true)
     expect(isPhotoKey('products/mch_a/prd_b/../../secret')).toBe(false)
     expect(isPhotoKey('backups/db.sql')).toBe(false)
+  })
+
+  it('serves customer avatars and review photos publicly, and never a return photo', () => {
+    expect(isPhotoKey(avatarKey('usr_AbC9', 'ph_c3'))).toBe(true)
+    expect(isPhotoKey(reviewKey('rev_a1', 'ph_c3', 1600))).toBe(true)
+    expect(isPhotoKey(reviewKey('rev_a1', 'ph_c3', 400))).toBe(true)
+    // Return photos are private: the public route must not recognise them at all.
+    expect(isPhotoKey(returnKey('ret_a1', 'ph_c3'))).toBe(false)
+    for (const odd of ['avatars/usr_a/../ph_b.webp', 'avatars/mch_a/ph_b.webp', 'reviews/rev_a/ph_b.webp', 'avatars/usr_a/ph_b-1600.webp']) {
+      expect(isPhotoKey(odd), odd).toBe(false)
+    }
+  })
+
+  it('reads a return photo key back into its request and name, and nothing else', () => {
+    expect(isReturnKey(returnKey('ret_a1', 'ph_c3'))).toEqual({ returnId: 'ret_a1', name: 'ph_c3' })
+    for (const odd of ['returns/ret_a/../ph_b.webp', 'returns/rev_a/ph_b.webp', avatarKey('usr_a', 'ph_b'), 'returns/ret_a/ph_b.png']) {
+      expect(isReturnKey(odd), odd).toBeNull()
+    }
+  })
+
+  it('builds review photo URLs from the base and a key it minted', () => {
+    expect(reviewPhotoUrls(BASE, 'rev_a', 'ph_b')).toEqual({
+      large: `${BASE}reviews/rev_a/ph_b-1600.webp`,
+      thumb: `${BASE}reviews/rev_a/ph_b-400.webp`,
+    })
   })
 })
 

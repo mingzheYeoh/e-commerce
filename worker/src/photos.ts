@@ -39,9 +39,44 @@ export const isPhotoName = (v: string) => NAME.test(v)
 export const keyFor = (merchantId: string, productId: string, name: string, size: 1600 | 400) =>
   `products/${merchantId}/${productId}/${name}-${size}.webp`
 
-/** Every key this module can mint, and nothing else. The serving route checks it. */
+/*
+ * Customer photos, the same pipeline: resized in the browser, webp checked
+ * here, keys minted here.
+ *
+ *   avatars/<user>/<name>.webp                 256px, public
+ *   reviews/<review>/<name>-1600.webp | -400   public
+ *   returns/<request>/<name>.webp              PRIVATE bucket, never public
+ *
+ * Avatars and review photos sit in the public MEDIA bucket beside product
+ * photos and are served by the same /media/u route. Return photos go to a
+ * separate bucket, and isPhotoKey refuses their shape, so no misconfigured
+ * binding can ever put one behind the public route.
+ */
+export const MAX_AVATAR_BYTES = 100_000
+export const MAX_REVIEW_PHOTOS = 3
+export const MAX_RETURN_PHOTOS = 3
+
+export const avatarKey = (userId: string, name: string) => `avatars/${userId}/${name}.webp`
+export const reviewKey = (reviewId: string, name: string, size: 1600 | 400) => `reviews/${reviewId}/${name}-${size}.webp`
+export const returnKey = (returnId: string, name: string) => `returns/${returnId}/${name}.webp`
+
+/** Every public key this module can mint, and nothing else. The serving route checks it. */
 export const isPhotoKey = (key: string) =>
-  /^products\/mch_[a-z0-9]+\/prd_[a-z0-9]+\/ph_[a-z0-9]+-(1600|400)\.webp$/.test(key)
+  /^products\/mch_[a-z0-9]+\/prd_[a-z0-9]+\/ph_[a-z0-9]+-(1600|400)\.webp$/.test(key) ||
+  /^avatars\/usr_[A-Za-z0-9]+\/ph_[a-z0-9]+\.webp$/.test(key) ||
+  /^reviews\/rev_[a-z0-9]+\/ph_[a-z0-9]+-(1600|400)\.webp$/.test(key)
+
+/** A return photo key's request and name, or null for any key returnKey would not mint. */
+export function isReturnKey(key: string): { returnId: string; name: string } | null {
+  const m = key.match(/^returns\/(ret_[a-z0-9]+)\/(ph_[a-z0-9]+)\.webp$/)
+  return m ? { returnId: m[1], name: m[2] } : null
+}
+
+/** A review photo's two URLs. */
+export const reviewPhotoUrls = (base: string, reviewId: string, name: string) => ({
+  large: base + reviewKey(reviewId, name, 1600),
+  thumb: base + reviewKey(reviewId, name, 400),
+})
 
 /** RIFF....WEBP: the first twelve bytes of every webp file. */
 export function isWebp(bytes: Uint8Array): boolean {

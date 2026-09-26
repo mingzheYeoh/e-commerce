@@ -79,6 +79,7 @@ import {
   type Media,
 } from './photos'
 import { reindex } from './indexing'
+import { clean, text } from './text'
 
 /*
  * Re-exported because Cloudflare resolves a Durable Object class by name from
@@ -559,17 +560,6 @@ const auditOut = (a: AuditPage) => ({
 })
 
 /* ------------------------------------------------------------- products io */
-
-/**
- * Merchant text as it will be stored: whitespace collapsed and square brackets
- * turned round. These fields reach the AI's context, where a passage header is
- * `[id] title` on its own line — a newline and a bracket inside a spec value
- * could otherwise forge another merchant's product entry next to the real ones.
- */
-const clean = (v: string) => v.replace(/\s+/g, ' ').replace(/\[/g, '(').replace(/\]/g, ')').trim()
-
-const text = (v: unknown, max: number): string | null =>
-  typeof v === 'string' && clean(v) && clean(v).length <= max ? clean(v) : null
 
 /** A whole, non-negative number: what price_minor and stock_count accept. */
 const whole = (v: unknown): number | null =>
