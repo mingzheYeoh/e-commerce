@@ -30,7 +30,7 @@ const assurances = [
     id="top"
     class="relative flex min-h-[640px] w-full flex-col justify-between overflow-hidden bg-void px-4 pb-8 pt-24 md:h-screen md:px-8 md:pb-12"
   >
-    <VideoBackdrop src="/media/video/hero-grid.mp4" poster="/media/video/hero-grid-poster.webp" />
+    <VideoBackdrop src="https://media.nexusohm.com/video/hero-grid.mp4" poster="https://media.nexusohm.com/video/hero-grid-poster.webp" />
 
     <!-- Assurance strip: the three things a shopper checks before anything else -->
     <ul
