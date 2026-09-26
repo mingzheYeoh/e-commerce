@@ -1823,6 +1823,12 @@ async function salesReport(env: TenancyEnv, scope: Scope, range: OrderRange): Pr
     // Both periods in one pass. Commission per merchant first, each line
     // at its own rate and floored on the merchant's sum, then summed: the
     // balance's rule, merchant by merchant.
+    //
+    // ponytail: like the order history, each of these four statements
+    // reads all the merchant's lines and filters by date after the join,
+    // so a report costs O(merchant history), not O(range). The same
+    // upgrade applies: a placed_at the merchant index reaches
+    // (order_fulfilments, indexed (merchant_id, placed_at)) to seek the range.
     env.ORDERS.prepare(
       `SELECT period, currency, SUM(gross) AS gross, SUM(refunds) AS refunds, SUM(commission) AS commission,
               SUM(orders) AS orders, SUM(units) AS units
@@ -2078,6 +2084,15 @@ function build(env: TenancyEnv, scope: Scope): Repository {
         const mine = where([tenant(scope, 'l.merchant_id')])
         // The limit counts ORDERS, in the CTE. A LIMIT on the grouped rows below
         // would count an order once per currency, and cut an order in half.
+        //
+        // ponytail: every page reads all of the merchant's lines (a SEARCH on
+        // order_lines_merchant_idx), joins each order, then sorts and cuts,
+        // because the sort key (orders.created_at) is not on anything the
+        // merchant id reaches. So a page costs O(merchant history) and the CSV
+        // export O(pages × history). Upgrade when a seller's history makes a
+        // page slow: copy placed_at onto order_fulfilments (one row per
+        // merchant part) with an index (merchant_id, placed_at DESC, order_id)
+        // and drive `picked` from it, so the cursor seeks straight to its page.
         const { results } = await env.ORDERS.prepare(
           `WITH picked AS (
              SELECT o.id FROM orders o JOIN order_lines l ON l.order_id = o.id${picked.sql}
@@ -2304,8 +2319,10 @@ function build(env: TenancyEnv, scope: Scope): Repository {
          * entry's commission is how far it moved that figure.
          *
          * ponytail: every read runs the window over the merchant's whole
-         * history. A monthly snapshot of the running figures when that history
-         * reaches the hundreds of thousands of events.
+         * history, whatever month is asked for: O(history) per statement.
+         * Upgrade with a monthly snapshot of the running figures (net, rated,
+         * paid per merchant and currency), so a statement starts from the last
+         * snapshot before `from` instead of the first sale.
          */
         const running = `
           SELECT e.*, SUM(CASE WHEN e.kind = 'payout' THEN 0 ELSE e.amount END) OVER w AS net,

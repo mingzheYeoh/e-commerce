@@ -3,14 +3,19 @@
 // change goes through the ordinary product PATCH, one product per request, so
 // its validation, its audit row and the AI index rules are the ones every
 // other save meets: this page adds no write of its own.
-import { computed, onMounted, ref } from 'vue'
-import { useRoute } from 'vue-router'
-import { inventory, updateProduct, isError, asProduct, type InventoryItem, type ProductStatus } from '../api'
+import { computed, onMounted, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { inventory, updateProduct, isError, asProduct, UNREACHABLE, type InventoryItem, type ProductStatus } from '../api'
 
 const route = useRoute()
+const router = useRouter()
 
 type Stock = 'all' | 'low' | 'out'
-const stock = ref<Stock>(route.query.filter === 'low' || route.query.filter === 'out' ? route.query.filter : 'all')
+/** The stock filter lives in the URL (?filter=low|out), so the overview links here and Back returns to it. */
+const stock = computed<Stock>({
+  get: () => (route.query.filter === 'low' || route.query.filter === 'out' ? route.query.filter : 'all'),
+  set: (f) => void router.replace({ query: f === 'all' ? {} : { filter: f } }),
+})
 const status = ref<ProductStatus | ''>('')
 
 const items = ref<InventoryItem[]>([])
@@ -66,6 +71,11 @@ async function setStock(p: InventoryItem, value: number): Promise<boolean> {
     p.stockCount = body.stockCount
     delete drafts.value[p.id]
     return true
+  } catch {
+    // `call` already answers a dropped connection as an error body; this is
+    // for anything else that throws, so one row's failure never stops the rest.
+    rowError.value[p.id] = UNREACHABLE
+    return false
   } finally {
     saving.value[p.id] = false
   }
@@ -93,6 +103,10 @@ function toggle(id: string) {
   selected.value = next
 }
 
+// A selection is of rows on screen: changing the filter starts a new one, so a
+// bulk set can never reach a row the merchant cannot see.
+watch([stock, status], () => (selected.value = new Set()))
+
 /** One request per product, in turn; a refusal is kept on its row and the rest carry on. */
 async function applyBulk() {
   const value = parseStock(bulkValue.value)
@@ -102,14 +116,19 @@ async function applyBulk() {
   }
   bulkBusy.value = true
   bulkNote.value = null
-  const targets = items.value.filter((p) => selected.value.has(p.id))
+  // Only rows shown, as well as selected: the watch above should make these
+  // the same, and this holds even if it did not.
+  const targets = shown.value.filter((p) => selected.value.has(p.id))
   let failed = 0
-  for (const p of targets) if (!(await setStock(p, value))) failed++
-  bulkBusy.value = false
-  bulkNote.value = failed
-    ? `${targets.length - failed} updated, ${failed} refused — see the rows marked below.`
-    : `${targets.length} updated.`
-  if (!failed) selected.value = new Set()
+  try {
+    for (const p of targets) if (!(await setStock(p, value))) failed++
+  } finally {
+    bulkBusy.value = false
+    bulkNote.value = failed
+      ? `${targets.length - failed} updated, ${failed} refused — see the rows marked below.`
+      : `${targets.length} updated.`
+    if (!failed) selected.value = new Set()
+  }
 }
 </script>
 

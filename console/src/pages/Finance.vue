@@ -3,6 +3,7 @@
 // entry and the balance after it, and the payouts made. All of it is summed by
 // the worker from the same rule the balance uses; this page formats.
 import { computed, onMounted, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { Download } from 'lucide-vue-next'
 import {
   merchantBalance,
@@ -19,7 +20,19 @@ import { monthRange } from '../dates'
 import { placed } from '../orders'
 import { download } from '../csv'
 
-const month = ref(new Date().toISOString().slice(0, 7))
+const route = useRoute()
+const router = useRouter()
+/** The statement's month lives in the URL (?month=YYYY-MM), so it can be reloaded and shared; this month by default. */
+const month = computed({
+  get: () =>
+    typeof route.query.month === 'string' && /^\d{4}-\d{2}$/.test(route.query.month)
+      ? route.query.month
+      : new Date().toISOString().slice(0, 7),
+  // A half-typed month (a browser without a month picker) is not navigated to.
+  set: (m: string) => {
+    if (/^\d{4}-\d{2}$/.test(m)) void router.replace({ query: { month: m } })
+  },
+})
 
 const current = ref<Balance[] | null>(null)
 const paid = ref<PayoutRow[] | null>(null)
@@ -40,12 +53,16 @@ onMounted(async () => {
   else error.value = oops
 })
 
+/** Only the newest month's answer may land, however the requests race. */
+let latest = 0
 async function loadStatement() {
-  if (!/^\d{4}-\d{2}$/.test(month.value)) return
+  if (route.path !== '/finance') return
+  const mine = ++latest
   stmtLoading.value = true
   stmtError.value = null
   const { from, to } = monthRange(month.value)
   const { body } = await ledger(from, to)
+  if (mine !== latest) return
   if (isError(body)) stmtError.value = body.error
   else if ('entries' in body) statement.value = body
   else stmtError.value = oops

@@ -391,6 +391,21 @@ are built in the browser from what the page already read, with formula cells
 defused (`console/src/csv.ts`). No index was needed: every statement is a
 SEARCH on a merchant index, which a test pins with `EXPLAIN QUERY PLAN`.
 
+Known limits:
+
+- **Stock is set, not adjusted.** An inventory edit sends the new absolute
+  count, read when the page loaded; a sale in between is overwritten by it.
+  A `stockDelta` or an expected-value check on the PATCH would close that.
+- **`GET /api/merchant/orders` changed shape.** It pages now: `next` replaced
+  `truncated`, `from`/`to` are optional and no longer default to 30 days, and
+  a page is 50 orders unless `limit` says otherwise (up to 200). Anything
+  outside this console that read the old shape needs updating.
+- **The plan test proves no full scan, not a bounded cost.** The history,
+  report and ledger queries read all of one merchant's lines per request, so
+  their cost grows with that merchant's history; `tenancy.ts` notes the index
+  that would bound them (`ponytail:` comments on `orders.list`, `stats.sales`
+  and `finance.ledger`).
+
 ### The platform back office
 
 A platform admin's sidebar has Orders, Payments, Reports and Customers beside
@@ -420,6 +435,11 @@ Order-level money has a currency only when all of an order's lines do:
 checkout adds lines into one subtotal whatever their currency, so an order
 spanning two is reported under `XXX` rather than guessed into either. The
 four indexes these reads needed are migration `0014`.
+
+The merchant rule above holds here too, with two reads named as exceptions:
+the overview's "owing" card sums every balance from all history (as
+`/api/platform/balances` already does), and the customer list's guest total
+sums every guest order. Both carry `ponytail:` notes on what would bound them.
 
 ## Asset pipeline
 
