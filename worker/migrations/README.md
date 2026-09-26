@@ -55,7 +55,33 @@ the catch-up listed under "Before production next deploys" below.
 
 ## Pending
 
-Nothing. On 2026-09-26 both databases ran the runbook below in order: `0013`,
+**`0016` customer uploads, on neither database yet.** It adds
+`users.avatar_key` (nullable) and four tables: `reviews` and `review_photos`
+(one review per account and product; closing an account cascades to both),
+`return_requests` (one open request per order part, enforced by the partial
+unique index `return_requests_open_idx`) and `return_photos`. Additive only, so
+it is safe ahead of the workers and must land before them: the phase 3
+`nexus-api` reads `users.avatar_key` on every `/api/auth/me`, and both workers
+read the new tables. Staging first, then production, each before its deploys:
+`npx wrangler d1 execute <db> --remote --file=migrations/0016-customer-uploads.sql`
+
+It runs **once** (its `ALTER TABLE` fails a second time). Check afterwards with
+`SELECT name FROM sqlite_master WHERE name IN ('reviews','review_photos','return_requests','return_photos')`
+— four rows.
+
+The same deploy needs, before either worker goes out:
+
+- **Two private R2 buckets**, bound as `PRIVATE` by both `wrangler.toml` and
+  `wrangler.console.toml`: `npx wrangler r2 bucket create nexus-private` and
+  `npx wrangler r2 bucket create nexus-private-staging`. Return photos go
+  there. Never attach a public domain to either: they are served only through
+  the authenticated `return-photos` routes.
+- **`MEDIA_BASE` on nexus-api** (already in `wrangler.toml`, the same value
+  the console has per environment), which avatar and review photo URLs are
+  built from. Those objects go in the existing `nexus-media` /
+  `nexus-media-staging` buckets under `avatars/` and `reviews/`.
+
+On 2026-09-26 both databases ran the runbook below in order: `0013`,
 then nexus-api, nexus-console and the storefront, then `0013b` (production:
 2 fulfilment parts for 2 expected, stock total unchanged at 1525), then
 `0014`. The notes that follow are kept because they explain that order.

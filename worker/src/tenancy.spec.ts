@@ -50,6 +50,12 @@ describe('the migration and the schema', () => {
     expect(norm('worker/schema.sql')).toContain(norm('worker/migrations/0014-platform-back-office-indexes.sql'))
   })
 
+  it('keeps 0016 and its block in schema.sql identical', () => {
+    // Customer uploads: the review and return tests run against the tables production creates.
+    const norm = (p: string) => readFileSync(p, 'utf8').replace(/\r\n/g, '\n').trim()
+    expect(norm('worker/schema.sql')).toContain(norm('worker/migrations/0016-customer-uploads.sql'))
+  })
+
   it('backfills one pending part per merchant of every paid order already stored, and none for a declined one', () => {
     // Replayed against a database that has the orders but not yet the parts,
     // which is where production stands when 0013 runs. Twice, because the
@@ -330,6 +336,56 @@ describe('the schema refuses states that must not exist', () => {
       raw.prepare(`INSERT INTO staff_sessions (token_hash, staff_id, expires_at, totp_pending)
                    VALUES ('hash','stf_1','2099-01-01T00:00:00Z', 2)`).run(),
     ).toThrow(/CHECK/)
+  })
+
+  /** A shopper, a product, and nothing else: the customer-upload tables' neighbours. */
+  function shopperAndProduct() {
+    const mem = memoryD1()
+    seedMerchant(mem.raw)
+    mem.raw.prepare(`INSERT INTO users (id, email, name, password_hash, password_salt, iterations)
+                     VALUES ('usr_a','a@x.co','Ada','h','s',1)`).run()
+    mem.raw.prepare(`INSERT INTO products (id, merchant_id, sku, title, brand, category, price_minor, currency, status)
+                     VALUES ('prd_1','mch_a','S','T','B','phones',100,'MYR','published')`).run()
+    return mem
+  }
+  const review = (raw: Raw, id: string, rating: unknown) =>
+    raw.prepare(`INSERT INTO reviews (id, user_id, product_id, merchant_id, rating) VALUES (?, 'usr_a', 'prd_1', 'mch_a', ?)`)
+      .run(id, rating as number)
+
+  it('will not store a rating outside 1 to 5, or a second review by one account of one product', () => {
+    const { raw } = shopperAndProduct()
+    expect(() => review(raw, 'rev_0', 6)).toThrow(/CHECK/)
+    expect(() => review(raw, 'rev_0', 4.5)).toThrow(/CHECK/)
+    review(raw, 'rev_1', 5)
+    expect(() => review(raw, 'rev_2', 4)).toThrow(/UNIQUE/)
+  })
+
+  it('takes an account’s reviews and their photo rows with it when the account is closed', () => {
+    const { raw, rows } = shopperAndProduct()
+    review(raw, 'rev_1', 5)
+    raw.prepare(`INSERT INTO review_photos (review_id, name) VALUES ('rev_1', 'ph_a')`).run()
+    raw.prepare(`DELETE FROM users WHERE id = 'usr_a'`).run()
+    expect(rows('reviews')).toEqual([])
+    expect(rows('review_photos')).toEqual([])
+  })
+
+  it('will not store a second open return for one part, or a decision without its reason', () => {
+    const { raw } = shopperAndProduct()
+    const open = raw.prepare(`INSERT INTO return_requests (id, order_id, merchant_id, reason) VALUES (?, 'NX-AAAAA', 'mch_a', 'damaged')`)
+    open.run('ret_1')
+    expect(() => open.run('ret_2')).toThrow(/UNIQUE/)
+    expect(() =>
+      raw.prepare(`INSERT INTO return_requests (id, order_id, merchant_id, reason) VALUES ('ret_3', 'NX-AAAAA', 'mch_a', 'bored')`).run(),
+    ).toThrow(/CHECK/)
+    // Rejected needs a note, approved needs an amount, and either needs who and when.
+    const decide = (sql: string) => () => raw.prepare(`UPDATE return_requests SET ${sql} WHERE id = 'ret_1'`).run()
+    expect(decide(`status = 'rejected', decided_by = 'stf_1', decided_at = 'now'`)).toThrow(/CHECK/)
+    expect(decide(`status = 'rejected', decision_note = '', decided_by = 'stf_1', decided_at = 'now'`)).toThrow(/CHECK/)
+    expect(decide(`status = 'approved', decided_by = 'stf_1', decided_at = 'now'`)).toThrow(/CHECK/)
+    expect(decide(`status = 'approved', refund_minor = 100`)).toThrow(/CHECK/)
+    decide(`status = 'rejected', decision_note = 'Outside policy', decided_by = 'stf_1', decided_at = 'now'`)()
+    // Decided, so a new open request for the same part is allowed.
+    open.run('ret_4')
   })
 })
 
