@@ -6,6 +6,7 @@ import worker, { type Env } from './index'
 import { memoryD1, type MemoryD1 } from '../test/d1-memory'
 import { memoryR2, webpBytes, type MemoryR2 } from '../test/r2-memory'
 import { derive, sha256, toB64 } from './credentials'
+import { readFileSync } from 'node:fs'
 
 const BASE = 'https://api.test/media/u/'
 const ORIGIN = 'http://localhost:5173'
@@ -107,6 +108,34 @@ const pair = () => {
   form.append('thumb', new File([webpBytes()], 't.webp', { type: 'image/webp' }))
   return form
 }
+
+describe('the deployment config', () => {
+  // Bindings are not inherited by a wrangler environment, and an omitted one
+  // deploys silently: so each half of each file is checked on its own.
+  const halves = (file: string) => {
+    const s = readFileSync(`worker/${file}`, 'utf8').replace(/\r\n/g, '\n')
+    const at = s.indexOf('[env.staging]')
+    return { production: s.slice(0, at), staging: s.slice(at) }
+  }
+  const privateBucket = (toml: string) => toml.match(/binding = "PRIVATE"\nbucket_name = "([^"]+)"/)?.[1]
+  const mediaBase = (toml: string) => toml.match(/^MEDIA_BASE = "([^"]+)"/m)?.[1]
+
+  it('binds the private bucket in both workers, per environment', () => {
+    for (const file of ['wrangler.toml', 'wrangler.console.toml']) {
+      const { production, staging } = halves(file)
+      expect(privateBucket(production), file).toBe('nexus-private')
+      expect(privateBucket(staging), file).toBe('nexus-private-staging')
+    }
+  })
+
+  it("gives nexus-api the console's MEDIA_BASE, per environment", () => {
+    const api = halves('wrangler.toml')
+    const consoleToml = halves('wrangler.console.toml')
+    expect(mediaBase(api.production)).toBe(mediaBase(consoleToml.production))
+    expect(mediaBase(api.staging)).toBe(mediaBase(consoleToml.staging))
+    expect(mediaBase(api.staging)).toMatch(/staging/)
+  })
+})
 
 describe('avatars', () => {
   it('replaces the old avatar, deletes its object, and shows the new one on /api/auth/me', async () => {

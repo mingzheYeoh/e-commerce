@@ -29,6 +29,12 @@ database_id = "7aa62821-d17f-43a2-b605-2643780e9690"
 binding = "MEDIA"
 bucket_name = "nexus-media"
 
+# Return photos: private, never given a public domain. Read only through the
+# authenticated return-photos routes (the shopper here, staff in nexus-console).
+[[r2_buckets]]
+binding = "PRIVATE"
+bucket_name = "nexus-private"
+
 # Publishing a product embeds its passage and upserts it into the index
 # nexus-api retrieves from (src/indexing.ts), so the assistant knows it within
 # seconds. Same index name as nexus-api's, per environment.
@@ -96,6 +102,10 @@ database_id = "aedb0572-7924-4068-8d30-11b6e61eeed5"
 [[env.staging.r2_buckets]]
 binding = "MEDIA"
 bucket_name = "nexus-media-staging"
+
+[[env.staging.r2_buckets]]
+binding = "PRIVATE"
+bucket_name = "nexus-private-staging"
 
 [env.staging.ai]
 binding = "AI"
