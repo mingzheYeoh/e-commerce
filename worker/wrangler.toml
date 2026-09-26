@@ -3,6 +3,13 @@ main = "src/index.ts"
 compatibility_date = "2026-09-01"
 compatibility_flags = ["nodejs_compat"]
 
+# Production answers on nexusohm.com. A custom domain is created (DNS record and
+# certificate) by `wrangler deploy`; routes are not inherited by [env.staging],
+# so staging stays on workers.dev. workers_dev stays on so every link already
+# handed out keeps working.
+workers_dev = true
+routes = [{ pattern = "api.nexusohm.com", custom_domain = true }]
+
 # Inference runs inside Cloudflare, so this binding IS the credential and no
 # third-party API key exists in the project at all.
 [ai]
@@ -29,7 +36,7 @@ bucket_name = "nexus-media"
 [vars]
 # The deployed storefront and the dev server, in that order. The first entry is
 # what an unrecognised origin gets echoed back, so it must not be localhost.
-ALLOWED_ORIGIN = "https://nexus-tech-collective.mingzhe030228.workers.dev,http://localhost:5173"
+ALLOWED_ORIGIN = "https://nexusohm.com,https://www.nexusohm.com,https://nexus-tech-collective.mingzhe030228.workers.dev,http://localhost:5173"
 
 # Who verification email comes from. The domain must be verified with the mail
 # provider, or every send is refused with a reason only the log sees.

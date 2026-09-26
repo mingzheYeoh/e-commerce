@@ -7,7 +7,7 @@
  * exception that blanks a page.
  */
 
-const BASE = import.meta.env.VITE_API_URL ?? 'https://nexus-api.mingzhe030228.workers.dev'
+const BASE = import.meta.env.VITE_API_URL ?? 'https://api.nexusohm.com'
 
 /** Inference on a 70B model is not instant; a search box's patience is not the bar. */
 const TIMEOUT_MS = 30_000
