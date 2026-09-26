@@ -48,11 +48,15 @@ const loading = ref(true)
 const more = ref(false)
 const exporting = ref(false)
 
+/** Only the newest request may land: a slow answer to an older filter, or an old Load more, is dropped. */
+let latest = 0
 async function load(before: string | null = null) {
+  const mine = ++latest
   error.value = null
   if (before) more.value = true
   else loading.value = true
   const { body } = await payments({ ...filter.value, before })
+  if (mine !== latest) return
   if (isError(body)) error.value = body.error
   else if ('entries' in body) {
     entries.value = before ? [...entries.value, ...body.entries] : body.entries
@@ -80,7 +84,7 @@ const apply = () => {
 
 const who = (e: PaymentEntry) => e.merchantIds.map(nameOf).join(', ')
 const parts = (e: PaymentEntry) =>
-  e.kind === 'charge' ? `goods ${formatMinor(e.goods ?? 0, e.currency)} · shipping ${formatMinor(e.shipping ?? 0, e.currency)} · tax ${formatMinor(e.tax ?? 0, e.currency)}` : ''
+  e.kind === 'charge' && e.shipping !== null ? `goods ${formatMinor(e.goods ?? 0, e.currency)} · shipping ${formatMinor(e.shipping ?? 0, e.currency)} · tax ${formatMinor(e.tax ?? 0, e.currency)}` : ''
 
 async function exportCsv() {
   exporting.value = true
@@ -88,9 +92,11 @@ async function exportCsv() {
   const rows: Cell[][] = [['Date (UTC)', 'Type', 'Order or reference', 'Merchants', 'Currency', 'Amount', 'Goods', 'Shipping', 'Tax']]
   let before: string | null = null
   const dec = (v: number | null) => (v === null ? null : minorToDecimal(v))
+  // One filter for the whole export, whatever the page's does meanwhile.
+  const f = { ...filter.value }
   try {
     do {
-      const { body } = await payments({ ...filter.value, before, limit: 200 })
+      const { body } = await payments({ ...f, before, limit: 200 })
       if (!('entries' in body)) {
         error.value = isError(body) ? body.error : 'The export stopped part way. Try again.'
         return
@@ -98,7 +104,7 @@ async function exportCsv() {
       for (const e of body.entries) rows.push([e.at, KIND[e.kind], e.ref, who(e), e.currency, minorToDecimal(e.amount), dec(e.goods), dec(e.shipping), dec(e.tax)])
       before = body.next
     } while (before)
-    download(`payments-${filter.value.from}-to-${filter.value.to}.csv`, rows)
+    download(`payments-${f.from}-to-${f.to}.csv`, rows)
   } finally {
     exporting.value = false
   }
@@ -145,6 +151,9 @@ async function exportCsv() {
     <button class="btn-primary" type="submit" :disabled="loading">Show</button>
   </form>
 
+  <p v-if="filter.merchant" class="mb-4 text-xs text-text-secondary">
+    Filtered to one merchant: charges show only this merchant's goods; shipping and tax belong to the whole order.
+  </p>
   <p v-if="error" class="mb-4 text-sm text-accent-amber" role="alert">{{ error }}</p>
   <p v-if="loading" class="text-text-secondary">Loading…</p>
   <template v-else-if="!error">
@@ -156,8 +165,10 @@ async function exportCsv() {
           <dd class="text-right text-text-primary">{{ formatMinor(t.charged, t.currency) }}</dd>
           <dt class="text-text-secondary">of which goods</dt>
           <dd class="text-right text-text-secondary">{{ formatMinor(t.goods, t.currency) }}</dd>
-          <dt class="text-text-secondary">shipping + tax</dt>
-          <dd class="text-right text-text-secondary">{{ formatMinor(t.shipping + t.tax, t.currency) }}</dd>
+          <template v-if="!filter.merchant">
+            <dt class="text-text-secondary">shipping + tax</dt>
+            <dd class="text-right text-text-secondary">{{ formatMinor(t.shipping + t.tax, t.currency) }}</dd>
+          </template>
           <dt class="text-text-secondary">Refunded · {{ t.refunds }}</dt>
           <dd class="text-right text-text-primary">−{{ formatMinor(t.refunded, t.currency) }}</dd>
           <dt class="text-text-secondary">Paid out · {{ t.payouts }}</dt>
@@ -186,7 +197,7 @@ async function exportCsv() {
               <td class="px-4 py-3">
                 <router-link v-if="e.kind !== 'payout'" :to="`/platform/orders/${e.ref}`" class="font-mono text-xs text-accent hover:text-accent-hover">{{ e.ref }}</router-link>
                 <span v-else class="text-text-primary">{{ e.ref }}</span>
-                <p v-if="e.kind === 'charge'" class="nums mt-0.5 whitespace-nowrap text-xs text-text-muted">{{ parts(e) }}</p>
+                <p v-if="parts(e)" class="nums mt-0.5 whitespace-nowrap text-xs text-text-muted">{{ parts(e) }}</p>
               </td>
               <td class="px-4 py-3 text-text-primary">{{ who(e) }}</td>
               <td class="nums whitespace-nowrap px-4 py-3 text-right" :class="e.amount < 0 ? 'text-text-secondary' : 'text-text-primary'">

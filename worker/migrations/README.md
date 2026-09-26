@@ -48,14 +48,10 @@ Verified against `sqlite_master` on 2026-09-21; production caught up on 2026-09-
 | `0013` order lifecycle | ❌ | ❌ |
 | `0014` platform back office indexes | ❌ | ❌ |
 
-Production currently holds six tables: `orders`, `order_lines`, and the four
-from `0006`. It has never had `users`, `sessions`, `email_tokens` or
-`recovery_codes`.
-
-That is not a fault. The worker deployed to production predates the accounts
-work — `/api/auth/me` returns 404 there and `/api/health` carries no `auth`
-key — so the code and the schema agree with each other. Production is behind
-staging by the whole accounts phase, not broken by it.
+Until 2026-09-24 production held only `orders`, `order_lines` and the four
+tables from `0006`; the accounts tables (`users`, `sessions`, `email_tokens`,
+`recovery_codes`) arrived with `0002`–`0005` that day, along with the rest of
+the catch-up listed under "Before production next deploys" below.
 
 ## Pending
 
@@ -104,8 +100,9 @@ indexes and nothing else — `refunds(created_at)`, `payouts(created_at)`,
 payments ledger, customer list and overview cards, which read across every
 merchant and so cannot seek on a merchant index. Index only, so it is safe in
 either order relative to the workers, and `IF NOT EXISTS` makes a second run
-harmless. It does need `0013` first (two of its tables), and on production the
-accounts tables from `0002`, which production has had since 2026-09-24. Run it
+harmless. It needs `0013` first, whose three tables (`refunds`, `payouts`,
+`order_fulfilments`) three of its indexes are on, and `users` from `0002`,
+which both databases have had since 2026-09-24. Run it
 before (or right after) deploying the `nexus-console` that has the platform
 pages; without it those pages work, but scan:
 `npx wrangler d1 execute <db> --remote --file=migrations/0014-platform-back-office-indexes.sql`

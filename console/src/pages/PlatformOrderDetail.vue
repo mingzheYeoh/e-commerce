@@ -3,7 +3,7 @@
 // refunds and how it moved. The platform may refund any line and cancel any
 // pending part (the way out for a suspended merchant); the worker decides what
 // is allowed, and its refusal is shown as it said it.
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import {
   platformOrder,
   platformRefund,
@@ -50,18 +50,21 @@ const parts = computed(() => {
   })
 })
 
+/** Only the newest answer lands, so moving between orders never shows the previous one. */
+let latest = 0
 async function load() {
+  const mine = ++latest
+  error.value = null
   const { status, body } = await platformOrder(props.id)
+  if (mine !== latest) return
   if (status === 404) error.value = 'No paid order with that number.'
   else if (isError(body)) error.value = body.error
   else if ('lines' in body) order.value = body
   else error.value = 'Something went wrong. Reload and try again.'
 }
 
-onMounted(async () => {
-  await load()
-  merchants.value = await merchantNames()
-})
+watch(() => props.id, load, { immediate: true })
+onMounted(async () => (merchants.value = await merchantNames()))
 
 async function act(run: () => Promise<{ body: object | ErrorBody }>): Promise<boolean> {
   busy.value = true

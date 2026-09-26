@@ -421,11 +421,14 @@ for 1 and 50 merchants on every read).
   timeline; the platform can refund any line or cancel any pending part.
 - **Payments**: charges (each paid order's total, goods, shipping and tax),
   refunds and payouts, newest first, with totals per currency over the filter.
+  Filtered to one merchant, a charge is that merchant's goods on the order
+  alone, per currency; shipping and tax belong to the whole order and drop out.
 - **Reports**: `stats.sales` in platform scope beside order-level figures —
   shipping and tax, orders, average order — a merchant leaderboard (net, take,
   refund rate, ship time, cancellations), products, and sign-ups by week.
 - **Customers**: shopper accounts with orders and spend; guest checkouts only as
-  a total. Explicit columns only, and a test fails if any statement names a
+  a total. Reading one account is recorded against each merchant whose order it
+  shows, like any order read. Explicit columns only, and a test fails if any statement names a
   password, salt, TOTP secret, token or recovery code.
 - **A merchant's page**: sales, fulfilment health, catalogue, staff (whether
   TOTP is enrolled, nothing more), balance, and the set-commission and

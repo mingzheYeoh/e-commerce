@@ -21,7 +21,10 @@ onMounted(async () => {
   } else error.value = 'Something went wrong. Reload and try again.'
 })
 
-/** Orders placed before this day and still pending: the overdue card's link. */
+/**
+ * The overdue count is parts placed before the UTC day `overdueDays` ago began;
+ * the order list's `to` is inclusive, so the day before that is the same cutoff.
+ */
 const overdueTo = computed(() => (attention.value ? addDays(new Date().toISOString().slice(0, 10), -attention.value.overdueDays - 1) : ''))
 
 const count = (status: string) => merchants.value.filter((m) => m.status === status).length
@@ -67,11 +70,11 @@ const ranking = computed(() =>
           :to="{ path: '/platform/orders', query: { status: 'pending', to: overdueTo } }"
           class="block rounded-card transition-colors hover:ring-1 hover:ring-border-strong"
         >
-          <StatCard label="Overdue shipments" :value="String(attention.overdue)" :sub="`Pending over ${attention.overdueDays} days`" />
+          <StatCard label="Overdue parts" :value="String(attention.overdue)" :sub="`To ship, placed on or before ${overdueTo}`" />
         </router-link>
         <div class="card p-4">
           <p class="label">Merchants owing the platform</p>
-          <p class="nums mt-1 font-display text-xl font-bold text-text-primary">{{ new Set(attention.owing.map((o) => o.merchantId)).size }}</p>
+          <p class="nums mt-1 font-display text-xl font-bold text-text-primary">{{ attention.owingMerchants }}</p>
           <ul class="mt-1 flex flex-col gap-0.5 text-xs">
             <li v-for="o in attention.owing.slice(0, 5)" :key="`${o.merchantId}-${o.currency}`">
               <router-link :to="`/platform/merchants/${o.merchantId}`" class="text-text-secondary hover:text-accent">

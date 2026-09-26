@@ -52,11 +52,15 @@ const loading = ref(true)
 const more = ref(false)
 const exporting = ref(false)
 
+/** Only the newest request may land: a slow answer to an older filter, or an old Load more, is dropped. */
+let latest = 0
 async function load(before: string | null = null) {
+  const mine = ++latest
   error.value = null
   if (before) more.value = true
   else loading.value = true
   const { body } = await platformOrders({ ...filter.value, before })
+  if (mine !== latest) return
   if (isError(body)) error.value = body.error
   else if ('orders' in body) {
     orders.value = before ? [...orders.value, ...body.orders] : body.orders
@@ -93,9 +97,11 @@ async function exportCsv() {
   error.value = null
   const rows: Cell[][] = [['Order', 'Placed (UTC)', 'Merchants', 'Status', 'Items', 'Shipping', 'Currency', 'Goods']]
   let before: string | null = null
+  // One filter for the whole export, whatever the page's does meanwhile.
+  const f = { ...filter.value }
   try {
     do {
-      const { body } = await platformOrders({ ...filter.value, before, limit: 200 })
+      const { body } = await platformOrders({ ...f, before, limit: 200 })
       if (!('orders' in body)) {
         error.value = isError(body) ? body.error : 'The export stopped part way. Try again.'
         return

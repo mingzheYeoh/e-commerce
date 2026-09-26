@@ -3,7 +3,8 @@
 // is owed, and the two money actions the platform takes on their behalf.
 // Both writes are the worker's existing routes, each audited in the same
 // batch as the change; a refusal (a payout over the balance) is shown as said.
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import StatCard from '../components/StatCard.vue'
 import SalesChart from '../components/SalesChart.vue'
 import {
@@ -25,7 +26,12 @@ const m = ref<MerchantDetail | null>(null)
 const sales = ref<SalesReport | null>(null)
 const error = ref<string | null>(null)
 const salesError = ref<string | null>(null)
-const range = ref<Preset>('30')
+const route = useRoute()
+const router = useRouter()
+const RANGES = ['7', '30', '90'] as const
+/** The sales range lives in the URL (?range=7|30|90), 30 days by default. */
+const range = computed<Preset>(() => (RANGES.find((r) => r === route.query.range) ?? '30') as Preset)
+const pickRange = (r: Preset) => void router.replace({ query: r === '30' ? {} : { range: r } })
 
 const actionError = ref<string | null>(null)
 const notice = ref<string | null>(null)
@@ -33,8 +39,14 @@ const busy = ref(false)
 const rateForm = ref('')
 const payout = reactive<Record<string, { amount: string; reference: string }>>({})
 
+/** Only the newest answer lands: a slow one for another merchant or range is dropped. */
+let latest = 0
+let latestSales = 0
 async function load() {
+  const mine = ++latest
+  error.value = null
   const { status, body } = await merchantDetail(props.id)
+  if (mine !== latest) return
   if (status === 404) error.value = 'No merchant with that id.'
   else if (isError(body)) error.value = body.error
   else if ('staff' in body) {
@@ -45,16 +57,18 @@ async function load() {
 }
 
 async function loadSales() {
+  const mine = ++latestSales
   salesError.value = null
   const { from, to } = presetRange(range.value)
   const { body } = await merchantSales(props.id, from, to)
+  if (mine !== latestSales) return
   if (isError(body)) salesError.value = body.error
   else if ('totals' in body) sales.value = body
   else salesError.value = 'Something went wrong. Reload and try again.'
 }
 
-onMounted(load)
-watch(range, loadSales, { immediate: true })
+watch(() => props.id, load, { immediate: true })
+watch([() => props.id, range], () => route.path.startsWith('/platform/merchants/') && loadSales(), { immediate: true })
 
 const trends = computed(() => {
   const r = sales.value
@@ -161,12 +175,12 @@ const BADGE: Record<string, string> = {
         <h2 id="sales-h" class="text-sm font-semibold text-text-primary">Sales</h2>
         <div class="flex gap-1" role="group" aria-label="Date range">
           <button
-            v-for="p in (['7', '30', '90'] as const)"
+            v-for="p in RANGES"
             :key="p"
             class="rounded-full border px-3 py-1 text-xs"
             :class="range === p ? 'border-accent bg-surface-2 text-text-primary' : 'border-border-hairline text-text-secondary'"
             :aria-pressed="range === p"
-            @click="range = p"
+            @click="pickRange(p)"
           >
             {{ p }} days
           </button>

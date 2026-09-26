@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // One shopper account and its paid orders. Opening it is an audited read.
-import { onMounted, ref } from 'vue'
+import { ref, watch } from 'vue'
 import { customer, isError, type CustomerDetail } from '../api'
 import { formatAmounts, formatMinor } from '../money'
 import { FULFILMENT, placed } from '../orders'
@@ -9,13 +9,18 @@ const props = defineProps<{ id: string }>()
 const c = ref<CustomerDetail | null>(null)
 const error = ref<string | null>(null)
 
-onMounted(async () => {
-  const { status, body } = await customer(props.id)
+/** Only the newest answer lands, so moving between accounts never shows the previous one. */
+let latest = 0
+watch(() => props.id, async (id) => {
+  const mine = ++latest
+  error.value = null
+  const { status, body } = await customer(id)
+  if (mine !== latest) return
   if (status === 404) error.value = 'No account with that id.'
   else if (isError(body)) error.value = body.error
   else if ('recent' in body) c.value = body
   else error.value = 'Something went wrong. Reload and try again.'
-})
+}, { immediate: true })
 </script>
 
 <template>

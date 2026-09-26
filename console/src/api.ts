@@ -550,11 +550,11 @@ export type Customer = {
   spend: Amount[]
 }
 
-export const customers = (q: string, before: string | null) =>
+export const customers = (q: string, before: string | null, limit?: number) =>
   call<
     | { next: string | null; customers: Customer[]; guests: { orders: number; spend: Amount[] } | null }
     | ErrorBody
-  >(`/api/platform/customers?${query({ q, before })}`)
+  >(`/api/platform/customers?${query({ q, before, limit })}`)
 
 export type CustomerDetail = Customer & {
   refunded: Amount[]
@@ -606,6 +606,7 @@ export const recordPayout = (id: string, input: { currency: string; amountMinor:
 
 export type Attention = {
   pendingApplications: number
+  owingMerchants: number
   toShip: number
   overdue: number
   overdueDays: number

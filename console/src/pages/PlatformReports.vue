@@ -32,12 +32,16 @@ const report = ref<PlatformReport | null>(null)
 const error = ref<string | null>(null)
 const loading = ref(false)
 
+/** Only the newest request may land: a slow answer to an older filter, or an old Load more, is dropped. */
+let latest = 0
 async function load() {
+  const mine = ++latest
   loading.value = true
   error.value = null
   const { from, to } = selected.value
   form.value = { from, to }
   const { body } = await platformReport(from, to)
+  if (mine !== latest) return
   if (isError(body)) error.value = body.error
   else if ('totals' in body) report.value = body
   else error.value = 'Something went wrong. Reload and try again.'
@@ -96,7 +100,7 @@ const leaderboard = computed(() => {
   return r.merchants.map((m) => ({ ...m, health: r.health.find((h) => h.merchantId === m.merchantId) }))
 })
 
-const aov = (c: { orders: number; total: number }) => (c.orders ? Math.floor(c.total / c.orders) : 0)
+const aov = (c: { orders: number; total: number }) => (c.orders ? Math.round(c.total / c.orders) : 0)
 const vs = (now: number, before: number) => {
   const c = change(now, before)
   return c ? `${c} vs previous` : before === now ? 'No change' : 'Nothing to compare'
