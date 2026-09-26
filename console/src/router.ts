@@ -88,9 +88,10 @@ export const router = createRouter({
 router.beforeEach(async (to) => {
   // A failed /me (offline, worker down) is treated as signed out rather than
   // aborting navigation onto a blank page; the worker still decides access.
-  const session = await me().then(
-    (r) => r.body,
-    () => ({ kind: null }) as const,
+  // `call` answers an unreachable worker with an error body, not a session.
+  const session: StaffMe = await me().then(
+    (r) => ('kind' in r.body ? r.body : { kind: null }),
+    () => ({ kind: null }),
   )
   return redirectFor(session, to.path) ?? true
 })

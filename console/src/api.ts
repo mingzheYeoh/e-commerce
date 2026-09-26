@@ -27,11 +27,17 @@ export const isError = (body: object): body is ErrorBody => 'error' in body
 export const asProduct = (body: Product | ErrorBody): Product | ErrorBody =>
   isError(body) || 'id' in body ? body : { error: 'Something went wrong. Reload and try again.' }
 
+/** What a request that never got an answer (offline, DNS, a dropped connection) reads as. */
+export const UNREACHABLE = "Couldn't reach the server. Check your connection and try again."
+
 async function call<T>(path: string, init?: RequestInit): Promise<{ status: number; body: T }> {
+  // A fetch that rejects is answered here, once, as an error body with status
+  // 0, so no page is left on "Loading…" by a promise nobody caught.
   const res = await fetch(path, {
     ...init,
     headers: { 'content-type': 'application/json', ...init?.headers },
-  })
+  }).catch(() => null)
+  if (!res) return { status: 0, body: { error: UNREACHABLE } as T }
   // A non-JSON body (a network error page, an empty 204) is read as {},
   // which every caller's isError() check reads as "not an error shape" —
   // safe because none of these routes has a meaningful empty success body.
