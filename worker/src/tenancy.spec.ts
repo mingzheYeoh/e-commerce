@@ -1,7 +1,13 @@
 import { describe, it, expect } from 'vitest'
-import { readFileSync } from 'node:fs'
+import { readFileSync as readFs } from 'node:fs'
+import { fileURLToPath } from 'node:url'
+import path from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import { memoryD1 } from '../test/d1-memory'
+
+/** Paths here are from the repo root, resolved from this file so the suite also runs from `worker/`. */
+const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..')
+const readFileSync = (p: string, encoding: 'utf8') => readFs(path.join(ROOT, p), encoding)
 
 describe('the migration and the schema', () => {
   it('keeps 0006-tenancy.sql and schema.sql identical', () => {
