@@ -27,11 +27,17 @@ export const isError = (body: object): body is ErrorBody => 'error' in body
 export const asProduct = (body: Product | ErrorBody): Product | ErrorBody =>
   isError(body) || 'id' in body ? body : { error: 'Something went wrong. Reload and try again.' }
 
+/** What a request that never got an answer (offline, DNS, a dropped connection) reads as. */
+export const UNREACHABLE = "Couldn't reach the server. Check your connection and try again."
+
 async function call<T>(path: string, init?: RequestInit): Promise<{ status: number; body: T }> {
+  // A fetch that rejects is answered here, once, as an error body with status
+  // 0, so no page is left on "Loading…" by a promise nobody caught.
   const res = await fetch(path, {
     ...init,
     headers: { 'content-type': 'application/json', ...init?.headers },
-  })
+  }).catch(() => null)
+  if (!res) return { status: 0, body: { error: UNREACHABLE } as T }
   // A non-JSON body (a network error page, an empty 204) is read as {},
   // which every caller's isError() check reads as "not an error shape" —
   // safe because none of these routes has a meaningful empty success body.
@@ -257,12 +263,102 @@ export type Balance = {
 
 export const merchantBalance = () => call<{ balances: Balance[] } | ErrorBody>('/api/merchant/balance')
 
-export const listOrders = (range: { from?: string; to?: string }) => {
-  const q = new URLSearchParams(Object.entries(range).filter(([, v]) => v) as [string, string][])
-  return call<{ from: string; to: string; truncated: boolean; orders: OrderSummary[] } | ErrorBody>(
-    `/api/merchant/orders?${q}`,
+/** Only the filled-in values, so an empty field means "no filter" rather than "". */
+const query = (params: Record<string, string | number | null | undefined>) =>
+  new URLSearchParams(
+    Object.entries(params)
+      .filter(([, v]) => v !== null && v !== undefined && v !== '')
+      .map(([k, v]) => [k, String(v)]),
   )
+
+export type OrderFilter = {
+  from?: string
+  to?: string
+  status?: FulfilmentStatus | ''
+  q?: string
+  /** The previous page's `next`. */
+  before?: string | null
+  limit?: number
 }
+
+/** One page, newest first; `next` is null on the last. */
+export const listOrders = (filter: OrderFilter) =>
+  call<{ from: string | null; to: string | null; next: string | null; orders: OrderSummary[] } | ErrorBody>(
+    `/api/merchant/orders?${query(filter)}`,
+  )
+
+export type Queue = { toShip: number; lowStock: number; outOfStock: number; lowStockAt: number }
+
+export const merchantQueue = () => call<Queue | ErrorBody>('/api/merchant/queue')
+
+export type ReportTotals = {
+  currency: string
+  gross: number
+  refunds: number
+  net: number
+  commission: number
+  earnings: number
+  orders: number
+  units: number
+}
+
+export type SalesReport = {
+  from: string
+  to: string
+  bucket: 'day' | 'week'
+  totals: ReportTotals[]
+  previous: { from: string; to: string; totals: ReportTotals[] }
+  series: { start: string; currency: string; net: number; gross: number }[]
+  categories: { category: string; currency: string; net: number; units: number }[]
+  products: { productId: string; title: string; currency: string; gross: number; net: number; units: number }[]
+}
+
+export const salesReport = (from: string, to: string) =>
+  call<SalesReport | ErrorBody>(`/api/merchant/reports/sales?${query({ from, to })}`)
+
+export type InventoryItem = {
+  id: string
+  sku: string
+  title: string
+  category: string
+  status: ProductStatus
+  priceMinor: number
+  currency: string
+  stockCount: number
+  sold30d: number
+}
+
+export const inventory = () => call<{ lowStockAt: number; products: InventoryItem[] } | ErrorBody>('/api/merchant/inventory')
+
+export type LedgerEntry = {
+  currency: string
+  at: string
+  kind: 'sale' | 'refund' | 'payout'
+  ref: string
+  amount: number
+  commission: number
+  balance: number
+}
+
+export type LedgerSummary = {
+  currency: string
+  opening: number
+  sales: number
+  refunds: number
+  commission: number
+  payouts: number
+  closing: number
+}
+
+export const ledger = (from: string, to: string) =>
+  call<
+    | { from: string; to: string; currentBps: number | null; summary: LedgerSummary[]; entries: LedgerEntry[] }
+    | ErrorBody
+  >(`/api/merchant/finance/ledger?${query({ from, to })}`)
+
+export type PayoutRow = { id: string; currency: string; amountMinor: number; reference: string; createdAt: string }
+
+export const payouts = () => call<{ payouts: PayoutRow[] } | ErrorBody>('/api/merchant/finance/payouts')
 
 export const getOrder = (id: string) => call<OrderDetail | ErrorBody>(`/api/merchant/orders/${encodeURIComponent(id)}`)
 

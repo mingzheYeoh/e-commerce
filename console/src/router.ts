@@ -10,6 +10,9 @@ import ProductNew from './pages/ProductNew.vue'
 import ProductEdit from './pages/ProductEdit.vue'
 import Orders from './pages/Orders.vue'
 import OrderDetail from './pages/OrderDetail.vue'
+import Reports from './pages/Reports.vue'
+import Inventory from './pages/Inventory.vue'
+import Finance from './pages/Finance.vue'
 import PlatformOverview from './pages/PlatformOverview.vue'
 import Merchants from './pages/Merchants.vue'
 import Applications from './pages/Applications.vue'
@@ -36,6 +39,9 @@ export const routes = [
   { path: '/products/:id', name: 'product-edit', component: ProductEdit, props: true, meta: merchant },
   { path: '/orders', name: 'orders', component: Orders, meta: merchant },
   { path: '/orders/:id', name: 'order', component: OrderDetail, props: true, meta: merchant },
+  { path: '/reports', name: 'reports', component: Reports, meta: merchant },
+  { path: '/inventory', name: 'inventory', component: Inventory, meta: merchant },
+  { path: '/finance', name: 'finance', component: Finance, meta: merchant },
   { path: '/platform', name: 'platform', component: PlatformOverview, meta: platform },
   { path: '/platform/merchants', name: 'merchants', component: Merchants, meta: platform },
   { path: '/platform/applications', name: 'applications', component: Applications, meta: platform },
@@ -45,6 +51,9 @@ export const routes = [
   { path: '/', name: 'root', component: SignIn },
   { path: '/:pathMatch(.*)*', name: 'not-found', component: SignIn },
 ]
+
+/** A merchant's pages: each of these and anything beneath it (/products/new, /orders/:id). */
+const MERCHANT_PAGES = ['/overview', '/products', '/orders', '/reports', '/inventory', '/finance']
 
 /** `to` is `base` itself or anywhere beneath it. */
 const within = (to: string, base: string) => to === base || to.startsWith(`${base}/`)
@@ -64,7 +73,7 @@ export function redirectFor(session: StaffMe, to: string): string | null {
   // A merchant's home is /overview; the products and orders subtrees (lists,
   // /new, and /:id) are theirs too.
   if (session.scope === 'merchant') {
-    return ['/overview', '/products', '/orders'].some((base) => within(to, base)) ? null : '/overview'
+    return MERCHANT_PAGES.some((base) => within(to, base)) ? null : '/overview'
   }
   // Applications moved under /platform; an old bookmark still lands on it.
   if (to === '/applications') return '/platform/applications'
@@ -79,9 +88,10 @@ export const router = createRouter({
 router.beforeEach(async (to) => {
   // A failed /me (offline, worker down) is treated as signed out rather than
   // aborting navigation onto a blank page; the worker still decides access.
-  const session = await me().then(
-    (r) => r.body,
-    () => ({ kind: null }) as const,
+  // `call` answers an unreachable worker with an error body, not a session.
+  const session: StaffMe = await me().then(
+    (r) => ('kind' in r.body ? r.body : { kind: null }),
+    () => ({ kind: null }),
   )
   return redirectFor(session, to.path) ?? true
 })

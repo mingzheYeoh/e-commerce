@@ -27,7 +27,7 @@ import {
 } from './staff-auth'
 import {
   id,
-  ORDER_CAP,
+  LOW_STOCK,
   scopedTo,
   platformWide,
   utcDay,
@@ -36,6 +36,11 @@ import {
   type AuditPage,
   type Balance,
   type Fulfilment,
+  type FulfilmentStatus,
+  type InventoryRow,
+  type Ledger,
+  type OrderFilter,
+  type SalesReport,
   type NewPayout,
   type NewRefund,
   type Payout,
@@ -162,7 +167,47 @@ function orderRange(url: URL): { from: string; to: string } | string {
   return { from, to }
 }
 
-/** Orders carry a name and a delivery address: no shared cache may keep them. */
+/** A report's range: three years at most, which is 157 weekly bars. */
+function reportRange(url: URL): { from: string; to: string } | string {
+  const range = orderRange(url)
+  if (typeof range === 'string') return range
+  const days = (Date.parse(range.to) - Date.parse(range.from)) / 86_400_000 + 1
+  return days > 1096 ? 'A report covers three years at most.' : range
+}
+
+const PART_STATUSES = new Set<string>(['pending', 'shipped', 'delivered', 'cancelled'])
+/** One page of the order history, unless the request asks for fewer or more (up to 200). */
+const ORDER_PAGE = 50
+/** A cursor is the last order's `created_at|id`, as the previous page's `next` gave it. */
+const CURSOR = /^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\|([A-Za-z0-9_-]{1,64})$/
+
+/** The order history's filters. Every one is optional; with none, every paid order of yours. */
+function orderFilter(url: URL): OrderFilter | string {
+  const p = url.searchParams
+  const from = p.get('from') || undefined
+  const to = p.get('to') || undefined
+  if ((from && !isDay(from)) || (to && !isDay(to))) return 'Dates are YYYY-MM-DD, between 2000 and 2100.'
+  if (from && to && from > to) return 'The start date is after the end date.'
+  const status = p.get('status') || undefined
+  if (status && !PART_STATUSES.has(status)) return 'status is pending, shipped, delivered or cancelled.'
+  const q = (p.get('q') ?? '').trim()
+  if (q.length > 40) return 'Search by at most 40 characters of an order id.'
+  const cursor = p.get('before')
+  const at = cursor === null ? null : cursor.match(CURSOR)
+  if (cursor !== null && !at) return 'before is the next value of the page before.'
+  const limit = p.get('limit') === null ? ORDER_PAGE : Number(p.get('limit'))
+  if (!Number.isInteger(limit) || limit < 1 || limit > 200) return 'limit is a whole number from 1 to 200.'
+  return {
+    from,
+    to,
+    status: status as FulfilmentStatus | undefined,
+    q: q || undefined,
+    before: at ? { at: at[1], id: at[2] } : undefined,
+    limit,
+  }
+}
+
+/** Orders carry a name and a delivery address, and money is money: no shared cache may keep either. */
 const PRIVATE = { 'cache-control': 'no-store' }
 
 const orderSummary = (o: OrderSummary) => ({
@@ -215,6 +260,40 @@ const payoutOut = (p: Payout) => ({
   currency: p.currency,
   amountMinor: p.amount_minor,
   reference: p.reference,
+})
+
+/** Which platform staff member recorded it stays the platform's business. */
+const paidOut = (p: Payout & { created_at: string }) => ({ ...payoutOut(p), createdAt: p.created_at })
+
+const inventoryOut = (p: InventoryRow) => ({
+  id: p.id,
+  sku: p.sku,
+  title: p.title,
+  category: p.category,
+  status: p.status,
+  priceMinor: p.price_minor,
+  currency: p.currency,
+  stockCount: p.stock_count,
+  sold30d: p.sold_30d,
+})
+
+const salesOut = (r: SalesReport) => ({
+  ...r,
+  products: r.products.map((p) => ({
+    productId: p.product_id,
+    title: p.title,
+    currency: p.currency,
+    gross: p.gross,
+    net: p.net,
+    units: p.units,
+  })),
+})
+
+/** A merchant's own ledger: the merchant id on every row would only repeat the session's. */
+const ledgerOut = (l: Ledger) => ({
+  currentBps: l.current_bps,
+  summary: l.summary.map(({ merchant_id: _m, ...s }) => s),
+  entries: l.entries.map(({ merchant_id: _m, ...e }) => e),
 })
 
 const orderDetail = (o: OrderDetail) => ({
@@ -702,16 +781,62 @@ async function route(request: Request, env: ConsoleEnv, url: URL, ctx: Execution
   if (path === '/api/merchant/orders' && method === 'GET') {
     const repo = await merchantRepo(env, request)
     if (repo instanceof Response) return repo
-    const range = orderRange(url)
-    if (typeof range === 'string') return json({ error: range }, 400)
-    const orders = await repo.orders.list(range)
-    // The repository returns one past the cap exactly so this can be said
-    // rather than a partial list passing for the whole range.
+    const filter = orderFilter(url)
+    if (typeof filter === 'string') return json({ error: filter }, 400)
+    const limit = filter.limit ?? ORDER_PAGE
+    // One past the page comes back exactly so a next page can be offered
+    // without a count query, and only when there is one.
+    const orders = await repo.orders.list(filter)
+    const page = orders.slice(0, limit)
+    const last = page[page.length - 1]
     return json(
-      { ...range, truncated: orders.length > ORDER_CAP, orders: orders.slice(0, ORDER_CAP).map(orderSummary) },
+      {
+        from: filter.from ?? null,
+        to: filter.to ?? null,
+        next: orders.length > limit ? `${last.created_at}|${last.id}` : null,
+        orders: page.map(orderSummary),
+      },
       200,
       PRIVATE,
     )
+  }
+
+  /* The back office's reads. Every one is scoped by the session and carries
+     money or order data, so none of them may be cached. */
+
+  if (path === '/api/merchant/queue' && method === 'GET') {
+    const repo = await merchantRepo(env, request)
+    if (repo instanceof Response) return repo
+    const q = await repo.stats.queue()
+    return json({ toShip: q.to_ship, lowStock: q.low_stock, outOfStock: q.out_of_stock, lowStockAt: LOW_STOCK }, 200, PRIVATE)
+  }
+
+  if (path === '/api/merchant/reports/sales' && method === 'GET') {
+    const repo = await merchantRepo(env, request)
+    if (repo instanceof Response) return repo
+    const range = reportRange(url)
+    if (typeof range === 'string') return json({ error: range }, 400)
+    return json(salesOut(await repo.stats.sales(range)), 200, PRIVATE)
+  }
+
+  if (path === '/api/merchant/inventory' && method === 'GET') {
+    const repo = await merchantRepo(env, request)
+    if (repo instanceof Response) return repo
+    return json({ lowStockAt: LOW_STOCK, products: (await repo.products.inventory()).map(inventoryOut) }, 200, PRIVATE)
+  }
+
+  if (path === '/api/merchant/finance/ledger' && method === 'GET') {
+    const repo = await merchantRepo(env, request)
+    if (repo instanceof Response) return repo
+    const range = reportRange(url)
+    if (typeof range === 'string') return json({ error: range }, 400)
+    return json({ ...range, ...ledgerOut(await repo.finance.ledger(range)) }, 200, PRIVATE)
+  }
+
+  if (path === '/api/merchant/finance/payouts' && method === 'GET') {
+    const repo = await merchantRepo(env, request)
+    if (repo instanceof Response) return repo
+    return json({ payouts: (await repo.finance.payouts()).map(paidOut) }, 200, PRIVATE)
   }
 
   const orderId = path.match(ORDER)?.[1]
@@ -936,13 +1061,19 @@ export default {
       return json({ error: 'cross-origin request refused' }, 403)
     }
 
+    let res: Response
     try {
-      return await route(request, env, url, ctx)
+      res = await route(request, env, url, ctx)
     } catch (err) {
       // Logged, not returned: internal detail in an error body is how binding
       // names and stack traces end up in someone else's console.
       console.error('unhandled', err)
-      return json({ error: 'internal error' }, 500)
+      res = json({ error: 'internal error' }, 500)
     }
+    // Every merchant and platform answer is private, the refusals too: a 400
+    // or 403 cached by something in between would outlive the reason for it,
+    // and a route that forgets PRIVATE on one branch is not a leak here.
+    if (/^\/api\/(merchant|platform)\//.test(url.pathname)) res.headers.set('cache-control', 'no-store')
+    return res
   },
 }

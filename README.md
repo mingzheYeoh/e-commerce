@@ -363,6 +363,49 @@ Limits worth knowing:
   reload), and the server answers an id it already holds with that order, so
   a lost answer never becomes a second order.
 
+### The merchant back office
+
+A merchant's sidebar has Orders, Inventory, Reports and Finance beside the
+Overview, all reading through `scopedTo` like everything else, all `GET`, all
+`no-store`:
+
+- **Orders** is the order history: filtered by the merchant's own part
+  (to ship, shipped, delivered, cancelled), by order id and by dates, in the
+  URL, paged on a `(placed, id)` cursor rather than OFFSET, and exported to CSV
+  page by page. The nav badge counts parts still to ship.
+- **Reports** sums a range and the one before it per currency: gross, refunds,
+  net, commission, earnings, orders, units, average order and refund rate; net
+  by day (by week past 92 days), by category, and by product.
+- **Inventory** shows stock, units sold in 30 days and days of cover. Every
+  stock edit, one row or many, is the ordinary product `PATCH`, so validation,
+  the audit row and the AI index rules are the ones every save meets.
+- **Finance** shows the balance, a month's statement — opening, sales, refunds,
+  commission, payouts, closing, and every entry with the balance after it —
+  and the payouts made.
+
+There is one commission rule in the SQL (`RATED` and `FLOORED` in
+`tenancy.ts`), and the balance, the reports and the ledger all use it. The
+ledger floors the running rated sum, so its entries' commissions add up to the
+balance's commission and its last balance is the balance's `available`. CSVs
+are built in the browser from what the page already read, with formula cells
+defused (`console/src/csv.ts`). No index was needed: every statement is a
+SEARCH on a merchant index, which a test pins with `EXPLAIN QUERY PLAN`.
+
+Known limits:
+
+- **Stock is set, not adjusted.** An inventory edit sends the new absolute
+  count, read when the page loaded; a sale in between is overwritten by it.
+  A `stockDelta` or an expected-value check on the PATCH would close that.
+- **`GET /api/merchant/orders` changed shape.** It pages now: `next` replaced
+  `truncated`, `from`/`to` are optional and no longer default to 30 days, and
+  a page is 50 orders unless `limit` says otherwise (up to 200). Anything
+  outside this console that read the old shape needs updating.
+- **The plan test proves no full scan, not a bounded cost.** The history,
+  report and ledger queries read all of one merchant's lines per request, so
+  their cost grows with that merchant's history; `tenancy.ts` notes the index
+  that would bound them (`ponytail:` comments on `orders.list`, `stats.sales`
+  and `finance.ledger`).
+
 ## Asset pipeline
 
 `scripts/fetch-assets.mjs` downloads real, licensed photography into
@@ -442,9 +485,10 @@ rather than trusted from the request. What is genuinely still missing:
   their password has no self-serve way back in; a customer does.
 - **Merchant staff beyond the owner.** One login per merchant; no inviting a
   teammate.
-- **Console pages for the money.** Balances, commission and payouts exist as
-  repository methods and console routes (see [the order lifecycle](#the-order-lifecycle)),
-  but only the order page's fulfilment and refund actions have UI so far.
+- **Platform pages for the money.** Merchants have theirs (see
+  [the merchant back office](#the-merchant-back-office)); commission, payouts
+  and every merchant's balance are console routes for the platform, with no
+  pages yet.
 - **Tracking for guest orders.** Carrier, tracking number and refunds are shown
   only to the account that placed an order; a guest's order link shows what it
   always did.

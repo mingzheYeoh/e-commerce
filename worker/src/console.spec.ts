@@ -168,6 +168,11 @@ const MERCHANT_ROUTES = [
   ['POST', '/api/merchant/orders/o1/cancel'],
   ['POST', '/api/merchant/orders/o1/refunds'],
   ['GET', '/api/merchant/balance'],
+  ['GET', '/api/merchant/queue'],
+  ['GET', '/api/merchant/reports/sales'],
+  ['GET', '/api/merchant/inventory'],
+  ['GET', '/api/merchant/finance/ledger'],
+  ['GET', '/api/merchant/finance/payouts'],
 ] as const
 
 const PLATFORM_ROUTES = [
@@ -904,7 +909,7 @@ describe('the console worker: merchant orders and overview', () => {
     }
   })
 
-  it('says when the list stops at 1000 orders, counting orders rather than currency rows', async () => {
+  it('pages every order exactly once, counting orders rather than currency rows, through ties in time', async () => {
     const { db, raw, cookie, merchantId } = await activeSession()
     seedProduct(raw, merchantId, 'prd_usd')
     seedProduct(raw, merchantId, 'prd_sgd')
@@ -918,28 +923,185 @@ describe('the console worker: merchant orders and overview', () => {
       `INSERT INTO order_lines (order_id, product_id, merchant_id, sku, title, qty, unit_price_cents)
        VALUES (?, ?, ?, ?, 'T', 1, 100)`,
     )
-    for (let i = 0; i < 1000; i++) {
-      order.run(`o${i}`, `-${i} seconds`)
-      line.run(`o${i}`, 'prd_usd', merchantId, 'sku-usd')
+    // 250 orders, every fifth sharing its second with the one before, so a
+    // cursor on time alone would skip or repeat across a page edge.
+    for (let i = 0; i < 250; i++) {
+      order.run(`o${String(i).padStart(3, '0')}`, `-${i - (i % 5 === 1 ? 1 : 0)} seconds`)
+      line.run(`o${String(i).padStart(3, '0')}`, 'prd_usd', merchantId, 'sku-usd')
     }
-    // One order in two currencies is two grouped rows but still one order: a
-    // LIMIT on the rows would call exactly 1000 orders truncated.
-    line.run('o0', 'prd_sgd', merchantId, 'sku-sgd')
+    // One order in two currencies is two grouped rows but still one order.
+    line.run('o000', 'prd_sgd', merchantId, 'sku-sgd')
 
-    const all = (await (await call(db, 'GET', '/api/merchant/orders', { cookie })).json()) as {
-      truncated: boolean
-      orders: { id: string; totals: unknown[] }[]
+    type Page = { next: string | null; orders: { id: string; totals: unknown[] }[] }
+    const seen: string[] = []
+    let next: string | null = null
+    let pages = 0
+    do {
+      const q: string = next ? `&before=${encodeURIComponent(next)}` : ''
+      const res = await call(db, 'GET', `/api/merchant/orders?limit=100${q}`, { cookie })
+      expect(res.status).toBe(200)
+      const page = (await res.json()) as Page
+      if (!pages) {
+        expect(page.orders.find((o) => o.id === 'o000')).toMatchObject({
+          totals: [{ currency: 'SGD', minor: 100 }, { currency: 'USD', minor: 100 }],
+        })
+      }
+      seen.push(...page.orders.map((o) => o.id))
+      next = page.next
+      pages++
+    } while (next)
+    expect(pages).toBe(3)
+    expect(new Set(seen).size, 'no order twice').toBe(250)
+    expect(seen).toHaveLength(250)
+    // Newest first: within a shared second, the higher id first.
+    expect(seen.slice(0, 3)).toEqual(['o001', 'o000', 'o002'])
+
+    // Exactly a page's worth leaves no next page to offer.
+    const exact = (await (await call(db, 'GET', '/api/merchant/orders?limit=200&before=' + encodeURIComponent(
+      (await (await call(db, 'GET', '/api/merchant/orders?limit=50', { cookie })).json() as Page).next!,
+    ), { cookie })).json()) as Page
+    expect(exact.orders).toHaveLength(200)
+    expect(exact.next).toBeNull()
+  })
+
+  it('filters the history by status and order id, and refuses a filter it cannot read', async () => {
+    const { db, raw, cookie, merchantId } = await activeSession()
+    sharedOrders(raw, merchantId)
+    raw.prepare(`INSERT INTO order_fulfilments (order_id, merchant_id) VALUES ('o_shared', ?), ('o_shared', 'mch_other')`).run(merchantId)
+    const ids = async (q: string) =>
+      ((await (await call(db, 'GET', `/api/merchant/orders?${q}`, { cookie })).json()) as { orders: { id: string }[] }).orders.map((o) => o.id)
+    expect(await ids('status=pending')).toEqual(['o_shared'])
+    expect(await ids('status=shipped')).toEqual([])
+    expect(await ids('q=SHARED')).toEqual(['o_shared'])
+    expect(await ids('q=theirs'), "another merchant's order is not found by its id").toEqual([])
+    for (const q of ['status=lost', 'limit=0', 'limit=201', 'limit=abc', 'before=garbage', `q=${'x'.repeat(41)}`]) {
+      expect((await call(db, 'GET', `/api/merchant/orders?${q}`, { cookie })).status, q).toBe(400)
     }
-    expect(all.truncated).toBe(false)
-    expect(all.orders).toHaveLength(1000)
-    expect(all.orders[0]).toMatchObject({ id: 'o0', totals: [{ currency: 'SGD', minor: 100 }, { currency: 'USD', minor: 100 }] })
+  })
+})
 
-    order.run('o_one_more', '+0 seconds')
-    line.run('o_one_more', 'prd_usd', merchantId, 'sku-usd')
-    const cut = (await (await call(db, 'GET', '/api/merchant/orders', { cookie })).json()) as typeof all
-    expect(cut.truncated).toBe(true)
-    expect(cut.orders).toHaveLength(1000)
-    expect(cut.orders[0].id).toBe('o_one_more')
+describe('the console worker: the back office', () => {
+  /**
+   * sharedOrders, with parts, a refund and a payout on each side. Every trace
+   * of the other merchant carries THEIRS or mch_other, so a leak shows.
+   */
+  async function office() {
+    const s = await activeSession()
+    sharedOrders(s.raw, s.merchantId)
+    s.raw
+      .prepare(`INSERT INTO order_fulfilments (order_id, merchant_id) VALUES ('o_shared', ?), ('o_shared', 'mch_other'), ('o_theirs', 'mch_other')`)
+      .run(s.merchantId)
+    s.raw.prepare(`UPDATE products SET status = 'published', stock_count = 2`).run()
+    // Live products have what publishing asks for, so a stock edit passes the gate.
+    withPhotos(s.raw, 'prd_mine')
+    s.raw
+      .prepare(
+        `INSERT INTO refunds (id, order_id, merchant_id, product_id, qty, amount_minor, reason, actor_id, actor_scope)
+         VALUES ('rfd_THEIRS', 'o_theirs', 'mch_other', 'prd_theirs', 1, 1000, 'THEIRS', 'stf_x', 'merchant')`,
+      )
+      .run()
+    s.raw
+      .prepare(
+        `INSERT INTO payouts (id, merchant_id, currency, amount_minor, reference, created_by)
+         VALUES ('pay_mine', ?, 'USD', 500, 'Mine September', 'stf_p'), ('pay_THEIRS', 'mch_other', 'USD', 100, 'THEIRS ref', 'stf_p')`,
+      )
+      .run(s.merchantId)
+    const get = async (path: string) => {
+      const res = await call(s.db, 'GET', path, { cookie: s.cookie })
+      return { res, body: (await res.json()) as Record<string, unknown> }
+    }
+    return { ...s, get }
+  }
+
+  const READS = [
+    '/api/merchant/queue',
+    '/api/merchant/reports/sales',
+    '/api/merchant/inventory',
+    '/api/merchant/finance/ledger',
+    '/api/merchant/finance/payouts',
+    '/api/merchant/orders',
+  ]
+
+  it("answers every read with this merchant's data alone, uncached, and writes no audit row for it", async () => {
+    const s = await office()
+    for (const path of READS) {
+      const { res, body } = await s.get(path)
+      expect(res.status, path).toBe(200)
+      expect(res.headers.get('cache-control'), path).toBe('no-store')
+      expect(JSON.stringify(body), path).not.toMatch(/THEIRS|mch_other|prd_theirs|o_theirs|shopper@example\.com|555 0199|stf_p/)
+    }
+    expect(s.raw.prepare(`SELECT COUNT(*) AS n FROM audit_log WHERE actor_scope = 'merchant'`).get()).toEqual({ n: 0 })
+  })
+
+  it('reports, stocks, queues and states the merchant alone, by hand-checked figures', async () => {
+    // Mine: o_shared, 2 × 1000 USD, pending. Paid out 500. 8% of 2000 is 160.
+    const s = await office()
+    expect((await s.get('/api/merchant/queue')).body).toEqual({ toShip: 1, lowStock: 1, outOfStock: 0, lowStockAt: 5 })
+
+    const report = (await s.get('/api/merchant/reports/sales')).body as { totals: unknown[]; products: unknown[] }
+    expect(report.totals).toEqual([
+      { currency: 'USD', gross: 2000, refunds: 0, net: 2000, commission: 160, earnings: 1840, orders: 1, units: 2 },
+    ])
+    expect(report.products).toEqual([{ productId: 'prd_mine', title: 'prd_mine', currency: 'USD', gross: 2000, net: 2000, units: 2 }])
+
+    expect((await s.get('/api/merchant/inventory')).body).toEqual({
+      lowStockAt: 5,
+      products: [
+        {
+          id: 'prd_mine',
+          sku: 'sku-prd_mine',
+          title: 'prd_mine',
+          category: 'C',
+          status: 'published',
+          priceMinor: 1000,
+          currency: 'USD',
+          stockCount: 2,
+          sold30d: 2,
+        },
+      ],
+    })
+
+    const ledger = (await s.get('/api/merchant/finance/ledger')).body as { currentBps: number; summary: unknown[]; entries: { kind: string; balance: number }[] }
+    expect(ledger.currentBps).toBe(800)
+    // 2000 − 160 − 500 = 1340, the balance route's own figure.
+    expect(ledger.summary).toEqual([{ currency: 'USD', opening: 0, sales: 2000, refunds: 0, commission: 160, payouts: 500, closing: 1340 }])
+    expect(ledger.entries.map((e) => [e.kind, e.balance])).toEqual([['sale', 1840], ['payout', 1340]])
+    const balance = (await s.get('/api/merchant/balance')).body as { balances: { available: number }[] }
+    expect(balance.balances[0].available).toBe(1340)
+
+    expect((await s.get('/api/merchant/finance/payouts')).body).toEqual({
+      payouts: [expect.objectContaining({ id: 'pay_mine', currency: 'USD', amountMinor: 500, reference: 'Mine September' })],
+    })
+  })
+
+  it('keeps refusals out of every cache too', async () => {
+    const s = await office()
+    const bad = await s.get('/api/merchant/reports/sales?from=nope')
+    expect(bad.res.status).toBe(400)
+    expect(bad.res.headers.get('cache-control')).toBe('no-store')
+    const anonymous = await call(s.db, 'GET', '/api/merchant/finance/ledger')
+    expect(anonymous.status).toBe(401)
+    expect(anonymous.headers.get('cache-control')).toBe('no-store')
+  })
+
+  it('refuses a report or statement range it cannot read, or one longer than three years', async () => {
+    const s = await office()
+    for (const path of ['/api/merchant/reports/sales', '/api/merchant/finance/ledger']) {
+      for (const q of ['from=2026-02-30', 'from=2026-09-10&to=2026-09-01', 'from=2020-01-01&to=2023-01-02']) {
+        expect((await s.get(`${path}?${q}`)).res.status, `${path}?${q}`).toBe(400)
+      }
+      expect((await s.get(`${path}?from=2020-01-01&to=2022-12-31`)).res.status).toBe(200)
+    }
+  })
+
+  it("sets stock through the product route alone: another merchant's product is 404 and unchanged", async () => {
+    const s = await office()
+    const res = await call(s.db, 'PATCH', '/api/merchant/products/prd_theirs', { cookie: s.cookie, body: { stockCount: 99 } })
+    expect(res.status).toBe(404)
+    expect(s.raw.prepare(`SELECT stock_count FROM products WHERE id = 'prd_theirs'`).get()).toEqual({ stock_count: 2 })
+    const mine = await call(s.db, 'PATCH', '/api/merchant/products/prd_mine', { cookie: s.cookie, body: { stockCount: 40 } })
+    expect(mine.status).toBe(200)
+    expect(((await s.get('/api/merchant/queue')).body as { lowStock: number }).lowStock).toBe(0)
   })
 })
 
