@@ -47,6 +47,7 @@ Verified against `sqlite_master` on 2026-09-21; production caught up on 2026-09-
 | `0012` audit merchant seq index | ✅ 2026-09-25 | ✅ 2026-09-25 |
 | `0013` order lifecycle (+ `0013b` re-run) | ✅ 2026-09-26 | ✅ 2026-09-26 |
 | `0014` platform back office indexes | ✅ 2026-09-26 | ✅ 2026-09-26 |
+| `0016` customer uploads | pending | pending |
 
 Until 2026-09-24 production held only `orders`, `order_lines` and the four
 tables from `0006`; the accounts tables (`users`, `sessions`, `email_tokens`,

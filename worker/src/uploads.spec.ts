@@ -7,6 +7,8 @@ import { memoryD1, type MemoryD1 } from '../test/d1-memory'
 import { memoryR2, webpBytes, type MemoryR2 } from '../test/r2-memory'
 import { derive, sha256, toB64 } from './credentials'
 import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
+import { dirname, join } from 'node:path'
 
 const BASE = 'https://api.test/media/u/'
 const ORIGIN = 'http://localhost:5173'
@@ -113,7 +115,7 @@ describe('the deployment config', () => {
   // Bindings are not inherited by a wrangler environment, and an omitted one
   // deploys silently: so each half of each file is checked on its own.
   const halves = (file: string) => {
-    const s = readFileSync(`worker/${file}`, 'utf8').replace(/\r\n/g, '\n')
+    const s = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', file), 'utf8').replace(/\r\n/g, '\n')
     const at = s.indexOf('[env.staging]')
     return { production: s.slice(0, at), staging: s.slice(at) }
   }
