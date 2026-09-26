@@ -44,6 +44,12 @@ describe('the migration and the schema', () => {
     expect(norm('worker/schema.sql')).toContain(norm('worker/migrations/0013-order-lifecycle.sql'))
   })
 
+  it('keeps 0014 and its block in schema.sql identical', () => {
+    // The platform back office's indexes: the plans pinned below run against the file production runs.
+    const norm = (p: string) => readFileSync(p, 'utf8').replace(/\r\n/g, '\n').trim()
+    expect(norm('worker/schema.sql')).toContain(norm('worker/migrations/0014-platform-back-office-indexes.sql'))
+  })
+
   it('backfills one pending part per merchant of every paid order already stored, and none for a declined one', () => {
     // Replayed against a database that has the orders but not yet the parts,
     // which is where production stands when 0013 runs. Twice, because the
@@ -2280,6 +2286,41 @@ describe('one merchant, read by the platform', () => {
     expect((await b.orders.get('o1'))!.refunds.map((r) => r.merchant_id)).toEqual(['mch_b'])
     expect((await platform.orders.get('o1'))!.refunds.map((r) => r.merchant_id)).toEqual(['mch_b'])
     expect((await a.orders.get('o1'))!.refunds).toEqual([])
+  })
+})
+
+describe('the platform reads, planned', () => {
+  it('find a range, a merchant or an account by index, never by scanning a table that grows with history', async () => {
+    /*
+     * The same rule as the merchant back office, for the platform: a SCAN of
+     * orders, refunds, payouts, parts or accounts grows with the platform's
+     * whole history. Two reads are exempt by design, and named: every balance
+     * (attention's `owing`, the all-time sum /api/platform/balances already
+     * reads) and the guest total, a seek on orders_user_idx for user_id NULL.
+     */
+    const { env, raw } = await platformBooks()
+    const statements: string[] = []
+    const recording = { ...env.ORDERS, prepare: (sql: string) => (statements.push(sql), env.ORDERS.prepare(sql)) } as unknown as D1Database
+    const platform = await platformWide({ ORDERS: recording }, 'stf_p')
+    await platform.orders.list({ status: 'pending', merchant: 'mch_a', from: utcDay(29), to: utcDay(0), limit: 50 })
+    await platform.payments.list({ ...LAST_30(), limit: 50 })
+    await platform.payments.list({ ...LAST_30(), merchantId: 'mch_a', limit: 50 })
+    await platform.analytics.report(LAST_30())
+    await platform.analytics.attention()
+    await platform.customers.list({ limit: 50, before: { at: '2999-01-01 00:00:00', id: 'z' } })
+    await platform.customers.get('usr_1')
+    await platform.merchants.get('mch_a')
+    await platform.merchants.sales('mch_a', LAST_30())
+    const exempt = (sql: string) => /b\.gross - b\.refunds/.test(sql)
+    const scans = statements
+      .filter((sql) => !exempt(sql))
+      .flatMap((sql) =>
+        (raw.prepare(`EXPLAIN QUERY PLAN ${sql}`).all() as { detail: string }[])
+          .map((r) => r.detail)
+          .filter((d) => /^SCAN (orders|order_lines|refunds|payouts|order_fulfilments|users|audit_log|[olrfuy])\b/.test(d))
+          .map((d) => `${d}  <=  ${sql.replace(/\s+/g, ' ').slice(0, 90)}`),
+      )
+    expect(scans).toEqual([])
   })
 })
 

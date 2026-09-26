@@ -46,6 +46,7 @@ Verified against `sqlite_master` on 2026-09-21; production caught up on 2026-09-
 | `0011` staff sessions | ✅ 2026-09-24 | ✅ applied 2026-09-22 |
 | `0012` audit merchant seq index | ✅ 2026-09-25 | ✅ 2026-09-25 |
 | `0013` order lifecycle | ❌ | ❌ |
+| `0014` platform back office indexes | ❌ | ❌ |
 
 Production currently holds six tables: `orders`, `order_lines`, and the four
 from `0006`. It has never had `users`, `sessions`, `email_tokens` or
@@ -96,6 +97,18 @@ Two hazards for any later migration that rebuilds a table the way `0009` did:
   enforces foreign keys, so `DROP TABLE orders` inside a rebuild deletes every
   fulfilment row with it. Copy them aside first, or rebuild with foreign keys
   deferred.
+
+**`0014` platform back office indexes, on neither database yet.** Four
+indexes and nothing else — `refunds(created_at)`, `payouts(created_at)`,
+`users(created_at, id)` and `order_fulfilments(status)` — for the platform's
+payments ledger, customer list and overview cards, which read across every
+merchant and so cannot seek on a merchant index. Index only, so it is safe in
+either order relative to the workers, and `IF NOT EXISTS` makes a second run
+harmless. It does need `0013` first (two of its tables), and on production the
+accounts tables from `0002`, which production has had since 2026-09-24. Run it
+before (or right after) deploying the `nexus-console` that has the platform
+pages; without it those pages work, but scan:
+`npx wrangler d1 execute <db> --remote --file=migrations/0014-platform-back-office-indexes.sql`
 
 `0012` (an index only) was applied to staging and then production on
 2026-09-25, each ahead of the console worker that reads it.
