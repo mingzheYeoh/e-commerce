@@ -1,7 +1,9 @@
-# NEXUS
+# NEXUSOHM
 
-**Live: https://nexus-tech-collective.mingzhe030228.workers.dev**
-**Merchant console: https://nexus-console.mingzhe030228.workers.dev**
+**Live: https://nexusohm.com**
+**Merchant console: https://admin.nexusohm.com** · API: https://api.nexusohm.com · Media: https://media.nexusohm.com
+
+(The original workers.dev addresses still answer.)
 
 A multi-brand consumer-electronics storefront built as an AI-engineering
 showcase: 18 brands, 45 products across five categories, real manufacturer
@@ -13,7 +15,7 @@ The retrieval, question answering and shopping assistant are the point — see
 project: query embeddings run on the visitor's device, and inference runs on
 Cloudflare Workers AI, where the binding *is* the credential.
 
-> Demo project. NEXUS is not a real retailer, the payment gateway is simulated
+> Demo project. NEXUSOHM is not a real retailer, the payment gateway is simulated
 > with Stripe's published test card numbers, and nothing takes money or ships.
 
 ## Try it
@@ -84,7 +86,7 @@ The API is a separate deployment, so the thing serving public HTML and the thing
 holding the Neo4j password are not the same script:
 
 ```bash
-cd worker && npx wrangler deploy     # https://nexus-api.mingzhe030228.workers.dev
+cd worker && npx wrangler deploy     # https://api.nexusohm.com
 ```
 
 ### Routes
