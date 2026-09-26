@@ -41,6 +41,24 @@ describe('the order history', () => {
     expect(w.findAll('button').some((b) => b.text() === 'Load more')).toBe(false)
   })
 
+  it('drops a Load more that answers after the filter changed', async () => {
+    let answerMore!: (v: Awaited<ReturnType<typeof listOrders>>) => void
+    vi.mocked(listOrders)
+      .mockResolvedValueOnce({ status: 200, body: { from: null, to: null, next: 'c1', orders: [order('NX-OLD1', [])] } })
+      .mockImplementationOnce(() => new Promise((r) => (answerMore = r)))
+      .mockResolvedValueOnce({ status: 200, body: { from: null, to: null, next: null, orders: [order('NX-NEW', [])] } })
+    const w = mount(Orders, { global: { stubs: { RouterLink: RouterLinkStub } } })
+    await flushPromises()
+    await w.findAll('button').find((b) => b.text() === 'Load more')!.trigger('click')
+    route.query = { status: 'shipped' }
+    await flushPromises()
+    answerMore({ status: 200, body: { from: null, to: null, next: null, orders: [order('NX-OLD2', [])] } })
+    await flushPromises()
+    const ids = w.findAll('tbody tr').map((r) => r.find('td').text())
+    expect(ids).toEqual(['NX-NEW'])
+    route.query = { status: 'pending' }
+  })
+
   it('exports every page of the filtered list, one row per currency, with nothing personal', async () => {
     vi.mocked(listOrders)
       .mockResolvedValueOnce({ status: 200, body: { from: null, to: null, next: null, orders: [] } })

@@ -37,11 +37,19 @@ const loading = ref(true)
 const more = ref(false)
 const exporting = ref(false)
 
+/**
+ * Only the newest request may land: a "Load more" still in flight when the
+ * merchant switches tab would otherwise append the old filter's orders to the
+ * new list.
+ */
+let latest = 0
 async function load(before: string | null = null) {
+  const mine = ++latest
   error.value = null
   if (before) more.value = true
   else loading.value = true
   const { body } = await listOrders({ ...filter.value, before })
+  if (mine !== latest) return
   if (isError(body)) error.value = body.error
   else if ('orders' in body) {
     orders.value = before ? [...orders.value, ...body.orders] : body.orders
