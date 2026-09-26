@@ -26,7 +26,7 @@ const props = defineProps<{ scope: 'merchant' | 'platform' }>()
 
 const route = useRoute()
 const router = useRouter()
-const name = ref(props.scope === 'platform' ? 'NEXUS Platform' : '')
+const name = ref(props.scope === 'platform' ? 'NEXUSOHM Platform' : '')
 const open = ref(false)
 
 type NavItem = { to: string; label: string; icon: unknown; exact?: boolean; badge?: 'toShip' }
@@ -97,7 +97,7 @@ async function logout() {
       class="hidden border-r border-border-hairline bg-surface-1 md:sticky md:top-0 md:flex md:h-screen md:w-56 md:shrink-0 md:flex-col"
     >
       <div class="flex h-14 items-center border-b border-border-hairline px-5">
-        <span class="font-display text-sm font-extrabold tracking-wide text-text-primary">NEXUS</span>
+        <span class="font-display text-sm font-extrabold tracking-wide text-text-primary">NEXUSOHM</span>
         <span class="ml-2 text-xs text-text-muted">Console</span>
       </div>
       <nav class="flex flex-col gap-1 p-3" aria-label="Main">
