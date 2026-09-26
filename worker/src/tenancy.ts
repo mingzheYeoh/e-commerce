@@ -133,6 +133,16 @@ export interface PlatformRepository extends Repository {
   merchants: {
     list(): Promise<MerchantSummary[]>
     /**
+     * Every merchant's id, name and status, for a filter or a label. The
+     * platform's own registry, like the names AuditPage carries: no orders,
+     * prices or money, so it is recorded once, not once per merchant.
+     */
+    names(): Promise<{ id: string; name: string; status: string }[]>
+    /** One merchant's profile, staff, catalogue, fulfilment health and balance. Null for no such merchant. */
+    get(id: string): Promise<MerchantDetail | null>
+    /** stats.sales for one merchant, read by the platform. Null for no such merchant. */
+    sales(id: string, range: OrderRange): Promise<(SalesReport & { merchant_id: string }) | null>
+    /**
      * active → suspended, and its audit row, in one batch. Throws when the
      * merchant is not active; nothing is written then.
      */
@@ -168,6 +178,183 @@ export interface PlatformRepository extends Repository {
      */
     list(filter: { merchantId: string | null; before: number | null }): Promise<AuditPage>
   }
+  /** Money in and out across the platform: what shoppers were charged, refunds, payouts. */
+  payments: {
+    /** Newest first, at most `limit` + 1, like orders.list; totals cover the whole filter. */
+    list(filter: PaymentFilter): Promise<PaymentPage>
+  }
+  analytics: {
+    /** What stats.sales does not carry: order-level charges, a merchant leaderboard, new customers. */
+    report(range: OrderRange): Promise<PlatformReport>
+    /** What needs the platform's attention now, for the overview's cards. */
+    attention(): Promise<Attention>
+  }
+  /**
+   * Shopper accounts. Personal data: explicit columns only, never a password
+   * hash, salt, TOTP secret, token or recovery code. Every read is audited
+   * (against no merchant: a shopper is the platform's relationship).
+   */
+  customers: {
+    /** Newest sign-up first, at most `limit` + 1, and the guest checkouts as one aggregate. */
+    list(filter: CustomerFilter): Promise<CustomerPage>
+    /** One account and its paid orders, newest first. Null for no such account. */
+    get(id: string): Promise<CustomerDetail | null>
+  }
+}
+
+export type PaymentKind = 'charge' | 'refund' | 'payout'
+
+/** The payments ledger's filters. The range is required: the route defaults it to 30 days. */
+export interface PaymentFilter extends OrderRange {
+  kind?: PaymentKind
+  merchantId?: string
+  currency?: string
+  /** Keyset: only entries strictly before this one, in list order. */
+  before?: { at: string; rank: number; id: string }
+  limit?: number
+}
+
+export interface PaymentEntry {
+  at: string
+  kind: PaymentKind
+  /** Sale before refund before payout within one second; with `id`, the list's total order and its cursor. */
+  rank: number
+  /** The order id (charge), refund id or payout id. */
+  id: string
+  /** The order id (charge, refund) or the payout's reference. */
+  ref: string
+  /** A charge's every merchant; a refund's or payout's one. */
+  merchant_ids: string[]
+  /** A charge's is the order's (see ORDER_CURRENCY); a refund's its line's; a payout's as recorded. */
+  currency: string
+  /** Signed as it moves the platform's cash: a charge in, a refund or payout out. */
+  amount: number
+  /** A charge's parts; null on a refund or payout. */
+  goods: number | null
+  shipping: number | null
+  tax: number | null
+}
+
+export interface PaymentPage {
+  /** Every merchant an entry on this page names, so each finds the read in its own log. */
+  merchant_ids: string[]
+  entries: PaymentEntry[]
+  /** The whole filter, per currency, ignoring the cursor and the limit. */
+  totals: {
+    currency: string
+    charges: number
+    charged: number
+    goods: number
+    shipping: number
+    tax: number
+    refunds: number
+    refunded: number
+    payouts: number
+    paid_out: number
+  }[]
+}
+
+/**
+ * The platform report's own figures, beside stats.sales in platform scope.
+ * Order-level money (shipping, tax, the total charged) is per order in the
+ * order's currency: see ORDER_CURRENCY.
+ */
+export interface PlatformReport extends OrderRange {
+  previous: OrderRange
+  charges: { period: 'now' | 'before'; currency: string; orders: number; goods: number; shipping: number; tax: number; total: number }[]
+  /** Per merchant and currency, the range only, best net first within each currency. */
+  merchants: {
+    merchant_id: string
+    name: string
+    currency: string
+    gross: number
+    refunds: number
+    net: number
+    commission: number
+    orders: number
+    units: number
+  }[]
+  /** Per merchant, the parts of orders placed in the range. */
+  health: { merchant_id: string; parts: number; cancelled: number; shipped: number; avg_ship_seconds: number | null }[]
+  /** Accounts created in the range, by week counted from `from`. */
+  signups: { start: string; count: number }[]
+  /** Paid orders in the range, placed signed in or as a guest. */
+  buyers: { accounts: number; guests: number }
+  /** Every merchant the leaderboard names. */
+  merchant_ids: string[]
+}
+
+export interface Attention {
+  pending_applications: number
+  /** Parts of paid orders still pending. */
+  to_ship: number
+  /** Of those, placed more than OVERDUE_DAYS ago. */
+  overdue: number
+  /** Balances below zero: the merchant owes the platform. */
+  owing: { merchant_id: string; name: string; currency: string; available: number }[]
+  /** Merchants with a published product at LOW_STOCK units or fewer. */
+  low_stock: { merchant_id: string; name: string; products: number }[]
+  merchant_ids: string[]
+}
+
+export interface MerchantDetail {
+  merchant_id: string
+  name: string
+  slug: string
+  status: string
+  created_at: string
+  settlement_currency: string
+  commission_bps: number
+  /** No password, salt or TOTP secret: whether a second factor is enrolled, and that is all. */
+  staff: { id: string; email: string; role: string; totp_enrolled: boolean; created_at: string }[]
+  products: { draft: number; published: number; archived: number; low_stock: number; out_of_stock: number }
+  /** Published at LOW_STOCK or fewer, lowest first, at most 20. */
+  low: { id: string; title: string; stock_count: number }[]
+  /** Parts of paid orders, all time. */
+  health: {
+    to_ship: number
+    overdue: number
+    parts: number
+    shipped: number
+    cancelled: number
+    avg_ship_seconds: number | null
+  }
+  balances: Balance[]
+}
+
+export interface CustomerFilter {
+  /** Part of the email or name, any case. */
+  q?: string
+  /** Keyset on (created_at, id), newest first. */
+  before?: { at: string; id: string }
+  limit?: number
+}
+
+export interface CustomerRow {
+  id: string
+  email: string
+  name: string
+  created_at: string
+  verified: boolean
+  two_factor: boolean
+  /** Paid orders placed signed in. */
+  orders: number
+  last_order_at: string | null
+  /** The total charged on those orders, per order currency. */
+  spend: Amount[]
+}
+
+export interface CustomerPage {
+  customers: CustomerRow[]
+  /** Paid orders placed signed out, all time, only ever as a sum: a guest has no account to list. On the first page only. */
+  guests: { orders: number; spend: Amount[] } | null
+}
+
+export interface CustomerDetail extends CustomerRow {
+  /** Refunded on those orders, per line currency. */
+  refunded: Amount[]
+  /** Newest first, at most CUSTOMER_ORDERS. */
+  recent: { id: string; created_at: string; currency: string; total: number; items: number; fulfilment: FulfilmentStatus[] }[]
 }
 
 /**
@@ -191,6 +378,12 @@ export interface OrderFilter extends Partial<OrderRange> {
   status?: FulfilmentStatus
   /** Part of the order id, any case. */
   q?: string
+  /**
+   * Orders with a line of this merchant's, and `status` read on that merchant's
+   * part. It narrows and never widens: it is ANDed with the tenant clause, so
+   * on a merchant read, naming another merchant finds nothing.
+   */
+  merchant?: string
   /** Keyset: only orders placed strictly before this one, in list order. */
   before?: { at: string; id: string }
   limit?: number
@@ -249,7 +442,7 @@ export interface SalesReport {
   bucket: 'day' | 'week'
   /** Only buckets with sales; `start` is the bucket's first day, counted from `from`. */
   series: { start: string; currency: string; net: number; gross: number }[]
-  categories: { category: string; currency: string; net: number; units: number }[]
+  categories: { category: string; currency: string; gross: number; net: number; units: number }[]
   /** Every product sold in the range, best net first within each currency. */
   products: { product_id: string; title: string; currency: string; gross: number; net: number; units: number }[]
 }
@@ -436,6 +629,8 @@ export interface OrderDetail {
   merchant_ids: string[]
   /** The in-scope parts, one per merchant. */
   fulfilment: Fulfilment[]
+  /** The in-scope refunds, oldest first. */
+  refunds: (Omit<Refund, 'order_id'> & { actor_scope: string; created_at: string })[]
 }
 
 export interface Overview {
@@ -501,6 +696,10 @@ export const LOW_STOCK = 5
 export const AUDIT_PAGE = 50
 /** The most orders one list returns. orders.list fetches one more, to tell. */
 export const ORDER_CAP = 1000
+/** A pending part of an order placed longer ago than this is overdue. */
+export const OVERDUE_DAYS = 3
+/** The most orders a customer's page lists. */
+export const CUSTOMER_ORDERS = 100
 
 /** Exported so staff-auth mints `mch_`/`stf_` the one way this worker mints ids. */
 export const id = (prefix: string) =>
@@ -747,6 +946,21 @@ const CURRENCY = `COALESCE(p.currency, 'XXX')`
 const PAID = ['o.payment_status = ?', 'succeeded'] as const
 
 /**
+ * An order's own currency, for the money that belongs to the order rather
+ * than to any line: shipping, tax and the total charged. Checkout adds every
+ * line into one subtotal whatever its currency (orders.ts), so an order is in
+ * a currency only when all of its lines are. One whose lines span two is in
+ * none, and reads as XXX, the way a line with no product row does, rather
+ * than being guessed into either.
+ */
+const ORDER_CURRENCY = (order: string) =>
+  `(SELECT CASE WHEN COUNT(DISTINCT ${CURRENCY}) = 1 THEN MIN(${CURRENCY}) ELSE 'XXX' END
+      FROM order_lines l LEFT JOIN products p ON p.id = l.product_id WHERE l.order_id = ${order}.id)`
+
+/** A LIKE pattern matching `q` anywhere, its own % _ and \ taken literally (used with ESCAPE '\'). */
+const contains = (q: string) => `%${q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`
+
+/**
  * What has been refunded on line `l` so far. Correlated rather than joined,
  * so each is a seek on refunds_line_idx instead of grouping every refund.
  */
@@ -805,6 +1019,18 @@ function balances(scope: Scope): { sql: string; args: unknown[] } {
   }
 }
 
+/** A balances() row finished: what is available, and whether it is owed to the platform instead. */
+const withAvailable = (r: Omit<Balance, 'available' | 'owes'>): Balance => {
+  const available = r.gross - r.refunds - r.commission - r.payouts
+  return { ...r, available, owes: available < 0 }
+}
+
+/**
+ * Mean seconds from an order being placed to a part of it shipping, over the
+ * parts `f` (joined to their orders `o`) that shipped; NULL when none has.
+ */
+const AVG_SHIP = `CAST(ROUND(AVG((julianday(f.shipped_at) - julianday(o.created_at)) * 86400)) AS INTEGER)`
+
 /**
  * Every in-scope line of a paid order placed in [from, to], with what the
  * reports read off it, as a subquery. Refunds are the line's, whenever made:
@@ -861,6 +1087,11 @@ function ledgerEvents(scope: Scope): { sql: string; args: unknown[] } {
 const DAY_MS = 86_400_000
 const dayNumber = (day: string) => Date.parse(`${day}T00:00:00Z`) / DAY_MS
 const dayOf = (n: number) => new Date(n * DAY_MS).toISOString().slice(0, 10)
+/** The same number of days as `range`, ending the day before it starts. */
+function previousOf(range: OrderRange): OrderRange {
+  const [from, to] = [dayNumber(range.from), dayNumber(range.to)]
+  return { from: dayOf(2 * from - to - 1), to: dayOf(from - 1) }
+}
 
 /**
  * The refund cap, as the last statement of any batch that inserts a refund.
@@ -1088,6 +1319,84 @@ function platformOnly(env: TenancyEnv, staffId: string): Omit<PlatformRepository
         ])
         return update.meta.changes === 1 ? { merchant_id: merchantId, commission_bps: bps } : null
       },
+
+      async names() {
+        const { results } = await env.ORDERS.prepare(`SELECT id, name, status FROM merchants ORDER BY name, id`).all<{
+          id: string
+          name: string
+          status: string
+        }>()
+        return results ?? []
+      },
+
+      async get(merchantId: string) {
+        // The merchant's own tenant clause for the SQL, as payouts.create
+        // does; the wrapper still records this as the platform's read.
+        const b = balances({ kind: 'merchant', merchantId, staffId })
+        const one = <T>(sql: string, ...args: unknown[]) => env.ORDERS.prepare(sql).bind(...args).first<T>()
+        const [row, staff, counts, low, health, balance] = await Promise.all([
+          one<Omit<MerchantDetail, 'staff' | 'products' | 'low' | 'health' | 'balances'>>(
+            `SELECT id AS merchant_id, name, slug, status, created_at, settlement_currency, commission_bps
+               FROM merchants WHERE id = ?`,
+            merchantId,
+          ),
+          // Named columns: never the password hash, its salt or the TOTP secret.
+          env.ORDERS.prepare(
+            `SELECT id, email, role, totp_confirmed_at IS NOT NULL AS totp_enrolled, created_at
+               FROM staff WHERE merchant_id = ? ORDER BY created_at, id`,
+          )
+            .bind(merchantId)
+            .all<Omit<MerchantDetail['staff'][number], 'totp_enrolled'> & { totp_enrolled: number }>(),
+          one<MerchantDetail['products']>(
+            `SELECT COALESCE(SUM(status = 'draft'), 0) AS draft, COALESCE(SUM(status = 'published'), 0) AS published,
+                    COALESCE(SUM(status = 'archived'), 0) AS archived,
+                    COALESCE(SUM(status = 'published' AND stock_count BETWEEN 1 AND ?), 0) AS low_stock,
+                    COALESCE(SUM(status = 'published' AND stock_count = 0), 0) AS out_of_stock
+               FROM products WHERE merchant_id = ?`,
+            LOW_STOCK,
+            merchantId,
+          ),
+          env.ORDERS.prepare(
+            `SELECT id, title, stock_count FROM products
+              WHERE merchant_id = ? AND status = 'published' AND stock_count <= ?
+              ORDER BY stock_count, title LIMIT 20`,
+          )
+            .bind(merchantId, LOW_STOCK)
+            .all<MerchantDetail['low'][number]>(),
+          // A seek on order_fulfilments_merchant_idx: this merchant's parts only.
+          one<MerchantDetail['health']>(
+            `SELECT COALESCE(SUM(f.status = 'pending'), 0) AS to_ship,
+                    COALESCE(SUM(f.status = 'pending' AND o.created_at < datetime('now', ?)), 0) AS overdue,
+                    COUNT(*) AS parts, COALESCE(SUM(f.shipped_at IS NOT NULL), 0) AS shipped,
+                    COALESCE(SUM(f.status = 'cancelled'), 0) AS cancelled,
+                    ${AVG_SHIP} AS avg_ship_seconds
+               FROM order_fulfilments f JOIN orders o ON o.id = f.order_id
+              WHERE f.merchant_id = ? AND o.payment_status = ?`,
+            `-${OVERDUE_DAYS} days`,
+            merchantId,
+            'succeeded',
+          ),
+          env.ORDERS.prepare(`${b.sql} ORDER BY g.currency`)
+            .bind(...b.args)
+            .all<Omit<Balance, 'available' | 'owes'>>(),
+        ])
+        if (!row) return null
+        return {
+          ...row,
+          staff: (staff.results ?? []).map((s) => ({ ...s, totp_enrolled: s.totp_enrolled === 1 })),
+          products: counts!,
+          low: low.results ?? [],
+          health: health!,
+          balances: (balance.results ?? []).map(withAvailable),
+        }
+      },
+
+      async sales(merchantId: string, range: OrderRange) {
+        const exists = await env.ORDERS.prepare(`SELECT 1 AS one FROM merchants WHERE id = ?`).bind(merchantId).first()
+        if (!exists) return null
+        const report = await salesReport(env, { kind: 'merchant', merchantId, staffId }, range)
+        return { ...report, merchant_id: merchantId }
+      },
     },
 
     payouts: {
@@ -1188,6 +1497,393 @@ function platformOnly(env: TenancyEnv, staffId: string): Omit<PlatformRepository
         }
       },
     },
+
+    payments: {
+      async list(filter: PaymentFilter) {
+        /*
+         * One branch per kind, each narrowed by its own index before the
+         * union: orders by orders_created_idx, refunds and payouts by their
+         * created_at indexes (0014), or by merchant when one is named.
+         * ponytail: the keyset is applied above the union, so each page
+         * re-reads the range; push it into each branch if a range grows past
+         * tens of thousands of entries.
+         */
+        const when = (col: string) =>
+          [
+            [`${col} >= ?`, filter.from],
+            [`${col} < date(?, '+1 day')`, filter.to],
+          ] as const
+        const branches: { sql: string; args: unknown[] }[] = []
+        if (!filter.kind || filter.kind === 'charge') {
+          const w = where([
+            PAID,
+            ...when('o.created_at'),
+            filter.merchantId
+              ? ['EXISTS (SELECT 1 FROM order_lines m WHERE m.order_id = o.id AND m.merchant_id = ?)', filter.merchantId]
+              : null,
+          ])
+          branches.push({
+            sql: `SELECT o.created_at AS at, 1 AS rank, 'charge' AS kind, o.id AS id, o.id AS ref,
+                         (SELECT json_group_array(DISTINCT m.merchant_id) FROM order_lines m WHERE m.order_id = o.id) AS merchant_ids,
+                         ${ORDER_CURRENCY('o')} AS currency, o.total_cents AS amount, o.subtotal_cents AS goods,
+                         o.shipping_cents AS shipping, o.tax_cents AS tax
+                    FROM orders o${w.sql}`,
+            args: w.args,
+          })
+        }
+        if (!filter.kind || filter.kind === 'refund') {
+          const w = where([...when('r.created_at'), filter.merchantId ? ['r.merchant_id = ?', filter.merchantId] : null])
+          branches.push({
+            sql: `SELECT r.created_at AS at, 2 AS rank, 'refund' AS kind, r.id AS id, r.order_id AS ref,
+                         json_array(r.merchant_id) AS merchant_ids, ${CURRENCY} AS currency, -r.amount_minor AS amount,
+                         NULL AS goods, NULL AS shipping, NULL AS tax
+                    FROM refunds r LEFT JOIN products p ON p.id = r.product_id${w.sql}`,
+            args: w.args,
+          })
+        }
+        if (!filter.kind || filter.kind === 'payout') {
+          const w = where([...when('y.created_at'), filter.merchantId ? ['y.merchant_id = ?', filter.merchantId] : null])
+          branches.push({
+            sql: `SELECT y.created_at AS at, 3 AS rank, 'payout' AS kind, y.id AS id, y.reference AS ref,
+                         json_array(y.merchant_id) AS merchant_ids, y.currency AS currency, -y.amount_minor AS amount,
+                         NULL AS goods, NULL AS shipping, NULL AS tax
+                    FROM payouts y${w.sql}`,
+            args: w.args,
+          })
+        }
+        const union = branches.map((b) => b.sql).join('\n UNION ALL\n')
+        const args = branches.flatMap((b) => b.args)
+        const currency = filter.currency ? (['e.currency = ?', filter.currency] as const) : null
+        const page = where([
+          currency,
+          filter.before ? ['(e.at, e.rank, e.id) < (?, ?, ?)', filter.before.at, filter.before.rank, filter.before.id] : null,
+        ])
+        const all = where([currency])
+        const limit = filter.limit ?? ORDER_CAP
+        const [entries, totals] = await Promise.all([
+          env.ORDERS.prepare(
+            `SELECT * FROM (${union}) e${page.sql} ORDER BY e.at DESC, e.rank DESC, e.id DESC LIMIT ?`,
+          )
+            .bind(...args, ...page.args, limit + 1)
+            .all<Omit<PaymentEntry, 'merchant_ids'> & { merchant_ids: string }>(),
+          env.ORDERS.prepare(
+            `SELECT e.currency,
+                    SUM(e.kind = 'charge') AS charges, SUM(CASE WHEN e.kind = 'charge' THEN e.amount ELSE 0 END) AS charged,
+                    SUM(COALESCE(e.goods, 0)) AS goods, SUM(COALESCE(e.shipping, 0)) AS shipping,
+                    SUM(COALESCE(e.tax, 0)) AS tax,
+                    SUM(e.kind = 'refund') AS refunds, SUM(CASE WHEN e.kind = 'refund' THEN -e.amount ELSE 0 END) AS refunded,
+                    SUM(e.kind = 'payout') AS payouts, SUM(CASE WHEN e.kind = 'payout' THEN -e.amount ELSE 0 END) AS paid_out
+               FROM (${union}) e${all.sql}
+              GROUP BY e.currency ORDER BY e.currency`,
+          )
+            .bind(...args, ...all.args)
+            .all<PaymentPage['totals'][number]>(),
+        ])
+        const rows = (entries.results ?? []).map((e) => ({ ...e, merchant_ids: JSON.parse(e.merchant_ids) as string[] }))
+        return {
+          merchant_ids: [...new Set(rows.slice(0, limit).flatMap((e) => e.merchant_ids))],
+          entries: rows,
+          totals: totals.results ?? [],
+        }
+      },
+    },
+
+    analytics: {
+      async report(range: OrderRange) {
+        const previous = previousOf(range)
+        const platform: Scope = { kind: 'platform', staffId }
+        const now = soldLines(platform, range.from, range.to)
+        const placed = (from: string) =>
+          where([PAID, ['o.created_at >= ?', from], ["o.created_at < date(?, '+1 day')", range.to]])
+        const both = placed(previous.from)
+        const inRange = placed(range.from)
+        const [charges, merchants, health, signups] = await Promise.all([
+          env.ORDERS.prepare(
+            `SELECT period, currency, COUNT(*) AS orders, SUM(guest) AS guests, SUM(goods) AS goods,
+                    SUM(shipping) AS shipping, SUM(tax) AS tax, SUM(total) AS total
+               FROM (SELECT CASE WHEN o.created_at >= ? THEN 'now' ELSE 'before' END AS period,
+                            ${ORDER_CURRENCY('o')} AS currency, o.user_id IS NULL AS guest,
+                            o.subtotal_cents AS goods, o.shipping_cents AS shipping, o.tax_cents AS tax,
+                            o.total_cents AS total
+                       FROM orders o${both.sql})
+              GROUP BY period, currency ORDER BY currency, period`,
+          )
+            .bind(range.from, ...both.args)
+            .all<PlatformReport['charges'][number] & { guests: number }>(),
+          // The balance's commission rule, merchant by merchant, as stats.sales does.
+          env.ORDERS.prepare(
+            `SELECT s.merchant_id, COALESCE(m.name, s.merchant_id) AS name, s.currency,
+                    SUM(s.gross) AS gross, SUM(s.refunds) AS refunds, SUM(s.gross) - SUM(s.refunds) AS net,
+                    ${FLOORED('SUM(s.rated)')} AS commission, COUNT(DISTINCT s.order_id) AS orders, SUM(s.units) AS units
+               FROM (${now.sql}) s LEFT JOIN merchants m ON m.id = s.merchant_id
+              GROUP BY s.merchant_id, s.currency
+              ORDER BY s.currency, net DESC, s.merchant_id`,
+          )
+            .bind(...now.args)
+            .all<PlatformReport['merchants'][number]>(),
+          env.ORDERS.prepare(
+            `SELECT f.merchant_id, COUNT(*) AS parts, SUM(f.status = 'cancelled') AS cancelled,
+                    SUM(f.shipped_at IS NOT NULL) AS shipped, ${AVG_SHIP} AS avg_ship_seconds
+               FROM orders o JOIN order_fulfilments f ON f.order_id = o.id${inRange.sql}
+              GROUP BY f.merchant_id ORDER BY f.merchant_id`,
+          )
+            .bind(...inRange.args)
+            .all<PlatformReport['health'][number]>(),
+          env.ORDERS.prepare(
+            `SELECT date(?, printf('+%d days', (CAST(julianday(substr(created_at, 1, 10)) - julianday(?) AS INTEGER) / 7) * 7)) AS start,
+                    COUNT(*) AS count
+               FROM users WHERE created_at >= ? AND created_at < date(?, '+1 day')
+              GROUP BY start ORDER BY start`,
+          )
+            .bind(range.from, range.from, range.from, range.to)
+            .all<PlatformReport['signups'][number]>(),
+        ])
+        const rows = charges.results ?? []
+        const current = rows.filter((c) => c.period === 'now')
+        const guests = current.reduce((n, c) => n + c.guests, 0)
+        const board = merchants.results ?? []
+        const parts = health.results ?? []
+        return {
+          ...range,
+          previous,
+          charges: rows.map(({ guests: _g, ...c }) => c),
+          merchants: board,
+          health: parts,
+          signups: signups.results ?? [],
+          buyers: { accounts: current.reduce((n, c) => n + c.orders, 0) - guests, guests },
+          merchant_ids: [...new Set([...board.map((m) => m.merchant_id), ...parts.map((h) => h.merchant_id)])],
+        }
+      },
+
+      async attention() {
+        const b = balances({ kind: 'platform', staffId })
+        const [counts, owing, low] = await Promise.all([
+          // Platform-wide, so pending parts are found by order_fulfilments_status_idx (0014).
+          env.ORDERS.prepare(
+            `SELECT (SELECT COUNT(*) FROM merchants WHERE status = 'pending') AS pending_applications,
+                    COUNT(*) AS to_ship, COALESCE(SUM(o.created_at < datetime('now', ?)), 0) AS overdue
+               FROM order_fulfilments f JOIN orders o ON o.id = f.order_id
+              WHERE f.status = 'pending' AND o.payment_status = ?`,
+          )
+            .bind(`-${OVERDUE_DAYS} days`, 'succeeded')
+            .first<Pick<Attention, 'pending_applications' | 'to_ship' | 'overdue'>>(),
+          // ponytail: every balance from all history, as /api/platform/balances
+          // reads it. A running balance table when history makes this slow.
+          env.ORDERS.prepare(
+            `SELECT b.merchant_id, mm.name, b.currency, b.gross - b.refunds - b.commission - b.payouts AS available
+               FROM (${b.sql}) b JOIN merchants mm ON mm.id = b.merchant_id
+              WHERE b.gross - b.refunds - b.commission - b.payouts < 0
+              ORDER BY available, b.merchant_id LIMIT 20`,
+          )
+            .bind(...b.args)
+            .all<Attention['owing'][number]>(),
+          env.ORDERS.prepare(
+            `SELECT p.merchant_id, m.name, COUNT(*) AS products
+               FROM products p JOIN merchants m ON m.id = p.merchant_id
+              WHERE p.status = 'published' AND p.stock_count <= ? AND m.status = 'active'
+              GROUP BY p.merchant_id ORDER BY products DESC, m.name LIMIT 20`,
+          )
+            .bind(LOW_STOCK)
+            .all<Attention['low_stock'][number]>(),
+        ])
+        const o = owing.results ?? []
+        const l = low.results ?? []
+        return {
+          ...(counts ?? { pending_applications: 0, to_ship: 0, overdue: 0 }),
+          owing: o,
+          low_stock: l,
+          merchant_ids: [...new Set([...o.map((r) => r.merchant_id), ...l.map((r) => r.merchant_id)])],
+        }
+      },
+    },
+
+    customers: {
+      async list(filter: CustomerFilter) {
+        const w = where([
+          filter.q ? ["(u.email LIKE ? ESCAPE '\\' OR u.name LIKE ? ESCAPE '\\')", contains(filter.q), contains(filter.q)] : null,
+          filter.before ? ['(u.created_at, u.id) < (?, ?)', filter.before.at, filter.before.id] : null,
+        ])
+        const [page, guests] = await Promise.all([
+          env.ORDERS.prepare(
+            `WITH picked AS (
+               SELECT ${ACCOUNT} FROM users u${w.sql}
+                ORDER BY u.created_at DESC, u.id DESC LIMIT ?
+             ),
+             paid AS (
+               SELECT o.user_id, o.created_at, o.total_cents, ${ORDER_CURRENCY('o')} AS currency
+                 FROM picked JOIN orders o ON o.user_id = picked.id
+                WHERE o.payment_status = ?
+             )
+             SELECT picked.id, picked.email, picked.name, picked.created_at, picked.verified, picked.two_factor,
+                    (SELECT COUNT(*) FROM paid WHERE paid.user_id = picked.id) AS orders,
+                    (SELECT MAX(paid.created_at) FROM paid WHERE paid.user_id = picked.id) AS last_order_at,
+                    (SELECT json_group_array(json_object('currency', currency, 'minor', minor))
+                       FROM (SELECT currency, SUM(total_cents) AS minor FROM paid
+                              WHERE paid.user_id = picked.id GROUP BY currency ORDER BY currency)) AS spend
+               FROM picked ORDER BY picked.created_at DESC, picked.id DESC`,
+          )
+            .bind(...w.args, (filter.limit ?? ORDER_CAP) + 1, 'succeeded')
+            .all<AccountRow & { orders: number; last_order_at: string | null; spend: string }>(),
+          // The first page only; the next ones are the same accounts' neighbours.
+          // ponytail: sums every guest order ever; a running total if that grows slow.
+          filter.before
+            ? null
+            : env.ORDERS.prepare(
+                `SELECT currency, COUNT(*) AS orders, SUM(total_cents) AS minor
+                   FROM (SELECT o.total_cents, ${ORDER_CURRENCY('o')} AS currency
+                           FROM orders o WHERE o.user_id IS NULL AND o.payment_status = ?)
+                  GROUP BY currency ORDER BY currency`,
+              )
+                .bind('succeeded')
+                .all<Amount & { orders: number }>(),
+        ])
+        const g = guests?.results ?? []
+        return {
+          customers: (page.results ?? []).map((c) => ({ ...account(c), orders: c.orders, last_order_at: c.last_order_at, spend: JSON.parse(c.spend) as Amount[] })),
+          guests: guests ? { orders: g.reduce((n, r) => n + r.orders, 0), spend: amountsOf(g) } : null,
+        }
+      },
+
+      async get(userId: string) {
+        const [user, spent, refunded, recent] = await Promise.all([
+          env.ORDERS.prepare(`SELECT ${ACCOUNT} FROM users u WHERE u.id = ?`).bind(userId).first<AccountRow>(),
+          env.ORDERS.prepare(
+            `SELECT currency, COUNT(*) AS orders, SUM(total_cents) AS minor, MAX(created_at) AS last
+               FROM (SELECT o.created_at, o.total_cents, ${ORDER_CURRENCY('o')} AS currency
+                       FROM orders o WHERE o.user_id = ? AND o.payment_status = ?)
+              GROUP BY currency ORDER BY currency`,
+          )
+            .bind(userId, 'succeeded')
+            .all<Amount & { orders: number; last: string }>(),
+          env.ORDERS.prepare(
+            `SELECT ${CURRENCY} AS currency, SUM(r.amount_minor) AS minor
+               FROM orders o JOIN refunds r ON r.order_id = o.id LEFT JOIN products p ON p.id = r.product_id
+              WHERE o.user_id = ? AND o.payment_status = ?
+              GROUP BY ${CURRENCY} ORDER BY ${CURRENCY}`,
+          )
+            .bind(userId, 'succeeded')
+            .all<Amount>(),
+          env.ORDERS.prepare(
+            `SELECT o.id, o.created_at, ${ORDER_CURRENCY('o')} AS currency, o.total_cents AS total,
+                    (SELECT COALESCE(SUM(q.qty), 0) FROM order_lines q WHERE q.order_id = o.id) AS items,
+                    (SELECT json_group_array(status) FROM (
+                       SELECT f.status FROM order_fulfilments f WHERE f.order_id = o.id ORDER BY f.merchant_id)) AS fulfilment
+               FROM orders o WHERE o.user_id = ? AND o.payment_status = ?
+              ORDER BY o.created_at DESC, o.id DESC LIMIT ?`,
+          )
+            .bind(userId, 'succeeded', CUSTOMER_ORDERS)
+            .all<Omit<CustomerDetail['recent'][number], 'fulfilment'> & { fulfilment: string }>(),
+        ])
+        if (!user) return null
+        const s = spent.results ?? []
+        return {
+          ...account(user),
+          orders: s.reduce((n, r) => n + r.orders, 0),
+          last_order_at: s.reduce<string | null>((m, r) => (m === null || r.last > m ? r.last : m), null),
+          spend: amountsOf(s),
+          refunded: amountsOf(refunded.results ?? []),
+          recent: (recent.results ?? []).map((o) => ({ ...o, fulfilment: JSON.parse(o.fulfilment) as FulfilmentStatus[] })),
+        }
+      },
+    },
+  }
+}
+
+/**
+ * The only columns of `users` the console ever reads. Named one by one: never
+ * the password hash or salt, the TOTP secret, or anything the tokens, sessions
+ * and recovery codes tables hold. Whether a second factor is on is a boolean
+ * computed here, so the secret it is computed from never leaves the query.
+ */
+const ACCOUNT = `u.id, u.email, u.name, u.created_at, u.email_verified_at IS NOT NULL AS verified,
+                 u.totp_confirmed_at IS NOT NULL AS two_factor`
+type AccountRow = { id: string; email: string; name: string; created_at: string; verified: number; two_factor: number }
+const account = (r: AccountRow) => ({
+  id: r.id,
+  email: r.email,
+  name: r.name,
+  created_at: r.created_at,
+  verified: r.verified === 1,
+  two_factor: r.two_factor === 1,
+})
+
+/**
+ * stats.sales, as a function of the scope it reads in: a merchant's own
+ * repository, the platform's, and the platform reading one merchant
+ * (merchants.sales) all run this one body, so the three cannot disagree.
+ */
+async function salesReport(env: TenancyEnv, scope: Scope, range: OrderRange): Promise<SalesReport> {
+  const days = dayNumber(range.to) - dayNumber(range.from) + 1
+  const previous = previousOf(range)
+  const size = days > 92 ? 7 : 1
+  const both = soldLines(scope, previous.from, range.to)
+  const now = soldLines(scope, range.from, range.to)
+
+  const [totals, series, categories, products] = await Promise.all([
+    // Both periods in one pass. Commission per merchant first, each line
+    // at its own rate and floored on the merchant's sum, then summed: the
+    // balance's rule, merchant by merchant.
+    env.ORDERS.prepare(
+      `SELECT period, currency, SUM(gross) AS gross, SUM(refunds) AS refunds, SUM(commission) AS commission,
+              SUM(orders) AS orders, SUM(units) AS units
+         FROM (SELECT CASE WHEN s.day >= ? THEN 'now' ELSE 'before' END AS period, s.merchant_id, s.currency,
+                      SUM(s.gross) AS gross, SUM(s.refunds) AS refunds,
+                      ${FLOORED('SUM(s.rated)')} AS commission,
+                      COUNT(DISTINCT s.order_id) AS orders, SUM(s.units) AS units
+                 FROM (${both.sql}) s
+                GROUP BY period, s.merchant_id, s.currency)
+        GROUP BY period, currency ORDER BY currency`,
+    )
+      .bind(range.from, ...both.args)
+      .all<Omit<ReportTotals, 'net' | 'earnings'> & { period: 'now' | 'before' }>(),
+    // The size is cast because a bound number can arrive as a REAL, and
+    // integer division by 7.0 is not integer division.
+    env.ORDERS.prepare(
+      `SELECT date(?, printf('+%d days', (CAST(julianday(day) - julianday(?) AS INTEGER) / CAST(? AS INTEGER)) * ?)) AS start,
+              currency, SUM(gross - refunds) AS net, SUM(gross) AS gross
+         FROM (${now.sql})
+        GROUP BY start, currency ORDER BY start, currency`,
+    )
+      .bind(range.from, range.from, size, size, ...now.args)
+      .all<SalesReport['series'][number]>(),
+    env.ORDERS.prepare(
+      `SELECT category, currency, SUM(gross) AS gross, SUM(gross - refunds) AS net, SUM(units) AS units
+         FROM (${now.sql})
+        GROUP BY currency, category ORDER BY currency, net DESC, category`,
+    )
+      .bind(...now.args)
+      .all<SalesReport['categories'][number]>(),
+    env.ORDERS.prepare(
+      `SELECT product_id, MAX(title) AS title, currency, SUM(gross) AS gross, SUM(gross - refunds) AS net,
+              SUM(units) AS units
+         FROM (${now.sql})
+        GROUP BY currency, product_id ORDER BY currency, net DESC, product_id`,
+    )
+      .bind(...now.args)
+      .all<SalesReport['products'][number]>(),
+  ])
+
+  const period = (p: 'now' | 'before'): ReportTotals[] =>
+    (totals.results ?? [])
+      .filter((r) => r.period === p)
+      .map(({ currency, gross, refunds, commission, orders, units }) => ({
+        currency,
+        gross,
+        refunds,
+        net: gross - refunds,
+        commission,
+        earnings: gross - refunds - commission,
+        orders,
+        units,
+      }))
+  return {
+    ...range,
+    previous: { ...previous, totals: period('before') },
+    totals: period('now'),
+    bucket: size === 7 ? ('week' as const) : ('day' as const),
+    series: series.results ?? [],
+    categories: categories.results ?? [],
+    products: products.results ?? [],
   }
 }
 
@@ -1357,19 +2053,23 @@ function build(env: TenancyEnv, scope: Scope): Repository {
         const parts = tenant(scope, 'f.merchant_id')
         const partClause = parts ? ` AND ${parts[0]}` : ''
         const partArgs = parts ? [parts[1]] : []
+        // The status of the named merchant's part, when the list is narrowed to one.
+        const narrowed = filter.merchant ? [' AND f.merchant_id = ?', filter.merchant] : ['']
         const picked = where([
           PAID,
           filter.from ? ['o.created_at >= ?', filter.from] : null,
           filter.to ? ["o.created_at < date(?, '+1 day')", filter.to] : null,
           // LIKE is ASCII case-insensitive; the pattern's own % and _ are escaped.
-          filter.q ? ["o.id LIKE ? ESCAPE '\\'", `%${filter.q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`] : null,
+          filter.q ? ["o.id LIKE ? ESCAPE '\\'", contains(filter.q)] : null,
           filter.status
             ? [
-                `EXISTS (SELECT 1 FROM order_fulfilments f WHERE f.order_id = o.id AND f.status = ?${partClause})`,
+                `EXISTS (SELECT 1 FROM order_fulfilments f WHERE f.order_id = o.id AND f.status = ?${partClause}${narrowed[0]})`,
                 filter.status,
                 ...partArgs,
+                ...narrowed.slice(1),
               ]
             : null,
+          filter.merchant ? ['l.merchant_id = ?', filter.merchant] : null,
           // Keyset on the list's own order, so a page never repeats or skips
           // an order however many arrive while someone reads.
           filter.before ? ['(o.created_at, o.id) < (?, ?)', filter.before.at, filter.before.id] : null,
@@ -1429,7 +2129,8 @@ function build(env: TenancyEnv, scope: Scope): Repository {
       async get(orderId: string) {
         const w = where([['l.order_id = ?', orderId], tenant(scope, 'l.merchant_id')])
         const f = where([['order_id = ?', orderId], tenant(scope)])
-        const [lines, totals, parts] = await Promise.all([
+        const r = where([['r.order_id = ?', orderId], tenant(scope, 'r.merchant_id')])
+        const [lines, totals, parts, refunds] = await Promise.all([
           env.ORDERS.prepare(
             `SELECT l.product_id, l.merchant_id, l.sku, l.title, l.variant, l.qty, l.unit_price_cents,
                     ${CURRENCY} AS currency, ${REFUNDED_QTY} AS refunded_qty, ${REFUNDED_MINOR} AS refunded_minor
@@ -1448,6 +2149,14 @@ function build(env: TenancyEnv, scope: Scope): Repository {
           env.ORDERS.prepare(`SELECT * FROM order_fulfilments${f.sql} ORDER BY merchant_id`)
             .bind(...f.args)
             .all<Fulfilment>(),
+          env.ORDERS.prepare(
+            `SELECT r.id, r.merchant_id, r.product_id, r.variant, r.qty, r.amount_minor, ${CURRENCY} AS currency,
+                    r.reason, r.actor_scope, r.created_at
+               FROM refunds r LEFT JOIN products p ON p.id = r.product_id${r.sql}
+              ORDER BY r.created_at, r.rowid`,
+          )
+            .bind(...r.args)
+            .all<OrderDetail['refunds'][number]>(),
         ])
         // No line of theirs: not their order. Checked before the header is
         // even read, so another merchant's customer's address is never loaded.
@@ -1467,6 +2176,7 @@ function build(env: TenancyEnv, scope: Scope): Repository {
           totals: amountsOf(totals.results ?? []),
           merchant_ids: [...new Set(lines.results.map((l) => l.merchant_id))],
           fulfilment: parts.results ?? [],
+          refunds: refunds.results ?? [],
         }
       },
     },
@@ -1580,10 +2290,7 @@ function build(env: TenancyEnv, scope: Scope): Repository {
         const { results } = await env.ORDERS.prepare(`${b.sql} ORDER BY g.merchant_id, g.currency`)
           .bind(...b.args)
           .all<Omit<Balance, 'available' | 'owes'>>()
-        return (results ?? []).map((r) => {
-          const available = r.gross - r.refunds - r.commission - r.payouts
-          return { ...r, available, owes: available < 0 }
-        })
+        return (results ?? []).map(withAvailable)
       },
 
       async ledger(range: OrderRange) {
@@ -1781,81 +2488,7 @@ function build(env: TenancyEnv, scope: Scope): Repository {
         return row ?? { to_ship: 0, low_stock: 0, out_of_stock: 0 }
       },
 
-      async sales(range: OrderRange) {
-        const [from, to] = [dayNumber(range.from), dayNumber(range.to)]
-        const days = to - from + 1
-        const previous = { from: dayOf(from - days), to: dayOf(from - 1) }
-        const size = days > 92 ? 7 : 1
-        const both = soldLines(scope, previous.from, range.to)
-        const now = soldLines(scope, range.from, range.to)
-
-        const [totals, series, categories, products] = await Promise.all([
-          // Both periods in one pass. Commission per merchant first, each line
-          // at its own rate and floored on the merchant's sum, then summed: the
-          // balance's rule, merchant by merchant.
-          env.ORDERS.prepare(
-            `SELECT period, currency, SUM(gross) AS gross, SUM(refunds) AS refunds, SUM(commission) AS commission,
-                    SUM(orders) AS orders, SUM(units) AS units
-               FROM (SELECT CASE WHEN s.day >= ? THEN 'now' ELSE 'before' END AS period, s.merchant_id, s.currency,
-                            SUM(s.gross) AS gross, SUM(s.refunds) AS refunds,
-                            ${FLOORED('SUM(s.rated)')} AS commission,
-                            COUNT(DISTINCT s.order_id) AS orders, SUM(s.units) AS units
-                       FROM (${both.sql}) s
-                      GROUP BY period, s.merchant_id, s.currency)
-              GROUP BY period, currency ORDER BY currency`,
-          )
-            .bind(range.from, ...both.args)
-            .all<Omit<ReportTotals, 'net' | 'earnings'> & { period: 'now' | 'before' }>(),
-          // The size is cast because a bound number can arrive as a REAL, and
-          // integer division by 7.0 is not integer division.
-          env.ORDERS.prepare(
-            `SELECT date(?, printf('+%d days', (CAST(julianday(day) - julianday(?) AS INTEGER) / CAST(? AS INTEGER)) * ?)) AS start,
-                    currency, SUM(gross - refunds) AS net, SUM(gross) AS gross
-               FROM (${now.sql})
-              GROUP BY start, currency ORDER BY start, currency`,
-          )
-            .bind(range.from, range.from, size, size, ...now.args)
-            .all<SalesReport['series'][number]>(),
-          env.ORDERS.prepare(
-            `SELECT category, currency, SUM(gross - refunds) AS net, SUM(units) AS units
-               FROM (${now.sql})
-              GROUP BY currency, category ORDER BY currency, net DESC, category`,
-          )
-            .bind(...now.args)
-            .all<SalesReport['categories'][number]>(),
-          env.ORDERS.prepare(
-            `SELECT product_id, MAX(title) AS title, currency, SUM(gross) AS gross, SUM(gross - refunds) AS net,
-                    SUM(units) AS units
-               FROM (${now.sql})
-              GROUP BY currency, product_id ORDER BY currency, net DESC, product_id`,
-          )
-            .bind(...now.args)
-            .all<SalesReport['products'][number]>(),
-        ])
-
-        const period = (p: 'now' | 'before'): ReportTotals[] =>
-          (totals.results ?? [])
-            .filter((r) => r.period === p)
-            .map(({ currency, gross, refunds, commission, orders, units }) => ({
-              currency,
-              gross,
-              refunds,
-              net: gross - refunds,
-              commission,
-              earnings: gross - refunds - commission,
-              orders,
-              units,
-            }))
-        return {
-          ...range,
-          previous: { ...previous, totals: period('before') },
-          totals: period('now'),
-          bucket: size === 7 ? ('week' as const) : ('day' as const),
-          series: series.results ?? [],
-          categories: categories.results ?? [],
-          products: products.results ?? [],
-        }
-      },
+      sales: (range: OrderRange) => salesReport(env, scope, range),
     },
   }
 
@@ -1926,6 +2559,9 @@ export const platformWide = async (env: TenancyEnv, staffId: string): Promise<Pl
     audit: wrapGroup(env, scope, 'audit', only.audit) as PlatformRepository['audit'],
     payouts: wrapGroup(env, scope, 'payouts', only.payouts) as PlatformRepository['payouts'],
     parts: wrapGroup(env, scope, 'parts', only.parts) as PlatformRepository['parts'],
+    payments: wrapGroup(env, scope, 'payments', only.payments) as PlatformRepository['payments'],
+    analytics: wrapGroup(env, scope, 'analytics', only.analytics) as PlatformRepository['analytics'],
+    customers: wrapGroup(env, scope, 'customers', only.customers) as PlatformRepository['customers'],
   }
 }
 

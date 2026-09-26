@@ -337,6 +337,8 @@ import {
   Invalid,
   type TenancyEnv,
   type Repository,
+  type PaymentFilter,
+  type CustomerFilter,
 } from './tenancy'
 
 /**
@@ -580,6 +582,14 @@ const CASES: Record<string, unknown[]> = {
   'audit.list': [{ merchantId: null, before: null }],
   'payouts.create': ['mch_a', { currency: 'MYR', amountMinor: 1, reference: 'Sweep' }],
   'parts.cancel': ['LEAK_o_b', 'mch_b'],
+  'merchants.names': [],
+  'merchants.get': ['mch_b'],
+  'merchants.sales': ['mch_b', { from: '2000-01-01', to: '2100-12-31' }],
+  'payments.list': [{ from: '2000-01-01', to: '2100-12-31' }],
+  'analytics.report': [{ from: '2000-01-01', to: '2100-12-31' }],
+  'analytics.attention': [],
+  'customers.list': [{}],
+  'customers.get': ['usr_nobody'],
 }
 
 /** Everything in CASES that a merchant repository does not carry at all. */
@@ -591,6 +601,14 @@ const PLATFORM_ONLY = [
   'audit.list',
   'payouts.create',
   'parts.cancel',
+  'merchants.names',
+  'merchants.get',
+  'merchants.sales',
+  'payments.list',
+  'analytics.report',
+  'analytics.attention',
+  'customers.list',
+  'customers.get',
 ]
 
 /** Methods the platform repository carries and refuses: they act for one merchant, which the platform is not. */
@@ -766,6 +784,7 @@ describe('completeness', () => {
     const mine = await scopedTo(env, 'mch_a', 'stf_1')
     expect('merchants' in mine).toBe(false)
     expect('audit' in mine).toBe(false)
+    for (const group of ['payments', 'analytics', 'customers']) expect(group in mine, group).toBe(false)
   })
 })
 
@@ -1799,9 +1818,9 @@ describe('the sales report', () => {
       { start: utcDay(0), currency: 'USD', net: 2000, gross: 2000 },
     ])
     expect(r.categories).toEqual([
-      { category: 'computing', currency: 'SGD', net: 1000, units: 1 },
-      { category: 'phones', currency: 'USD', net: 3000, units: 3 },
-      { category: 'audio', currency: 'USD', net: 2500, units: 3 },
+      { category: 'computing', currency: 'SGD', gross: 1000, net: 1000, units: 1 },
+      { category: 'phones', currency: 'USD', gross: 3000, net: 3000, units: 3 },
+      { category: 'audio', currency: 'USD', gross: 7500, net: 2500, units: 3 },
     ])
     expect(r.products).toEqual([
       { product_id: 'pa_sgd', title: 'Alpha SGD', currency: 'SGD', gross: 1000, net: 1000, units: 1 },
@@ -2017,5 +2036,325 @@ describe('the back office reads', () => {
         .filter((d) => /^SCAN (orders|order_lines|refunds|payouts|products|order_fulfilments|merchants|[lopfrm])\b/.test(d)),
     )
     expect(scans).toEqual([])
+  })
+})
+
+/* ------------------------------------------------------ platform back office */
+
+/**
+ * backOffice(), with what the platform's own pages read on top. Every figure
+ * the tests below expect is arithmetic on this table.
+ *
+ *   Order-level money: each paid order charged its lines' subtotal + 500
+ *   shipping + 100 tax. o1 spans USD and SGD lines, so its order currency is XXX.
+ *     o1 now   2700 → 3300 XXX    usr_1     o2 -3d  2500 → 3100 USD  guest
+ *     o3 -10d  6000 → 6600 USD    usr_1     o4 -40d 5000 → 5600 USD  guest
+ *     o6 now   2100 → 2700 SGD    guest     o7 now  1000 → 1600 SGD  usr_2
+ *   A's o1 part shipped exactly one day after the order.
+ *   Payouts: B 1000 SGD; A 967 SGD (all of its SGD). Then the platform refunds
+ *   o7's line in full (1000 SGD), so A owes 967 SGD.
+ *   Accounts: usr_1 signed up 2 days ago (verified, 2FA), usr_2 9 days ago,
+ *   usr_3 40 days ago, no orders. mch_p is a pending application.
+ */
+async function platformBooks() {
+  const t = await backOffice()
+  const { raw, platform } = t
+  raw
+    .prepare(
+      `UPDATE orders SET subtotal_cents = (SELECT SUM(qty * unit_price_cents) FROM order_lines WHERE order_id = orders.id)
+        WHERE payment_status = 'succeeded'`,
+    )
+    .run()
+  raw
+    .prepare(`UPDATE orders SET shipping_cents = 500, tax_cents = 100, total_cents = subtotal_cents + 600 WHERE payment_status = 'succeeded'`)
+    .run()
+  const user = raw.prepare(
+    `INSERT INTO users (id, email, name, password_hash, password_salt, iterations, created_at, email_verified_at, totp_secret, totp_confirmed_at)
+     VALUES (?, ?, ?, 'SECRET_HASH', 'SECRET_SALT', 1, datetime('now', ?), ?, ?, ?)`,
+  )
+  user.run('usr_1', 'ada@example.com', 'Ada', '-2 days', '2026-01-01', 'SECRET_TOTP', '2026-01-01')
+  user.run('usr_2', 'bob@example.com', 'Bob', '-9 days', null, null, null)
+  user.run('usr_3', 'cy@example.com', 'Cy', '-40 days', null, null, null)
+  raw.prepare(`INSERT INTO recovery_codes (code_hash, user_id) VALUES ('SECRET_CODE', 'usr_1')`).run()
+  raw.prepare(`UPDATE orders SET user_id = 'usr_1' WHERE id IN ('o1', 'o3')`).run()
+  raw.prepare(`UPDATE orders SET user_id = 'usr_2' WHERE id = 'o7'`).run()
+  raw
+    .prepare(
+      `UPDATE order_fulfilments SET shipped_at = (SELECT datetime(created_at, '+1 day') FROM orders WHERE id = 'o1')
+        WHERE order_id = 'o1' AND merchant_id = 'mch_a'`,
+    )
+    .run()
+  raw.prepare(`INSERT INTO merchants (id, slug, name, settlement_currency, status) VALUES ('mch_p', 'p', 'P', 'USD', 'pending')`).run()
+  const staff = raw.prepare(
+    `INSERT INTO staff (id, email, scope, merchant_id, role, password_hash, password_salt, iterations, totp_secret, totp_confirmed_at)
+     VALUES (?, ?, 'merchant', 'mch_a', ?, 'SECRET_HASH', 'SECRET_SALT', 1, ?, ?)`,
+  )
+  staff.run('stf_a', 'owner@a.test', 'owner', 'SECRET_TOTP', '2026-01-01')
+  staff.run('stf_a2', 'member@a.test', 'member', null, null)
+  await platform.payouts.create('mch_b', { currency: 'SGD', amountMinor: 1000, reference: 'B Sept' })
+  await platform.payouts.create('mch_a', { currency: 'SGD', amountMinor: 967, reference: 'A Sept' })
+  await platform.refunds.create('o7', refund('pa_sgd', 1))
+  return t
+}
+
+const EVER = { from: '2000-01-01', to: '2100-12-31' }
+
+describe('the payments ledger', () => {
+  it('lists charges, refunds and payouts with hand-checked totals per currency, never adding two', async () => {
+    const { platform } = await platformBooks()
+    const page = await platform.payments.list(EVER)
+    expect(page.entries.map((e) => `${e.kind}:${e.ref}`).sort()).toEqual(
+      [
+        'charge:o1', 'charge:o2', 'charge:o3', 'charge:o4', 'charge:o6', 'charge:o7',
+        'refund:o2', 'refund:o3', 'refund:o6', 'refund:o7',
+        'payout:A Sept', 'payout:B Sept',
+      ].sort(),
+    )
+    expect(page.totals).toEqual([
+      { currency: 'SGD', charges: 2, charged: 4300, goods: 3100, shipping: 1000, tax: 200, refunds: 2, refunded: 1100, payouts: 2, paid_out: 1967 },
+      { currency: 'USD', charges: 3, charged: 15300, goods: 13500, shipping: 1500, tax: 300, refunds: 2, refunded: 5000, payouts: 0, paid_out: 0 },
+      // o1's lines are in two currencies, so its order-level money is in none.
+      { currency: 'XXX', charges: 1, charged: 3300, goods: 2700, shipping: 500, tax: 100, refunds: 0, refunded: 0, payouts: 0, paid_out: 0 },
+    ])
+    const o1 = page.entries.find((e) => e.kind === 'charge' && e.ref === 'o1')!
+    expect(o1).toMatchObject({ amount: 3300, goods: 2700, shipping: 500, tax: 100, currency: 'XXX' })
+    expect([...o1.merchant_ids].sort()).toEqual(['mch_a', 'mch_b'])
+    expect(page.entries.find((e) => e.ref === 'B Sept')).toMatchObject({ amount: -1000, currency: 'SGD', merchant_ids: ['mch_b'] })
+  })
+
+  it('filters by kind, merchant, currency and date', async () => {
+    const { platform } = await platformBooks()
+    const refs = async (f: Partial<PaymentFilter>) =>
+      (await platform.payments.list({ ...EVER, ...f })).entries.map((e) => `${e.kind}:${e.ref}`).sort()
+    expect(await refs({ merchantId: 'mch_b' })).toEqual(['charge:o1', 'charge:o6', 'payout:B Sept', 'refund:o6'])
+    expect(await refs({ kind: 'refund', currency: 'USD' })).toEqual(['refund:o2', 'refund:o3'])
+    expect(await refs({ kind: 'charge', from: utcDay(45), to: utcDay(5) })).toEqual(['charge:o3', 'charge:o4'])
+    const b = await platform.payments.list({ ...EVER, merchantId: 'mch_b', currency: 'SGD' })
+    expect(b.totals).toEqual([
+      { currency: 'SGD', charges: 1, charged: 2700, goods: 2100, shipping: 500, tax: 100, refunds: 1, refunded: 100, payouts: 1, paid_out: 1000 },
+    ])
+  })
+
+  it('pages newest first through equal timestamps, every entry exactly once', async () => {
+    const { platform, raw } = await platformBooks()
+    raw.prepare(`UPDATE orders SET created_at = '2026-01-01 00:00:00' WHERE id IN ('o1', 'o6', 'o7', 'o2')`).run()
+    const whole = (await platform.payments.list(EVER)).entries.map((e) => e.id)
+    const seen: string[] = []
+    let before: PaymentFilter['before']
+    for (;;) {
+      const page = await platform.payments.list({ ...EVER, limit: 2, before })
+      const shown = page.entries.slice(0, 2)
+      seen.push(...shown.map((e) => e.id))
+      if (page.entries.length <= 2) break
+      before = { at: shown[1].at, rank: shown[1].rank, id: shown[1].id }
+    }
+    expect(seen).toEqual(whole)
+    expect(new Set(seen).size).toBe(12)
+  })
+
+  it('records the read against each merchant on the page', async () => {
+    const { platform, raw } = await platformBooks()
+    await platform.payments.list({ ...EVER, merchantId: 'mch_b', kind: 'payout' })
+    expect(raw.prepare(`SELECT merchant_id FROM audit_log WHERE action = 'payments.list'`).all()).toEqual([{ merchant_id: 'mch_b' }])
+  })
+})
+
+describe('the platform report', () => {
+  it('adds up order-level charges, a merchant leaderboard, fulfilment health and sign-ups by hand', async () => {
+    const { platform } = await platformBooks()
+    const r = await platform.analytics.report(LAST_30())
+    expect(r.previous).toEqual({ from: utcDay(59), to: utcDay(30) })
+    expect(r.charges).toEqual([
+      { period: 'now', currency: 'SGD', orders: 2, goods: 3100, shipping: 1000, tax: 200, total: 4300 },
+      { period: 'before', currency: 'USD', orders: 1, goods: 5000, shipping: 500, tax: 100, total: 5600 },
+      { period: 'now', currency: 'USD', orders: 2, goods: 8500, shipping: 1000, tax: 200, total: 9700 },
+      { period: 'now', currency: 'XXX', orders: 1, goods: 2700, shipping: 500, tax: 100, total: 3300 },
+    ])
+    // o1, o3 (usr_1) and o7 (usr_2) signed in; o2 and o6 as guests.
+    expect(r.buyers).toEqual({ accounts: 3, guests: 2 })
+    /*
+     * A USD: 10500 gross, 5000 refunded, 5500 net, floor(5500 × 333 / 10000) = 183.
+     * A SGD: o7 1000, all refunded, so nothing to charge.
+     * B SGD: 2800 gross, 100 refunded, floor(2700 × 800 / 10000) = 216.
+     */
+    expect(r.merchants).toEqual([
+      { merchant_id: 'mch_b', name: 'MCH_B', currency: 'SGD', gross: 2800, refunds: 100, net: 2700, commission: 216, orders: 2, units: 4 },
+      { merchant_id: 'mch_a', name: 'MCH_A', currency: 'SGD', gross: 1000, refunds: 1000, net: 0, commission: 0, orders: 1, units: 1 },
+      { merchant_id: 'mch_a', name: 'MCH_A', currency: 'USD', gross: 10500, refunds: 5000, net: 5500, commission: 183, orders: 3, units: 6 },
+    ])
+    // A: o1 shipped a day in, o2 cancelled, o3 and o7 pending. B: o1 and o6 pending.
+    expect(r.health).toEqual([
+      { merchant_id: 'mch_a', parts: 4, cancelled: 1, shipped: 1, avg_ship_seconds: 86400 },
+      { merchant_id: 'mch_b', parts: 2, cancelled: 0, shipped: 0, avg_ship_seconds: null },
+    ])
+    // Weeks from utcDay(29): usr_2 is day 20 (the week from day 14), usr_1 day 27 (from day 21). usr_3 is outside.
+    expect(r.signups).toEqual([
+      { start: utcDay(15), count: 1 },
+      { start: utcDay(8), count: 1 },
+    ])
+    expect([...r.merchant_ids].sort()).toEqual(['mch_a', 'mch_b'])
+    // The leaderboard's commission is stats.sales's, by the one rule, currency by currency.
+    const sales = await platform.stats.sales(LAST_30())
+    for (const t of sales.totals) {
+      expect(r.merchants.filter((m) => m.currency === t.currency).reduce((n, m) => n + m.commission, 0)).toBe(t.commission)
+    }
+  })
+
+  it('names what needs attention: applications, overdue parts, merchants owing, merchants low on stock', async () => {
+    const { platform } = await platformBooks()
+    expect(await platform.analytics.attention()).toEqual({
+      pending_applications: 1,
+      // A: o3, o4, o7. B: o1, o6. Placed more than three days ago: o3 and o4.
+      to_ship: 5,
+      overdue: 2,
+      // A SGD: 1000 − 1000 refunded − 0 commission − 967 paid out.
+      owing: [{ merchant_id: 'mch_a', name: 'MCH_A', currency: 'SGD', available: -967 }],
+      // pa1 at 3 and pa_sgd at 0; the draft is not on sale.
+      low_stock: [{ merchant_id: 'mch_a', name: 'MCH_A', products: 2 }],
+      merchant_ids: ['mch_a'],
+    })
+  })
+})
+
+describe('one merchant, read by the platform', () => {
+  it('shows profile, staff without secrets, catalogue, all-time health and balance', async () => {
+    const { platform } = await platformBooks()
+    const m = await platform.merchants.get('mch_a')
+    expect(JSON.stringify(m)).not.toContain('SECRET_')
+    expect(m).toMatchObject({
+      merchant_id: 'mch_a',
+      name: 'MCH_A',
+      slug: 'mch_a',
+      status: 'active',
+      settlement_currency: 'USD',
+      commission_bps: 333,
+      products: { draft: 1, published: 3, archived: 0, low_stock: 1, out_of_stock: 1 },
+      low: [
+        { id: 'pa_sgd', title: 'Alpha SGD', stock_count: 0 },
+        { id: 'pa1', title: 'Alpha One', stock_count: 3 },
+      ],
+      // o1 shipped, o2 cancelled, o3 o4 o7 pending; o3 and o4 are over three days old.
+      health: { to_ship: 3, overdue: 2, parts: 5, shipped: 1, cancelled: 1, avg_ship_seconds: 86400 },
+    })
+    expect(m!.staff.map((s) => [s.id, s.email, s.role, s.totp_enrolled])).toEqual([
+      ['stf_a', 'owner@a.test', 'owner', true],
+      ['stf_a2', 'member@a.test', 'member', false],
+    ])
+    // USD: 15500 gross, 5000 refunded, floor(10500 × 333 / 10000) = 349, nothing paid out.
+    expect(m!.balances.map((b) => [b.currency, b.available, b.owes])).toEqual([
+      ['SGD', -967, true],
+      ['USD', 10151, false],
+    ])
+    expect(await platform.merchants.get('mch_nope')).toBeNull()
+  })
+
+  it("reports one merchant's sales by stats.sales's own body, and records the read against it", async () => {
+    const { platform, a, raw } = await platformBooks()
+    const { merchant_id, ...report } = (await platform.merchants.sales('mch_a', LAST_30()))!
+    expect(merchant_id).toBe('mch_a')
+    expect(report).toEqual(await a.stats.sales(LAST_30()))
+    expect(JSON.stringify(report)).not.toMatch(/mch_b|pb1|Beta/)
+    expect(await platform.merchants.sales('mch_nope', LAST_30())).toBeNull()
+    // The attempt on a merchant that does not exist is recorded too, against no merchant.
+    expect(raw.prepare(`SELECT merchant_id, subject FROM audit_log WHERE action = 'merchants.sales' ORDER BY rowid`).all()).toEqual([
+      { merchant_id: 'mch_a', subject: 'mch_a' },
+      { merchant_id: null, subject: 'mch_nope' },
+    ])
+  })
+
+  it('narrows the order list to one merchant, reading status on its part, and never widens a merchant read', async () => {
+    const { platform, a } = await platformBooks()
+    const ids = async (repo: Repository, f: Parameters<Repository['orders']['list']>[0]) => (await repo.orders.list(f)).map((o) => o.id)
+    expect(await ids(platform, { merchant: 'mch_b' })).toEqual(['o6', 'o1'])
+    // A shipped its half of o1; B has not.
+    expect(await ids(platform, { merchant: 'mch_a', status: 'pending' })).toEqual(['o7', 'o3', 'o4'])
+    expect(await ids(platform, { merchant: 'mch_b', status: 'pending' })).toEqual(['o6', 'o1'])
+    expect(await ids(a, { merchant: 'mch_b' }), 'ANDed with the tenant clause').toEqual([])
+  })
+
+  it('shows every refund on an order to the platform, and a merchant only its own', async () => {
+    const { platform, a, b } = await platformBooks()
+    const o7 = await platform.orders.get('o7')
+    expect(o7!.refunds.map((r) => [r.merchant_id, r.amount_minor, r.currency, r.actor_scope])).toEqual([['mch_a', 1000, 'SGD', 'platform']])
+    await b.refunds.create('o1', refund('pb1', 0, 50))
+    expect((await b.orders.get('o1'))!.refunds.map((r) => r.merchant_id)).toEqual(['mch_b'])
+    expect((await platform.orders.get('o1'))!.refunds.map((r) => r.merchant_id)).toEqual(['mch_b'])
+    expect((await a.orders.get('o1'))!.refunds).toEqual([])
+  })
+})
+
+describe('customers', () => {
+  it('lists accounts newest first with orders and spend per order currency, and guests only as a sum', async () => {
+    const { platform } = await platformBooks()
+    const page = await platform.customers.list({})
+    expect(page.customers.map(({ created_at: _c, last_order_at: _l, ...c }) => c)).toEqual([
+      { id: 'usr_1', email: 'ada@example.com', name: 'Ada', verified: true, two_factor: true, orders: 2, spend: [{ currency: 'USD', minor: 6600 }, { currency: 'XXX', minor: 3300 }] },
+      { id: 'usr_2', email: 'bob@example.com', name: 'Bob', verified: false, two_factor: false, orders: 1, spend: [{ currency: 'SGD', minor: 1600 }] },
+      { id: 'usr_3', email: 'cy@example.com', name: 'Cy', verified: false, two_factor: false, orders: 0, spend: [] },
+    ])
+    expect(page.customers[2].last_order_at).toBeNull()
+    // o2 3100 USD, o4 5600 USD, o6 2700 SGD. o5 was declined.
+    expect(page.guests).toEqual({ orders: 3, spend: [{ currency: 'SGD', minor: 2700 }, { currency: 'USD', minor: 8700 }] })
+    expect((await platform.customers.list({ q: 'BOB' })).customers.map((c) => c.id)).toEqual(['usr_2'])
+    expect((await platform.customers.list({ q: '%' })).customers).toEqual([])
+    expect(JSON.stringify(page)).not.toContain('SECRET_')
+  })
+
+  it('pages through equal sign-up times exactly once', async () => {
+    const { platform, raw } = await platformBooks()
+    for (const id of ['usr_4', 'usr_5', 'usr_6']) {
+      raw
+        .prepare(
+          `INSERT INTO users (id, email, name, password_hash, password_salt, iterations, created_at)
+           VALUES (?, ?, 'Same', 'h', 's', 1, (SELECT created_at FROM users WHERE id = 'usr_1'))`,
+        )
+        .run(id, `${id}@example.com`)
+    }
+    const seen: string[] = []
+    let before: CustomerFilter['before']
+    for (;;) {
+      const page = await platform.customers.list({ limit: 2, before })
+      const shown = page.customers.slice(0, 2)
+      seen.push(...shown.map((c) => c.id))
+      if (before) expect(page.guests, 'guests ride on the first page only').toBeNull()
+      if (page.customers.length <= 2) break
+      before = { at: shown[1].created_at, id: shown[1].id }
+    }
+    expect(seen).toEqual(['usr_6', 'usr_5', 'usr_4', 'usr_1', 'usr_2', 'usr_3'])
+  })
+
+  it('shows one account with its orders and refunds, and none for a stranger', async () => {
+    const { platform } = await platformBooks()
+    const c = await platform.customers.get('usr_1')
+    expect(c).toMatchObject({
+      id: 'usr_1',
+      orders: 2,
+      spend: [{ currency: 'USD', minor: 6600 }, { currency: 'XXX', minor: 3300 }],
+      refunded: [{ currency: 'USD', minor: 2500 }],
+    })
+    expect(c!.recent.map((o) => [o.id, o.currency, o.total, o.items, o.fulfilment])).toEqual([
+      ['o1', 'XXX', 3300, 3, ['shipped', 'pending']],
+      ['o3', 'USD', 6600, 3, ['pending']],
+    ])
+    expect(await platform.customers.get('usr_nobody')).toBeNull()
+  })
+
+  it('never selects a secret column, and records every read', async () => {
+    const { env, raw } = await platformBooks()
+    const statements: string[] = []
+    const recording = { ...env.ORDERS, prepare: (sql: string) => (statements.push(sql), env.ORDERS.prepare(sql)) } as unknown as D1Database
+    const platform = await platformWide({ ORDERS: recording }, 'stf_p')
+    await platform.customers.list({ q: 'a' })
+    await platform.customers.get('usr_1')
+    await platform.merchants.get('mch_a')
+    const reads = statements.filter((s) => !/INSERT INTO audit_log/.test(s))
+    expect(reads.length).toBeGreaterThan(5)
+    for (const sql of reads) {
+      expect(sql, sql).not.toMatch(/password|salt|totp_secret|token|recovery|sessions|kdf|iterations|failed_attempts|locked_until|pending_email|SELECT \*|\.\*/i)
+    }
+    expect(raw.prepare(`SELECT action, merchant_id, subject FROM audit_log WHERE action LIKE 'customers.%' ORDER BY rowid`).all()).toEqual([
+      { action: 'customers.list', merchant_id: null, subject: null },
+      { action: 'customers.get', merchant_id: null, subject: 'usr_1' },
+    ])
   })
 })
