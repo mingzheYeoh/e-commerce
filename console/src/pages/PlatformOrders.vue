@@ -1,10 +1,20 @@
 <script setup lang="ts">
-// The order history. The filters live in the URL, so "To ship" on the
-// overview and the nav badge are plain links, and Back returns to the same view.
-import { computed, ref, watch } from 'vue'
+// Every order on the platform, whoever sold into it. The same list as a
+// merchant's Orders page, with a merchant filter: the filters live in the URL,
+// so an overview card can link straight to a filtered view. Status filters on
+// any part, or on the chosen merchant's part when one is picked.
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Download } from 'lucide-vue-next'
-import { listOrders, isError, type FulfilmentStatus, type OrderFilter, type OrderSummary } from '../api'
+import {
+  platformOrders,
+  merchantNames,
+  isError,
+  type FulfilmentStatus,
+  type MerchantName,
+  type OrderFilter,
+  type PlatformOrderSummary,
+} from '../api'
 import { formatAmounts, minorToDecimal } from '../money'
 import { FULFILMENT, METHOD, placed } from '../orders'
 import { download, type Cell } from '../csv'
@@ -20,35 +30,36 @@ const TABS: { status: FulfilmentStatus | ''; label: string }[] = [
   { status: 'cancelled', label: 'Cancelled' },
 ]
 
+type Filter = OrderFilter & { merchant?: string }
 const str = (v: unknown) => (typeof v === 'string' ? v : '')
-/** What the URL asks for; the form below edits a copy until Apply. */
-const filter = computed<OrderFilter>(() => ({
+const filter = computed<Filter>(() => ({
   status: str(route.query.status) as FulfilmentStatus | '',
+  merchant: str(route.query.merchant),
   q: str(route.query.q),
   from: str(route.query.from),
   to: str(route.query.to),
 }))
-const form = ref({ q: '', from: '', to: '' })
+const form = ref({ q: '', from: '', to: '', merchant: '' })
 
-const orders = ref<OrderSummary[]>([])
+const merchants = ref<MerchantName[]>([])
+const nameOf = (id: string) => merchants.value.find((m) => m.id === id)?.name ?? id
+onMounted(async () => (merchants.value = await merchantNames()))
+
+const orders = ref<PlatformOrderSummary[]>([])
 const next = ref<string | null>(null)
 const error = ref<string | null>(null)
 const loading = ref(true)
 const more = ref(false)
 const exporting = ref(false)
 
-/**
- * Only the newest request may land: a "Load more" still in flight when the
- * merchant switches tab would otherwise append the old filter's orders to the
- * new list.
- */
+/** Only the newest request may land: a slow answer to an older filter, or an old Load more, is dropped. */
 let latest = 0
 async function load(before: string | null = null) {
   const mine = ++latest
   error.value = null
   if (before) more.value = true
   else loading.value = true
-  const { body } = await listOrders({ ...filter.value, before })
+  const { body } = await platformOrders({ ...filter.value, before })
   if (mine !== latest) return
   if (isError(body)) error.value = body.error
   else if ('orders' in body) {
@@ -62,49 +73,47 @@ async function load(before: string | null = null) {
 watch(
   filter,
   (f) => {
-    // Leaving for an order page changes the query too; that is not a new filter.
-    if (route.path !== '/orders') return
-    form.value = { q: f.q ?? '', from: f.from ?? '', to: f.to ?? '' }
+    if (route.path !== '/platform/orders') return
+    form.value = { q: f.q ?? '', from: f.from ?? '', to: f.to ?? '', merchant: f.merchant ?? '' }
     void load()
   },
   { immediate: true },
 )
 
-/** Only the filters that are set, so a bare /orders stays bare. */
-const go = (patch: Partial<OrderFilter>) => {
+const go = (patch: Partial<Filter>) => {
   const q = Object.fromEntries(Object.entries({ ...filter.value, ...patch }).filter(([, v]) => v))
   void router.replace({ query: q })
 }
-const apply = () => go({ q: form.value.q.trim(), from: form.value.from, to: form.value.to })
+const apply = () => go({ q: form.value.q.trim(), from: form.value.from, to: form.value.to, merchant: form.value.merchant })
 const clear = () => void router.replace({ query: filter.value.status ? { status: filter.value.status } : {} })
+const filtered = computed(() => Boolean(filter.value.q || filter.value.from || filter.value.to || filter.value.merchant))
 
-const statusLabel = (o: OrderSummary) => o.fulfilment.map((f) => FULFILMENT[f]?.label ?? f).join(' · ')
+const statusLabel = (o: PlatformOrderSummary) => o.fulfilment.map((f) => FULFILMENT[f]?.label ?? f).join(' · ')
+const sellers = (o: PlatformOrderSummary) => o.merchantIds.map(nameOf).join(', ')
 
-/**
- * The whole filtered list, page by page, one row per order and currency (an
- * order's two currencies are two amounts, never one sum). Nothing here that the
- * list above does not show: no name, address, email or phone.
- */
+/** Page by page, one row per order and currency. No name, address, email or phone. */
 async function exportCsv() {
   exporting.value = true
   error.value = null
-  const rows: Cell[][] = [['Order', 'Placed (UTC)', 'Status', 'Items', 'Shipping', 'Currency', 'Your total']]
+  const rows: Cell[][] = [['Order', 'Placed (UTC)', 'Merchants', 'Status', 'Items', 'Shipping', 'Currency', 'Goods']]
   let before: string | null = null
+  // One filter for the whole export, whatever the page's does meanwhile.
+  const f = { ...filter.value }
   try {
     do {
-      const { body } = await listOrders({ ...filter.value, before, limit: 200 })
+      const { body } = await platformOrders({ ...f, before, limit: 200 })
       if (!('orders' in body)) {
         error.value = isError(body) ? body.error : 'The export stopped part way. Try again.'
         return
       }
       for (const o of body.orders) {
         for (const t of o.totals) {
-          rows.push([o.id, placed(o.placedAt), statusLabel(o), o.items, METHOD[o.method] ?? o.method, t.currency, minorToDecimal(t.minor)])
+          rows.push([o.id, placed(o.placedAt), sellers(o), statusLabel(o), o.items, METHOD[o.method] ?? o.method, t.currency, minorToDecimal(t.minor)])
         }
       }
       before = body.next
     } while (before)
-    download(`orders-${new Date().toISOString().slice(0, 10)}.csv`, rows)
+    download(`platform-orders-${new Date().toISOString().slice(0, 10)}.csv`, rows)
   } finally {
     exporting.value = false
   }
@@ -113,7 +122,7 @@ async function exportCsv() {
 
 <template>
   <div class="mb-6 flex flex-wrap items-center justify-between gap-3">
-    <h1 class="font-display text-xl font-bold text-text-primary">Orders</h1>
+    <h1 class="font-display text-xl font-bold text-text-primary">All orders</h1>
     <button class="btn-ghost inline-flex items-center gap-2 px-3 py-2" :disabled="exporting || loading" @click="exportCsv">
       <Download class="h-4 w-4" aria-hidden="true" />{{ exporting ? 'Exporting…' : 'Export CSV' }}
     </button>
@@ -134,19 +143,26 @@ async function exportCsv() {
 
   <form class="mb-6 flex flex-wrap items-end gap-3" @submit.prevent="apply">
     <div class="min-w-[10rem] flex-1">
-      <label class="label mb-1 block" for="orders-q">Order id</label>
-      <input id="orders-q" v-model="form.q" class="input" type="search" maxlength="40" placeholder="NX-…" />
+      <label class="label mb-1 block" for="porders-q">Order id</label>
+      <input id="porders-q" v-model="form.q" class="input" type="search" maxlength="40" placeholder="NX-…" />
+    </div>
+    <div class="min-w-[10rem] flex-1 sm:flex-none">
+      <label class="label mb-1 block" for="porders-merchant">Merchant</label>
+      <select id="porders-merchant" v-model="form.merchant" class="input">
+        <option value="">All merchants</option>
+        <option v-for="m in merchants" :key="m.id" :value="m.id">{{ m.name }}</option>
+      </select>
     </div>
     <div class="min-w-[9rem] flex-1 sm:flex-none">
-      <label class="label mb-1 block" for="orders-from">From</label>
-      <input id="orders-from" v-model="form.from" class="input" type="date" />
+      <label class="label mb-1 block" for="porders-from">From</label>
+      <input id="porders-from" v-model="form.from" class="input" type="date" />
     </div>
     <div class="min-w-[9rem] flex-1 sm:flex-none">
-      <label class="label mb-1 block" for="orders-to">To</label>
-      <input id="orders-to" v-model="form.to" class="input" type="date" />
+      <label class="label mb-1 block" for="porders-to">To</label>
+      <input id="porders-to" v-model="form.to" class="input" type="date" />
     </div>
     <button class="btn-primary" type="submit" :disabled="loading">Search</button>
-    <button v-if="filter.q || filter.from || filter.to" class="btn-ghost" type="button" @click="clear">Clear</button>
+    <button v-if="filtered" class="btn-ghost" type="button" @click="clear">Clear</button>
   </form>
 
   <p v-if="error" class="mb-4 text-sm text-accent-amber" role="alert">{{ error }}</p>
@@ -154,15 +170,15 @@ async function exportCsv() {
   <p v-else-if="!error && orders.length === 0" class="card p-6 text-text-secondary">No paid orders match.</p>
   <template v-else-if="orders.length">
     <ul class="card divide-y divide-border-hairline sm:hidden">
-      <!-- A phone gets one tappable row per order; the table below needs more width than it has. -->
       <li v-for="o in orders" :key="o.id">
-        <router-link :to="`/orders/${o.id}`" class="flex flex-col gap-1 px-4 py-3 hover:bg-surface-2">
+        <router-link :to="`/platform/orders/${o.id}`" class="flex flex-col gap-1 px-4 py-3 hover:bg-surface-2">
           <span class="flex items-baseline justify-between gap-3">
             <span class="font-mono text-xs text-accent">{{ o.id }}</span>
             <span class="nums text-sm text-text-primary">{{ formatAmounts(o.totals) }}</span>
           </span>
+          <span class="truncate text-xs text-text-primary">{{ sellers(o) }}</span>
           <span class="nums text-xs text-text-secondary">
-            {{ placed(o.placedAt) }} UTC · {{ o.items }} item{{ o.items === 1 ? '' : 's' }} · {{ METHOD[o.method] ?? o.method }}
+            {{ placed(o.placedAt) }} UTC · {{ o.items }} item{{ o.items === 1 ? '' : 's' }}
             <template v-for="(f, i) in o.fulfilment" :key="i"> · {{ FULFILMENT[f]?.label ?? f }}</template>
           </span>
         </router-link>
@@ -174,26 +190,26 @@ async function exportCsv() {
           <tr class="label">
             <th class="px-4 py-3 font-medium">Order</th>
             <th class="px-4 py-3 font-medium">Placed (UTC)</th>
+            <th class="px-4 py-3 font-medium">Merchants</th>
             <th class="px-4 py-3 font-medium">Items</th>
-            <th class="px-4 py-3 font-medium">Your total</th>
-            <th class="px-4 py-3 font-medium">Shipping</th>
-            <th class="px-4 py-3 font-medium">Status</th>
+            <th class="px-4 py-3 font-medium">Goods</th>
+            <th class="px-4 py-3 font-medium">Parts</th>
           </tr>
         </thead>
         <tbody>
           <tr v-for="o in orders" :key="o.id" class="border-b border-border-hairline last:border-0 hover:bg-surface-2">
             <td class="px-4 py-3">
-              <router-link :to="`/orders/${o.id}`" class="whitespace-nowrap font-mono text-xs text-accent hover:text-accent-hover">{{ o.id }}</router-link>
+              <router-link :to="`/platform/orders/${o.id}`" class="whitespace-nowrap font-mono text-xs text-accent hover:text-accent-hover">{{ o.id }}</router-link>
             </td>
-            <td class="nums px-4 py-3 text-text-secondary">{{ placed(o.placedAt) }}</td>
+            <td class="nums whitespace-nowrap px-4 py-3 text-text-secondary">{{ placed(o.placedAt) }}</td>
+            <td class="px-4 py-3 text-text-primary">{{ sellers(o) }}</td>
             <td class="nums px-4 py-3 text-text-secondary">{{ o.items }}</td>
-            <td class="nums px-4 py-3 text-text-primary">{{ formatAmounts(o.totals) }}</td>
-            <td class="px-4 py-3 text-text-secondary">{{ METHOD[o.method] ?? o.method }}</td>
+            <td class="nums whitespace-nowrap px-4 py-3 text-text-primary">{{ formatAmounts(o.totals) }}</td>
             <td class="px-4 py-3">
               <span
                 v-for="(f, i) in o.fulfilment"
                 :key="i"
-                class="whitespace-nowrap rounded-full border px-2 py-0.5 text-xs"
+                class="mr-1 whitespace-nowrap rounded-full border px-2 py-0.5 text-xs"
                 :class="FULFILMENT[f]?.badge"
               >{{ FULFILMENT[f]?.label ?? f }}</span>
             </td>

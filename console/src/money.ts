@@ -21,6 +21,25 @@ export function formatMinor(minor: number, currency: string): string {
 }
 
 /**
+ * Minor units -> a plain decimal for a spreadsheet: '-1234.05', no symbol, no
+ * grouping. Integer arithmetic only, so it is exact for any safe integer.
+ */
+export function minorToDecimal(minor: number): string {
+  const abs = Math.abs(minor)
+  return `${minor < 0 ? '-' : ''}${Math.floor(abs / 100)}.${String(abs % 100).padStart(2, '0')}`
+}
+
+/** A basis-point rate as a percentage: 800 -> '8%', 333 -> '3.33%'. */
+export const formatBps = (bps: number) => `${(bps / 100).toFixed(2).replace(/\.?0+$/, '')}%`
+
+/** The change from `before` to `now` as a signed percentage, or null when there is nothing to compare with. */
+export function change(now: number, before: number): string | null {
+  if (!before) return null
+  const pct = ((now - before) / before) * 100
+  return `${pct > 0 ? '+' : ''}${pct.toFixed(Math.abs(pct) < 10 ? 1 : 0)}%`
+}
+
+/**
  * A total that may span currencies, each shown on its own and never summed:
  * there is no rate to add them with. `empty` when there is nothing at all.
  */

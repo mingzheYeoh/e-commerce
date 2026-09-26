@@ -8,7 +8,11 @@
 import { computed, ref } from 'vue'
 import { formatMinor } from '../money'
 
-const props = defineProps<{ days: { day: string; minor: number }[]; currency: string }>()
+// `bucket: 'week'` marks each entry as the week starting on its day (Reports
+// over long ranges); the overview's daily chart leaves it out.
+// `count` charts a tally (sign-ups) rather than money: `currency` is then only its label.
+const props = defineProps<{ days: { day: string; minor: number }[]; currency: string; bucket?: 'day' | 'week'; count?: boolean }>()
+const shownValue = (v: number) => (props.count ? v.toLocaleString() : formatMinor(v, props.currency))
 
 const W = 300
 const H = 100
@@ -27,8 +31,13 @@ const bars = computed(() =>
 const hover = ref<number | null>(null)
 const shown = computed(() => props.days[hover.value ?? props.days.length - 1])
 
-const dayLabel = (day: string) =>
+const dateLabel = (day: string) =>
   new Date(`${day}T00:00:00Z`).toLocaleDateString(undefined, { month: 'short', day: 'numeric', timeZone: 'UTC' })
+const dayLabel = (day: string) => (props.bucket === 'week' ? `Week of ${dateLabel(day)}` : dateLabel(day))
+/** "(today)" only when the last bar really is today, which a past range's is not. */
+const latest = computed(() =>
+  props.bucket !== 'week' && props.days[props.days.length - 1]?.day === new Date().toISOString().slice(0, 10) ? ' (today)' : '',
+)
 </script>
 
 <template>
@@ -36,18 +45,18 @@ const dayLabel = (day: string) =>
     <figcaption class="mb-3 flex items-baseline justify-between gap-3">
       <span class="label">
         <span class="mr-2 rounded border border-border-hairline px-1.5 py-0.5 font-mono text-[10px] text-text-muted">{{ currency }}</span>
-        {{ shown ? dayLabel(shown.day) : '' }}{{ hover === null ? ' (today)' : '' }}
+        {{ shown ? dayLabel(shown.day) : '' }}{{ hover === null ? latest : '' }}
       </span>
-      <span class="nums text-sm font-semibold text-text-primary">{{ shown ? formatMinor(shown.minor, currency) : '' }}</span>
+      <span class="nums text-sm font-semibold text-text-primary">{{ shown ? shownValue(shown.minor) : '' }}</span>
     </figcaption>
     <div>
-      <span class="nums mb-1 block text-[11px] text-text-muted">{{ formatMinor(max, currency) }}</span>
+      <span class="nums mb-1 block text-[11px] text-text-muted">{{ shownValue(max) }}</span>
       <svg
         :viewBox="`0 0 ${W} ${H}`"
         preserveAspectRatio="none"
         class="block h-40 w-full"
         role="img"
-        :aria-label="`Daily sales in ${currency} over the last ${days.length} days`"
+        :aria-label="`${count ? currency : `Sales in ${currency}`} by ${bucket ?? 'day'}, ${days.length} ${bucket ?? 'day'}s`"
         @mouseleave="hover = null"
       >
         <line x1="0" :x2="W" y1="0.25" y2="0.25" class="stroke-border-hairline" stroke-dasharray="2 2" vector-effect="non-scaling-stroke" />
@@ -63,20 +72,20 @@ const dayLabel = (day: string) =>
           />
           <!-- The hit target is the whole column, not the bar: a zero day is still hoverable. -->
           <rect :x="i * slot" y="0" :width="slot" :height="H" fill="transparent" @mouseenter="hover = i" @click="hover = i">
-            <title>{{ dayLabel(b.day) }}: {{ formatMinor(b.minor, currency) }}</title>
+            <title>{{ dayLabel(b.day) }}: {{ shownValue(b.minor) }}</title>
           </rect>
         </g>
       </svg>
     </div>
     <div class="nums mt-2 flex justify-between text-[11px] text-text-muted">
-      <span>{{ days[0] ? dayLabel(days[0].day) : '' }}</span>
-      <span>{{ days.length ? dayLabel(days[days.length - 1].day) : '' }}</span>
+      <span>{{ days[0] ? dateLabel(days[0].day) : '' }}</span>
+      <span>{{ days.length ? dateLabel(days[days.length - 1].day) : '' }}</span>
     </div>
     <table class="sr-only">
-      <caption>Daily sales, {{ currency }}</caption>
+      <caption>{{ count ? currency : `Sales, ${currency}` }} by {{ bucket ?? 'day' }}</caption>
       <tr v-for="d in days" :key="d.day">
         <th scope="row">{{ d.day }}</th>
-        <td>{{ formatMinor(d.minor, currency) }}</td>
+        <td>{{ shownValue(d.minor) }}</td>
       </tr>
     </table>
   </figure>

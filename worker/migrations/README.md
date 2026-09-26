@@ -44,23 +44,71 @@ Verified against `sqlite_master` on 2026-09-21; production caught up on 2026-09-
 | `0009` order lines product id | ✅ 2026-09-24 | ✅ applied 2026-09-21 |
 | `0010` display order | ✅ 2026-09-24 | ✅ applied 2026-09-21, rebuilt 2026-09-22 |
 | `0011` staff sessions | ✅ 2026-09-24 | ✅ applied 2026-09-22 |
-| `0012` audit merchant seq index | ❌ | ❌ |
+| `0012` audit merchant seq index | ✅ 2026-09-25 | ✅ 2026-09-25 |
+| `0013` order lifecycle | ❌ | ❌ |
+| `0014` platform back office indexes | ❌ | ❌ |
 
-Production currently holds six tables: `orders`, `order_lines`, and the four
-from `0006`. It has never had `users`, `sessions`, `email_tokens` or
-`recovery_codes`.
-
-That is not a fault. The worker deployed to production predates the accounts
-work — `/api/auth/me` returns 404 there and `/api/health` carries no `auth`
-key — so the code and the schema agree with each other. Production is behind
-staging by the whole accounts phase, not broken by it.
+Until 2026-09-24 production held only `orders`, `order_lines` and the four
+tables from `0006`; the accounts tables (`users`, `sessions`, `email_tokens`,
+`recovery_codes`) arrived with `0002`–`0005` that day, along with the rest of
+the catch-up listed under "Before production next deploys" below.
 
 ## Pending
 
-**`0012` is not applied anywhere yet** — neither production nor staging. It
-is an index only, so it is safe in either order relative to the console worker
-that reads it: without it the audit log viewer still works, it just sorts the
-whole of a merchant's log for every page filtered to that merchant.
+**`0013` order lifecycle, on neither database yet.** It adds
+`merchants.commission_bps` (default 800) and `order_lines.commission_bps` (the
+rate each line was sold at, default 800 for every line already stored), the
+`order_fulfilments`, `refunds` and `payouts` tables with their indexes and
+append-only triggers, and backfills one `pending` fulfilment row
+(`stock_taken = 0`) per merchant of every paid order already stored. Additive
+only, so it is safe ahead of the workers, and it has to be: the branch's
+`nexus-api` inserts a fulfilment row, decrements `stock_count` and writes
+`order_lines.commission_bps` in the order batch, and its `nexus-console` reads
+all three tables, so a worker deployed ahead of `0013` fails every checkout
+(503) and every order page.
+
+`0013` runs **once**: its `ALTER TABLE`s fail a second time. Only its last
+statement, the backfill, is safe to repeat, and it is also `0013b` on its own.
+
+The runbook, staging first and then production, each in this order:
+
+1. Apply `0013`:
+   `npx wrangler d1 execute <db> --remote --file=migrations/0013-order-lifecycle.sql`
+2. Deploy `nexus-api` (it must also get the new `ORDER_LIMITER` binding from
+   `wrangler.toml`).
+3. Deploy `nexus-console`.
+4. Re-run the backfill, for the orders the old `nexus-api` took between steps
+   1 and 2 — they have no fulfilment row, so no merchant could ship them:
+   `npx wrangler d1 execute <db> --remote --file=migrations/0013b-backfill-fulfilments.sql`
+5. Check that `SELECT COUNT(*) FROM order_fulfilments` equals
+   `SELECT COUNT(*) FROM (SELECT DISTINCT l.order_id, l.merchant_id FROM order_lines l JOIN orders o ON o.id = l.order_id WHERE o.payment_status = 'succeeded')`.
+
+Two hazards for any later migration that rebuilds a table the way `0009` did:
+
+- **`order_lines`**: carry `commission_bps` across, or every past sale is
+  re-priced at the default. Nothing in `0013` references `order_lines` from a
+  trigger, on purpose (see the comment above the refunds triggers), so such a
+  rebuild still works. Keep it that way.
+- **`orders`**: `order_fulfilments.order_id` is `ON DELETE CASCADE`, and D1
+  enforces foreign keys, so `DROP TABLE orders` inside a rebuild deletes every
+  fulfilment row with it. Copy them aside first, or rebuild with foreign keys
+  deferred.
+
+**`0014` platform back office indexes, on neither database yet.** Four
+indexes and nothing else — `refunds(created_at)`, `payouts(created_at)`,
+`users(created_at, id)` and `order_fulfilments(status)` — for the platform's
+payments ledger, customer list and overview cards, which read across every
+merchant and so cannot seek on a merchant index. Index only, so it is safe in
+either order relative to the workers, and `IF NOT EXISTS` makes a second run
+harmless. It needs `0013` first, whose three tables (`refunds`, `payouts`,
+`order_fulfilments`) three of its indexes are on, and `users` from `0002`,
+which both databases have had since 2026-09-24. Run it
+before (or right after) deploying the `nexus-console` that has the platform
+pages; without it those pages work, but scan:
+`npx wrangler d1 execute <db> --remote --file=migrations/0014-platform-back-office-indexes.sql`
+
+`0012` (an index only) was applied to staging and then production on
+2026-09-25, each ahead of the console worker that reads it.
 
 ## Before production next deploys
 

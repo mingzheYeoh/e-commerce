@@ -321,6 +321,129 @@ restoring a merchant, and reading the audit log, exist only on the repository
 Totals are lists of `{ currency, minor }`: order lines take their currency from
 the product they were priced from, and two currencies are never added together.
 
+### The order lifecycle
+
+Checkout waits for `POST /api/orders`, which takes each line's units out of
+stock and opens one fulfilment part per merchant in the same D1 batch as the
+order; a line short of stock refuses the whole order with a 409 naming the
+product, and the shopper stays on the checkout with the cart intact.
+
+Each merchant moves only its own part: `pending → shipped → delivered`, or
+`pending → cancelled` (which puts the units back and refunds the lines in
+full). Any other transition is a 409. Refunds are per line, in units and/or
+money, never past what was paid for the line less earlier refunds — checked
+before the write and again by a guard statement inside it. Every one of these
+writes lands in one batch with its audit row.
+
+Money is integer minor units throughout. A merchant's balance, per currency,
+is `gross − refunds − commission − payouts`. Each order line records the
+commission rate it was sold at (the merchant's rate at checkout, 8% by
+default), so changing a rate prices future sales only; commission is
+`floor(Σ (line gross − line refunds) × line rate / 10000)`, floored once on the
+total. A payout larger than the available balance is refused by the statement
+that would insert it. A balance can still go negative — a refund after a
+payout — and is then flagged `owes`: the merchant owes the platform. Revenue on
+the dashboards is net of refunds, with gross beside it. See
+`worker/src/tenancy.ts` (`Balance`) and migration `0013`.
+
+Limits worth knowing:
+
+- **Payouts rest on simulated payment.** An order is as real as its caller
+  says; `POST /api/orders` is rate limited per IP (`ORDER_LIMITER`, 10 a
+  minute), but nothing verifies a charge, so balances and payouts are demo
+  figures.
+- **Cancelling refunds the goods, not shipping or tax.** Those belong to the
+  order, not to any one merchant; refunding them is not built yet.
+- **A refund is money, not a return.** Refunding units does not put them back
+  in stock; only cancelling a part that took stock at checkout does. Parts
+  from before `0013` never took stock, so cancelling one restocks nothing.
+- **A suspended merchant's pending parts** can be cancelled by the platform
+  (`POST /api/platform/orders/:id/parts/:merchantId/cancel`).
+- **A retried checkout** reuses its order id (kept in the browser across a
+  reload), and the server answers an id it already holds with that order, so
+  a lost answer never becomes a second order.
+
+### The merchant back office
+
+A merchant's sidebar has Orders, Inventory, Reports and Finance beside the
+Overview, all reading through `scopedTo` like everything else, all `GET`, all
+`no-store`:
+
+- **Orders** is the order history: filtered by the merchant's own part
+  (to ship, shipped, delivered, cancelled), by order id and by dates, in the
+  URL, paged on a `(placed, id)` cursor rather than OFFSET, and exported to CSV
+  page by page. The nav badge counts parts still to ship.
+- **Reports** sums a range and the one before it per currency: gross, refunds,
+  net, commission, earnings, orders, units, average order and refund rate; net
+  by day (by week past 92 days), by category, and by product.
+- **Inventory** shows stock, units sold in 30 days and days of cover. Every
+  stock edit, one row or many, is the ordinary product `PATCH`, so validation,
+  the audit row and the AI index rules are the ones every save meets.
+- **Finance** shows the balance, a month's statement — opening, sales, refunds,
+  commission, payouts, closing, and every entry with the balance after it —
+  and the payouts made.
+
+There is one commission rule in the SQL (`RATED` and `FLOORED` in
+`tenancy.ts`), and the balance, the reports and the ledger all use it. The
+ledger floors the running rated sum, so its entries' commissions add up to the
+balance's commission and its last balance is the balance's `available`. CSVs
+are built in the browser from what the page already read, with formula cells
+defused (`console/src/csv.ts`). No index was needed: every statement is a
+SEARCH on a merchant index, which a test pins with `EXPLAIN QUERY PLAN`.
+
+Known limits:
+
+- **Stock is set, not adjusted.** An inventory edit sends the new absolute
+  count, read when the page loaded; a sale in between is overwritten by it.
+  A `stockDelta` or an expected-value check on the PATCH would close that.
+- **`GET /api/merchant/orders` changed shape.** It pages now: `next` replaced
+  `truncated`, `from`/`to` are optional and no longer default to 30 days, and
+  a page is 50 orders unless `limit` says otherwise (up to 200). Anything
+  outside this console that read the old shape needs updating.
+- **The plan test proves no full scan, not a bounded cost.** The history,
+  report and ledger queries read all of one merchant's lines per request, so
+  their cost grows with that merchant's history; `tenancy.ts` notes the index
+  that would bound them (`ponytail:` comments on `orders.list`, `stats.sales`
+  and `finance.ledger`).
+
+### The platform back office
+
+A platform admin's sidebar has Orders, Payments, Reports and Customers beside
+Merchants, Applications and the audit log. Every read goes through
+`platformWide`, is refused to merchant staff and to a session still enrolling
+TOTP, is `no-store`, and is audited by the repository wrapper in one
+statement however many merchants it drew on (a test pins the statement count
+for 1 and 50 merchants on every read).
+
+- **Orders**: every order, filtered by any part's status, by merchant (status
+  then reads that merchant's part), by id and dates, keyset-paged, CSV without
+  contact details. The order page shows each merchant's part, lines, refunds and
+  timeline; the platform can refund any line or cancel any pending part.
+- **Payments**: charges (each paid order's total, goods, shipping and tax),
+  refunds and payouts, newest first, with totals per currency over the filter.
+  Filtered to one merchant, a charge is that merchant's goods on the order
+  alone, per currency; shipping and tax belong to the whole order and drop out.
+- **Reports**: `stats.sales` in platform scope beside order-level figures —
+  shipping and tax, orders, average order — a merchant leaderboard (net, take,
+  refund rate, ship time, cancellations), products, and sign-ups by week.
+- **Customers**: shopper accounts with orders and spend; guest checkouts only as
+  a total. Reading one account is recorded against each merchant whose order it
+  shows, like any order read. Explicit columns only, and a test fails if any statement names a
+  password, salt, TOTP secret, token or recovery code.
+- **A merchant's page**: sales, fulfilment health, catalogue, staff (whether
+  TOTP is enrolled, nothing more), balance, and the set-commission and
+  record-payout actions.
+
+Order-level money has a currency only when all of an order's lines do:
+checkout adds lines into one subtotal whatever their currency, so an order
+spanning two is reported under `XXX` rather than guessed into either. The
+four indexes these reads needed are migration `0014`.
+
+The merchant rule above holds here too, with two reads named as exceptions:
+the overview's "owing" card sums every balance from all history (as
+`/api/platform/balances` already does), and the customer list's guest total
+sums every guest order. Both carry `ponytail:` notes on what would bound them.
+
 ## Asset pipeline
 
 `scripts/fetch-assets.mjs` downloads real, licensed photography into
@@ -400,9 +523,9 @@ rather than trusted from the request. What is genuinely still missing:
   their password has no self-serve way back in; a customer does.
 - **Merchant staff beyond the owner.** One login per merchant; no inviting a
   teammate.
-- **Fulfilment in the console.** A merchant sees their own lines of every paid
-  order and where to ship them, but cannot mark anything shipped: orders have a
-  payment status and no fulfilment status yet.
+- **Tracking for guest orders.** Carrier, tracking number and refunds are shown
+  only to the account that placed an order; a guest's order link shows what it
+  always did.
 - **A route-layer isolation sweep and both timing residuals** noted in the
   registration code's own comments — known, deferred, not silently ignored.
 

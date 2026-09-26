@@ -6,16 +6,21 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
+  ChartColumn,
   ClipboardCheck,
   LayoutDashboard,
+  Boxes,
   Menu,
   Package,
+  Receipt,
   ScrollText,
   ShoppingBag,
   Store,
+  Users,
+  Wallet,
   X,
 } from 'lucide-vue-next'
-import { me, signOut } from '../api'
+import { me, merchantQueue, signOut } from '../api'
 
 const props = defineProps<{ scope: 'merchant' | 'platform' }>()
 
@@ -24,14 +29,23 @@ const router = useRouter()
 const name = ref(props.scope === 'platform' ? 'NEXUS Platform' : '')
 const open = ref(false)
 
-const NAV = {
+type NavItem = { to: string; label: string; icon: unknown; exact?: boolean; badge?: 'toShip' }
+
+const NAV: Record<'merchant' | 'platform', NavItem[]> = {
   merchant: [
     { to: '/overview', label: 'Overview', icon: LayoutDashboard },
     { to: '/products', label: 'Products', icon: Package },
-    { to: '/orders', label: 'Orders', icon: ShoppingBag },
+    { to: '/orders', label: 'Orders', icon: ShoppingBag, badge: 'toShip' },
+    { to: '/inventory', label: 'Inventory', icon: Boxes },
+    { to: '/reports', label: 'Reports', icon: ChartColumn },
+    { to: '/finance', label: 'Finance', icon: Wallet },
   ],
   platform: [
     { to: '/platform', label: 'Overview', icon: LayoutDashboard, exact: true },
+    { to: '/platform/orders', label: 'Orders', icon: ShoppingBag },
+    { to: '/platform/payments', label: 'Payments', icon: Receipt },
+    { to: '/platform/reports', label: 'Reports', icon: ChartColumn },
+    { to: '/platform/customers', label: 'Customers', icon: Users },
     { to: '/platform/merchants', label: 'Merchants', icon: Store },
     { to: '/platform/applications', label: 'Applications', icon: ClipboardCheck },
     { to: '/platform/audit', label: 'Audit log', icon: ScrollText },
@@ -44,10 +58,29 @@ const nav = computed(() => NAV[props.scope])
 const active = (item: { to: string; exact?: boolean }) =>
   route.path === item.to || (!item.exact && route.path.startsWith(`${item.to}/`))
 
+/**
+ * Parts still to ship, beside Orders. Re-read on every page change, so it
+ * drops as soon as the order page marks one shipped and the merchant moves on.
+ * A failed read shows no badge rather than a wrong number.
+ */
+const toShip = ref(0)
+async function refreshQueue() {
+  if (props.scope !== 'merchant') return
+  const { body } = await merchantQueue().catch(() => ({ body: { error: 'offline' } }))
+  toShip.value = 'toShip' in body ? body.toShip : 0
+}
+
 // A tap on a link closes the mobile menu by way of the route change.
-watch(() => route.path, () => (open.value = false))
+watch(
+  () => route.path,
+  () => {
+    open.value = false
+    void refreshQueue()
+  },
+)
 
 onMounted(async () => {
+  void refreshQueue()
   const { body } = await me()
   if (body.kind === 'active' && body.scope === 'merchant') name.value = body.merchant.name
 })
@@ -78,6 +111,11 @@ async function logout() {
         >
           <component :is="item.icon" class="h-4 w-4" :class="active(item) ? 'text-accent' : ''" aria-hidden="true" />
           {{ item.label }}
+          <span
+            v-if="item.badge && toShip"
+            class="nums ml-auto rounded-full border border-accent-amber/40 px-1.5 text-[11px] text-accent-amber"
+            :aria-label="`${toShip} to ship`"
+          >{{ toShip }}</span>
         </router-link>
       </nav>
     </aside>
@@ -116,6 +154,11 @@ async function logout() {
         >
           <component :is="item.icon" class="h-4 w-4" :class="active(item) ? 'text-accent' : ''" aria-hidden="true" />
           {{ item.label }}
+          <span
+            v-if="item.badge && toShip"
+            class="nums ml-auto rounded-full border border-accent-amber/40 px-1.5 text-[11px] text-accent-amber"
+            :aria-label="`${toShip} to ship`"
+          >{{ toShip }}</span>
         </router-link>
       </nav>
 

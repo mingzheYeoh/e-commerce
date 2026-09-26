@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
-import { placeOrder, maskEmail, type OrderPayload } from './orders'
+import { placeOrder, getOrder, maskEmail, type OrderPayload } from './orders'
 import { memoryD1 } from '../test/d1-memory'
+import { accountOrders } from './auth'
 
 /**
  * A real SQLite database, because the server now reads one.
@@ -67,7 +68,7 @@ describe('placeOrder', () => {
 
     expect(res.status).toBe(200)
     // Oregon levies no sales tax, and this product clears the free-shipping bar.
-    expect(res.body).toEqual({ id: 'NX-4K2P9', total: unitCents })
+    expect(res.body).toEqual({ id: 'NX-4K2P9', total: unitCents, totals: { subtotal: unitCents, shipping: 0, tax: 0, total: unitCents } })
     expect(rows('orders')).toHaveLength(1)
     expect(rows('order_lines')).toHaveLength(1)
   })
@@ -473,19 +474,240 @@ describe('placeOrder addresses', () => {
     expect(res.status).toBe(400)
   })
 
-  it('reports a repeated order id as a conflict, not a server fault', async () => {
-    // Placed twice for real, against the table's own primary key, rather than
-    // against a stand-in rigged to throw the message this branch looks for.
+  it('answers a repeated order id with the stored order, and stores it once', async () => {
+    // A retry after a lost answer. The checkout decides whether the id was its
+    // own; the server says what that order was.
     const { db, rows } = seeded()
     expect((await placeOrder({ ORDERS: db }, payload())).status).toBe(200)
-    expect((await placeOrder({ ORDERS: db }, payload())).status).toBe(409)
+    expect(await placeOrder({ ORDERS: db }, payload())).toEqual({
+      status: 200,
+      body: { id: 'NX-4K2P9', total: unitCents, totals: { subtotal: unitCents, shipping: 0, tax: 0, total: unitCents }, existing: true },
+    })
     expect(rows('orders')).toHaveLength(1)
+  })
+
+  it('tells a request with a different email only that the id is taken, never what the order was', async () => {
+    // Order ids are short enough to guess. The stored totals are a retry's
+    // answer, and a retry resends the email it was placed with.
+    const { db } = seeded()
+    expect((await placeOrder({ ORDERS: db }, payload())).status).toBe(200)
+    const guess = await placeOrder({ ORDERS: db }, payload({ address: { ...payload().address, email: 'someone@else.test' } }))
+    expect(guess).toEqual({ status: 409, body: { error: 'That order id is already taken.', code: 'duplicate' } })
+    // Case and surrounding spaces are not a different person.
+    const shouted = await placeOrder(
+      { ORDERS: db },
+      payload({ address: { ...payload().address, email: `  ${payload().address.email.toUpperCase()} ` } }),
+    )
+    expect(shouted.status).toBe(200)
+  })
+
+  it('reports two racing inserts of one id as a duplicate, not a server fault', async () => {
+    // Both passed the lookup; the table's own primary key decides.
+    const { db } = seeded()
+    const racing = {
+      prepare: db.prepare.bind(db),
+      batch: (async (stmts: D1PreparedStatement[]) => {
+        await placeOrder({ ORDERS: db }, payload())
+        return db.batch(stmts)
+      }) as D1Database['batch'],
+    } as unknown as D1Database
+    expect(await placeOrder({ ORDERS: racing }, payload())).toEqual({
+      status: 409,
+      body: { error: 'order already exists', code: 'duplicate' },
+    })
   })
 
   it('rejects a body that is not an object at all', async () => {
     const { db } = seeded()
     for (const body of [null, 'order', 42, undefined]) {
       expect((await placeOrder({ ORDERS: db }, body)).status).toBe(400)
+    }
+  })
+})
+
+describe('placeOrder and stock', () => {
+  const stock = (raw: ReturnType<typeof seeded>['raw'], id: string) =>
+    (raw.prepare(`SELECT stock_count FROM products WHERE id = ?`).get(id) as { stock_count: number }).stock_count
+
+  it('takes the units out of stock and opens a pending part per merchant, with the order', async () => {
+    const { db, raw, rows } = seeded()
+    const res = await placeOrder(
+      { ORDERS: db },
+      payload({
+        lines: [
+          // Two finishes of one product draw on one stock count: 2 + 3 of 9.
+          { productId: FLAGSHIP.id, qty: 2, finish: FINISHES[0] },
+          { productId: FLAGSHIP.id, qty: 3, finish: FINISHES[1] },
+          { productId: CHEAP.id, qty: 1 },
+        ],
+      }),
+    )
+    expect(res.status).toBe(200)
+    expect([stock(raw, FLAGSHIP.id), stock(raw, CHEAP.id)]).toEqual([4, 8])
+    expect(rows('order_fulfilments')).toEqual([expect.objectContaining({ order_id: 'NX-4K2P9', merchant_id: 'mch_nexus', status: 'pending' })])
+  })
+
+  it('refuses the whole order, naming the product, when one line wants more than is left', async () => {
+    const { db, raw, rows } = seeded()
+    raw.prepare(`UPDATE products SET stock_count = 1 WHERE id = ?`).run(CHEAP.id)
+    const res = await placeOrder(
+      { ORDERS: db },
+      payload({ lines: [{ productId: FLAGSHIP.id, qty: 1 }, { productId: CHEAP.id, qty: 2 }] }),
+    )
+    expect(res).toEqual({ status: 409, body: { error: 'Only 1 of "Cheap Thing" left in stock. Lower the quantity to continue.' } })
+
+    raw.prepare(`UPDATE products SET stock_count = 0 WHERE id = ?`).run(CHEAP.id)
+    const soldOut = await placeOrder({ ORDERS: db }, payload({ lines: [{ productId: CHEAP.id, qty: 1 }] }))
+    expect(soldOut).toEqual({ status: 409, body: { error: '"Cheap Thing" is sold out. Remove it from your cart to continue.' } })
+
+    // No partial write: not the order, not its lines, not the flagship's stock.
+    expect(rows('orders')).toEqual([])
+    expect(rows('order_lines')).toEqual([])
+    expect(rows('order_fulfilments')).toEqual([])
+    expect(stock(raw, FLAGSHIP.id)).toBe(9)
+  })
+
+  it('refuses, and writes nothing, when another checkout takes the last units between the check and the write', async () => {
+    // The pre-check reads 9 in stock. Then a racing checkout empties the
+    // shelf, and the stock CHECK aborts this order's batch as a whole.
+    const { db, raw, rows } = seeded()
+    const racing = {
+      prepare: db.prepare.bind(db),
+      batch: (async (stmts: D1PreparedStatement[]) => {
+        raw.prepare(`UPDATE products SET stock_count = 0 WHERE id = ?`).run(FLAGSHIP.id)
+        return db.batch(stmts)
+      }) as D1Database['batch'],
+    } as unknown as D1Database
+    const res = await placeOrder({ ORDERS: racing }, payload({ lines: [{ productId: FLAGSHIP.id, qty: 1 }, { productId: CHEAP.id, qty: 1 }] }))
+    expect(res).toEqual({ status: 409, body: { error: '"Flagship Thing" is sold out. Remove it from your cart to continue.' } })
+    expect(rows('orders')).toEqual([])
+    expect(rows('order_lines')).toEqual([])
+    expect(rows('order_fulfilments')).toEqual([])
+    expect(stock(raw, CHEAP.id)).toBe(9)
+  })
+
+  it('leaves stock alone for a declined attempt, which opens no part either', async () => {
+    const { db, raw, rows } = seeded()
+    raw.prepare(`UPDATE products SET stock_count = 0 WHERE id = ?`).run(FLAGSHIP.id)
+    // Recorded for the audit trail even though nothing is in stock: nothing was sold.
+    expect((await placeOrder({ ORDERS: db }, payload({ paymentCode: 'card_declined' }))).status).toBe(200)
+    expect(stock(raw, FLAGSHIP.id)).toBe(0)
+    expect(rows('order_fulfilments')).toEqual([])
+  })
+
+  it('answers a replay of an order that took the last unit as that order, not as sold out', async () => {
+    // Stock 1: the first POST lands and takes it, its answer is lost, the
+    // checkout retries. Judged afresh, the replay would be refused as sold out
+    // by its own unit, and the shopper sent to pay again.
+    const { db, raw, rows } = seeded()
+    raw.prepare(`UPDATE products SET stock_count = 1 WHERE id = ?`).run(FLAGSHIP.id)
+    expect((await placeOrder({ ORDERS: db }, payload())).status).toBe(200)
+    const replay = await placeOrder({ ORDERS: db }, payload())
+    expect(replay).toMatchObject({ status: 200, body: { id: 'NX-4K2P9', total: unitCents, existing: true } })
+    expect(stock(raw, FLAGSHIP.id)).toBe(0)
+    // Even once the product is off sale, the stored order is still the answer.
+    raw.prepare(`UPDATE products SET status = 'archived'`).run()
+    expect((await placeOrder({ ORDERS: db }, payload())).status).toBe(200)
+    expect(rows('orders')).toHaveLength(1)
+  })
+
+  it('marks the part as having taken stock, so a cancel may put it back', async () => {
+    const { db, rows } = seeded()
+    await placeOrder({ ORDERS: db }, payload())
+    expect(rows('order_fulfilments')[0]).toMatchObject({ stock_taken: 1 })
+  })
+})
+
+describe('placeOrder and commission', () => {
+  it("freezes the merchant's rate onto each line, so a later change prices only later sales", async () => {
+    const { db, raw } = seeded()
+    await placeOrder({ ORDERS: db }, payload())
+    raw.prepare(`UPDATE merchants SET commission_bps = 1250`).run()
+    await placeOrder({ ORDERS: db }, payload({ id: 'NX-5M3RT' }))
+    expect(raw.prepare(`SELECT order_id, commission_bps FROM order_lines ORDER BY order_id`).all()).toEqual([
+      { order_id: 'NX-4K2P9', commission_bps: 800 },
+      { order_id: 'NX-5M3RT', commission_bps: 1250 },
+    ])
+  })
+})
+
+describe('getOrder', () => {
+  /** A paid order filed to usr_owner, shipped by its one seller, with one unit refunded. */
+  async function shippedOrder() {
+    const mem = seeded()
+    await placeOrder({ ORDERS: mem.db }, payload({ lines: [{ productId: FLAGSHIP.id, qty: 2 }] }), 'usr_owner')
+    mem.raw
+      .prepare(
+        `UPDATE order_fulfilments SET status = 'shipped', carrier = 'UPS', tracking = '1Z999', shipped_at = datetime('now')`,
+      )
+      .run()
+    mem.raw
+      .prepare(
+        `INSERT INTO refunds (id, order_id, merchant_id, product_id, qty, amount_minor, reason, actor_id, actor_scope)
+         VALUES ('rfd_1', 'NX-4K2P9', 'mch_nexus', ?, 1, ?, 'Damaged', 'stf_1', 'merchant')`,
+      )
+      .run(FLAGSHIP.id, FLAGSHIP.price)
+    return mem
+  }
+
+  it('gives the account that placed the order its delivery and refunds', async () => {
+    const { db } = await shippedOrder()
+    const order = await getOrder({ ORDERS: db }, 'NX-4K2P9', 'usr_owner')
+    expect(order!.parts).toEqual([
+      {
+        seller: 'Nexus',
+        status: 'shipped',
+        carrier: 'UPS',
+        tracking: '1Z999',
+        shippedAt: expect.any(String),
+        deliveredAt: null,
+        items: [{ sku: FLAGSHIP.sku, title: FLAGSHIP.title, qty: 2, finish: undefined }],
+        refunded: [{ currency: 'USD', minor: FLAGSHIP.price }],
+      },
+    ])
+  })
+
+  it('shows anyone else holding the id no more than it always did', async () => {
+    // Signed out, or signed in as somebody else: the tracking number and the
+    // refunds are not theirs to read.
+    const { db } = await shippedOrder()
+    for (const viewer of [null, 'usr_stranger']) {
+      const order = await getOrder({ ORDERS: db }, 'NX-4K2P9', viewer)
+      expect(order, String(viewer)).not.toHaveProperty('parts')
+      expect(JSON.stringify(order)).not.toMatch(/1Z999|UPS|Damaged/)
+    }
+  })
+
+  it("lists delivery and refunds in the account's own order history, and nobody else's", async () => {
+    const { db } = await shippedOrder()
+    const mine = await accountOrders({ ORDERS: db } as never, { id: 'usr_owner', email: 'a@x.co', name: 'A' })
+    expect(mine).toEqual([
+      expect.objectContaining({
+        id: 'NX-4K2P9',
+        fulfilment: [{ status: 'shipped', carrier: 'UPS', tracking: '1Z999' }],
+        refunded: [{ currency: 'USD', minor: FLAGSHIP.price }],
+      }),
+    ])
+    expect(await accountOrders({ ORDERS: db } as never, { id: 'usr_stranger', email: 'b@x.co', name: 'B' })).toEqual([])
+  })
+
+  it('never adds them to a guest order, which no account owns', async () => {
+    const { db, raw } = seeded()
+    await placeOrder({ ORDERS: db }, payload())
+    raw.prepare(`UPDATE order_fulfilments SET status = 'shipped', carrier = 'UPS', tracking = '1Z', shipped_at = datetime('now')`).run()
+    expect(await getOrder({ ORDERS: db }, 'NX-4K2P9', null)).not.toHaveProperty('parts')
+  })
+
+  it('shows where an order is going only to the account that placed it', async () => {
+    const { db } = seeded()
+    await placeOrder({ ORDERS: db }, payload(), 'usr_owner')
+    const owner = await getOrder({ ORDERS: db }, 'NX-4K2P9', 'usr_owner')
+    expect(owner?.address).toMatchObject({ name: 'Ada Lovelace', line1: '12 Analytical Way' })
+    for (const viewer of [null, 'usr_stranger']) {
+      const seen = (await getOrder({ ORDERS: db }, 'NX-4K2P9', viewer))!.address
+      expect(seen.name).toBe('Ada')
+      expect([seen.line1, seen.line2, seen.postal, seen.phone]).toEqual(['', '', '', ''])
+      expect(seen.city).toBe(owner!.address.city)
     }
   })
 })

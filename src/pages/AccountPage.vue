@@ -18,7 +18,7 @@ import AccountSettings from '@/components/account/AccountSettings.vue'
 const auth = useAuthStore()
 const route = useRoute()
 const router = useRouter()
-const { format } = useCurrency()
+const { format, formatAmount } = useCurrency()
 
 const mode = ref<'in' | 'up' | 'forgot'>('in')
 const name = ref('')
@@ -80,6 +80,14 @@ async function submit() {
 async function leave() {
   await auth.logout()
   orders.value = null
+}
+
+/** Where each seller's part of an order stands. */
+const PART_LABEL: Record<string, string> = {
+  pending: 'Being prepared',
+  shipped: 'Shipped',
+  delivered: 'Delivered',
+  cancelled: 'Cancelled',
 }
 
 const PAYMENT_LABEL: Record<string, string> = {
@@ -150,6 +158,14 @@ const when = (iso: string) =>
               "
             >
               {{ PAYMENT_LABEL[order.paymentCode] ?? order.paymentCode }}
+            </span>
+            <!-- One per seller: each ships its own items. -->
+            <span v-for="(f, i) in order.fulfilment" :key="i" class="text-sm text-text-secondary">
+              {{ PART_LABEL[f.status] ?? f.status
+              }}<template v-if="f.carrier"> · {{ f.carrier }} <span class="code">{{ f.tracking }}</span></template>
+            </span>
+            <span v-if="order.refunded.length" class="nums text-sm text-accent-amber">
+              Refunded {{ order.refunded.map(formatAmount).join(' · ') }}
             </span>
             <span class="nums ml-auto font-semibold">{{ format(order.total) }}</span>
           </li>

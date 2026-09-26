@@ -217,16 +217,51 @@ export interface RemoteOrder {
   totals: { subtotal: number; shipping: number; tax: number; total: number }
   paymentCode: string
   lines: { sku: string; title: string; qty: number; unitPriceCents: number; finish?: string }[]
+  /** Present only when the signed-in account placed this order. */
+  parts?: OrderPart[]
+}
+
+/** One seller's part of an order: sent only to the account that placed it. */
+export interface OrderPart {
+  seller: string
+  status: 'pending' | 'shipped' | 'delivered' | 'cancelled'
+  carrier: string | null
+  tracking: string | null
+  shippedAt: string | null
+  deliveredAt: string | null
+  items: { sku: string; title: string; qty: number; finish?: string }[]
+  /** Refunded on this seller's lines, one amount per currency. */
+  refunded: { currency: string; minor: number }[]
 }
 
 /**
- * Stores an order so it exists somewhere other than the device that placed it.
- *
- * Returns a boolean rather than throwing because the shopper's receipt is
- * already written locally by the time this runs — a database that is down costs
- * the shareable copy of the order, not the order.
+ * What placing an order came to. `refused` is the server's answer (a 409 for
+ * stock, a 400 for a basket it would not price), with its own words;
+ * `duplicate` is a 409 for an id it already holds. `unreachable` is no answer
+ * at all: a timeout or a network failure, where the order may or may not have
+ * landed.
  */
-export async function saveOrder(order: OrderRequest): Promise<boolean> {
+type StoredTotals = { subtotal: number; shipping: number; tax: number; total: number }
+
+export type SaveResult =
+  | {
+      ok: true
+      /** What the server charged. */
+      totals?: StoredTotals
+      /** The id was already stored: this describes that order, placed earlier. */
+      existing?: boolean
+    }
+  | { ok: false; reason: 'refused'; status: number; error: string; duplicate: boolean }
+  | { ok: false; reason: 'unreachable' }
+
+/** How long checkout waits for the order to be stored before saying it could not confirm it. */
+export const SAVE_TIMEOUT_MS = 15_000
+
+/**
+ * Places the order. The checkout waits for this: only `ok` becomes a receipt,
+ * because the server is what prices the order and takes its stock.
+ */
+export async function saveOrder(order: OrderRequest): Promise<SaveResult> {
   try {
     const res = await fetch(`${BASE}/api/orders`, {
       method: 'POST',
@@ -235,19 +270,29 @@ export async function saveOrder(order: OrderRequest): Promise<boolean> {
       // So the session cookie rides along. It is the only way an order is ever
       // filed to an account — the server reads the cookie, not the payload.
       credentials: 'include',
-      signal: AbortSignal.timeout(10_000),
+      signal: AbortSignal.timeout(SAVE_TIMEOUT_MS),
     })
-    // 409 means this id is already stored, which is a success from here.
-    return res.ok || res.status === 409
+    if (res.ok) {
+      const data = (await res.json().catch(() => ({}))) as { totals?: StoredTotals; existing?: boolean }
+      return { ok: true, totals: data.totals, existing: data.existing === true }
+    }
+    const data = (await res.json().catch(() => ({}))) as { error?: string; code?: string }
+    return { ok: false, reason: 'refused', status: res.status, error: data.error ?? '', duplicate: data.code === 'duplicate' }
   } catch {
-    return false
+    return { ok: false, reason: 'unreachable' }
   }
 }
 
-/** Reads an order placed on another device, or in a browser since cleared. */
+/**
+ * Reads an order placed on another device, or in a browser since cleared.
+ *
+ * With credentials, so that the account which placed it also gets `parts`
+ * (delivery and refunds). Anyone else gets the order as it always was.
+ */
 export async function fetchOrder(id: string): Promise<RemoteOrder | null> {
   try {
     const res = await fetch(`${BASE}/api/orders/${encodeURIComponent(id)}`, {
+      credentials: 'include',
       signal: AbortSignal.timeout(10_000),
     })
     return res.ok ? ((await res.json()) as RemoteOrder) : null
@@ -271,6 +316,10 @@ export interface AccountOrder {
   currency: string
   paymentCode: string
   itemCount: number
+  /** Each seller's part: how far it got, and how to follow it once shipped. */
+  fulfilment: { status: OrderPart['status']; carrier: string | null; tracking: string | null }[]
+  /** Refunded so far, one amount per currency. */
+  refunded: { currency: string; minor: number }[]
 }
 
 export type AuthResult = { ok: true; user: Account } | { ok: false; error: string }

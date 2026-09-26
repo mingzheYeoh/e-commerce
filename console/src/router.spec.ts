@@ -31,21 +31,67 @@ describe('redirectFor', () => {
       scope: 'merchant',
       merchant: { name: 'Acme', slug: 'acme', status: 'active' },
     }
-    for (const allowed of ['/overview', '/products', '/products/new', '/products/abc123', '/orders', '/orders/NX-4K2P9']) {
+    for (const allowed of [
+      '/overview',
+      '/products',
+      '/products/new',
+      '/products/abc123',
+      '/orders',
+      '/orders/NX-4K2P9',
+      '/reports',
+      '/inventory',
+      '/finance',
+    ]) {
       expect(redirectFor(session, allowed), allowed).toBeNull()
     }
-    for (const elsewhere of ['/', '/applications', '/platform', '/platform/merchants', '/signin', '/enrol', '/productsx', '/ordersheet']) {
+    for (const elsewhere of [
+      '/',
+      '/applications',
+      '/platform',
+      '/platform/merchants',
+      '/signin',
+      '/enrol',
+      '/productsx',
+      '/ordersheet',
+      '/reportsx',
+      '/financial',
+      '/platform/orders',
+      '/platform/payments',
+      '/platform/reports',
+      '/platform/customers',
+      '/platform/customers/usr_1',
+      '/platform/merchants/mch_1',
+    ]) {
       expect(redirectFor(session, elsewhere), elsewhere).toBe('/overview')
     }
   })
 
   it('sends an active platform admin to /platform, and lets it reach everything beneath', () => {
     const session: StaffMe = { kind: 'active', scope: 'platform' }
-    for (const allowed of ['/platform', '/platform/merchants', '/platform/applications', '/platform/audit']) {
+    for (const allowed of [
+      '/platform',
+      '/platform/merchants',
+      '/platform/merchants/mch_1',
+      '/platform/applications',
+      '/platform/audit',
+      '/platform/orders',
+      '/platform/orders/NX-4K2P9',
+      '/platform/payments',
+      '/platform/reports',
+      '/platform/customers',
+      '/platform/customers/usr_1',
+    ]) {
       expect(redirectFor(session, allowed), allowed).toBeNull()
     }
-    for (const elsewhere of ['/', '/overview', '/products', '/orders/x', '/verify', '/platformx']) {
+    for (const elsewhere of ['/', '/overview', '/products', '/orders/x', '/reports', '/inventory', '/finance', '/verify', '/platformx']) {
       expect(redirectFor(session, elsewhere), elsewhere).toBe('/platform')
+    }
+  })
+
+  it('keeps the platform back office from a stranger and an enrolling session', () => {
+    for (const path of ['/platform/orders', '/platform/payments', '/platform/reports', '/platform/customers/usr_1', '/platform/merchants/m']) {
+      expect(redirectFor({ kind: null }, path), path).toBe('/signin')
+      expect(redirectFor({ kind: 'enrolling' }, path), path).toBe('/enrol')
     }
   })
 

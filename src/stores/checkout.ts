@@ -4,7 +4,7 @@ import { charge } from '@/lib/payment'
 import { totalCents, type OrderTotals, type ShipMethod } from '@/lib/money'
 import { findCountry, validSubdivision, validPostal, validPhone } from '@/lib/regions'
 import { methodAvailable, defaultMethodFor } from '@/lib/shipping'
-import { saveOrder, fetchOrder } from '@/lib/api'
+import { saveOrder, fetchOrder, type OrderPart } from '@/lib/api'
 import { catalogue, catalogueReady } from './catalog'
 import { useUiStore } from './ui'
 
@@ -12,9 +12,10 @@ import { useUiStore } from './ui'
  * Checkout state and order placement.
  *
  * The rule that matters most is at the bottom of `place()`: the cart is cleared
- * only after a charge succeeds. Written the other way round, one declined card
- * empties a shopper's basket — which is the sort of bug that is obvious in
- * hindsight and invisible in review, so it has a test of its own.
+ * only after a charge succeeds AND the server has stored the order. Written the
+ * other way round, one declined card — or one sold-out item — empties a
+ * shopper's basket, which is the sort of bug that is obvious in hindsight and
+ * invisible in review, so each has a test of its own.
  */
 
 export interface Address {
@@ -45,6 +46,7 @@ export interface Order {
 }
 
 const ORDERS_KEY = 'nexus:orders'
+const ATTEMPT_KEY = 'nexus:checkout-attempt'
 
 /**
  * Storage that cannot throw.
@@ -105,6 +107,12 @@ export const useCheckoutStore = defineStore('checkout', {
     orders: safeStorage.read<Order[]>(ORDERS_KEY, []),
     /** Order id -> whether the durable copy was written. Surfaced on the receipt. */
     synced: {} as Record<string, boolean>,
+    /**
+     * The id an unanswered attempt used, and the request it was for, so a
+     * retry can reuse it. Kept in storage, because the likeliest thing a
+     * shopper does after "we could not confirm your order" is reload.
+     */
+    attempt: safeStorage.read<{ id: string; key: string } | null>(ATTEMPT_KEY, null),
   }),
 
   getters: {
@@ -179,11 +187,18 @@ export const useCheckoutStore = defineStore('checkout', {
       if (this.stepValid(this.step) && this.step < 3) this.step = (this.step + 1) as 1 | 2 | 3
     },
 
+    setAttempt(attempt: { id: string; key: string } | null) {
+      this.attempt = attempt
+      safeStorage.write(ATTEMPT_KEY, attempt)
+    },
+
     findOrder(id: string): Order | undefined {
       return this.orders.find((o) => o.id === id)
     },
 
     async place(): Promise<{ ok: true; id: string } | { ok: false }> {
+      // A second press while the first is still in flight is not a second order.
+      if (this.placing) return { ok: false }
       const cart = useCartStore()
       this.error = ''
       // Price and availability are checked against the live list, not a
@@ -223,56 +238,111 @@ export const useCheckoutStore = defineStore('checkout', {
       await new Promise((r) => setTimeout(r, 400))
 
       const result = charge(this.card.number)
-      this.placing = false
 
       if (!result.ok) {
+        this.placing = false
         // Stay put. The form keeps its values and the cart keeps its contents:
         // a decline is something to retry, not a reason to start over.
         this.error = result.message
         return { ok: false }
       }
 
-      const order: Order = {
-        id: orderId(),
-        placedAt: new Date().toISOString(),
+      const request = {
         address: { ...this.address },
         method: this.method,
-        // The live-priced lines, so the receipt shows what the server charges.
-        lines: cart.lines.map(({ available: _a, limited: _l, ...line }) => line),
-        totals: this.totals,
-        paymentCode: result.code,
-      }
-
-      this.orders = [order, ...this.orders].slice(0, 20)
-      safeStorage.write(ORDERS_KEY, this.orders)
-
-      // Only now. Clearing before the charge would cost a shopper their basket
-      // every time a card was refused.
-      cart.items = []
-      this.card = { number: '', expiry: '', cvc: '' }
-      this.step = 1
-
-      // The durable copy, so /order/NX-4K2P9 opens on a device that never saw
-      // this checkout. Deliberately not awaited into the result: the receipt
-      // above is already written, and a database outage must not turn a
-      // completed purchase into an error message.
-      void saveOrder({
-        id: order.id,
-        address: order.address,
-        method: order.method,
         // Catalogue ids, quantities and the chosen finish. Still no prices:
         // the server prices the order from its own catalogue, and it checks the
         // finish against that product's colourways rather than taking the word
         // for it. The id rather than the sku, because two merchants may list one
         // sku and the server would be guessing which one was bought.
-        lines: order.lines.map((l) => ({ productId: l.productId, qty: l.qty, finish: l.finish })),
-        paymentCode: order.paymentCode,
+        lines: cart.lines.map((l) => ({ productId: l.productId, qty: l.qty, finish: l.finish })),
+        paymentCode: result.code,
         currency: useUiStore().currency,
-      }).then((stored) => {
-        this.synced[order.id] = stored
-      })
+      }
+      /*
+       * The same basket to the same address by the same method, retried after
+       * an attempt that got no answer, keeps that attempt's id — across a
+       * reload too, since the attempt is kept in storage. If the first one did
+       * land, the server answers with that stored order and this is the same
+       * order, not a second one. Anything changed, and it is a new order with
+       * a new id. The display currency is not part of it: switching it changes
+       * no money the server charges.
+       */
+      const key = JSON.stringify({ address: request.address, method: request.method, lines: request.lines })
+      const retry = this.attempt?.key === key
+      const id = retry ? this.attempt!.id : orderId()
+      this.setAttempt({ id, key })
+
+      // Waited for, unlike before: the server is what takes the stock, so a
+      // receipt written ahead of its answer could promise goods it refused.
+      const saved = await saveOrder({ id, ...request })
+      this.placing = false
+
+      // The server already held this id. For a retry that is this order; for a
+      // fresh id it is a stranger's, and nothing of this checkout was placed.
+      if (saved.ok && saved.existing && !retry) {
+        this.setAttempt(null)
+        this.error = 'Something went wrong placing your order. Please press Pay again.'
+        return { ok: false }
+      }
+
+      // "Already exists" is success only for a retry of this same request.
+      if (!saved.ok && !(saved.reason === 'refused' && saved.duplicate && retry)) {
+        // Stay on the checkout with the cart intact, and say what happened.
+        if (saved.reason === 'unreachable') {
+          this.error = 'We could not confirm your order. Check your connection and press Pay again: it will not be placed twice.'
+        } else if (saved.duplicate) {
+          // A fresh id that happened to be taken: draw another next time.
+          this.setAttempt(null)
+          this.error = 'Something went wrong placing your order. Please press Pay again.'
+        } else if (saved.status === 409 || saved.status === 400) {
+          // Sold out, or a basket the catalogue no longer agrees with. The
+          // server's own words name the product.
+          this.setAttempt(null)
+          this.error = saved.error || 'Some items are no longer available. Review your cart to continue.'
+        } else if (saved.status === 429) {
+          this.error = saved.error || 'Too many orders from this connection. Try again in a minute.'
+        } else {
+          this.error = 'We could not place your order just now. Your cart is saved: try again in a moment.'
+        }
+        return { ok: false }
+      }
+      this.setAttempt(null)
+
+      const order: Order = {
+        id,
+        placedAt: new Date().toISOString(),
+        address: request.address,
+        method: this.method,
+        // The live-priced lines, so the receipt shows what the server charges.
+        lines: cart.lines.map(({ available: _a, limited: _l, ...line }) => line),
+        // The server's figures where it gave them: for a retry of an order that
+        // already landed, they are what was charged then, not what this page
+        // would work out now.
+        totals: (saved.ok && saved.totals) || this.totals,
+        paymentCode: result.code,
+      }
+
+      this.orders = [order, ...this.orders].slice(0, 20)
+      safeStorage.write(ORDERS_KEY, this.orders)
+      this.synced[order.id] = true
+
+      // Only now, once the server has the order. Clearing any earlier would
+      // cost a shopper their basket every time a card or the stock said no.
+      cart.items = []
+      this.card = { number: '', expiry: '', cvc: '' }
+      this.step = 1
 
       return { ok: true, id: order.id }
+    },
+
+    /**
+     * Each seller's delivery and refunds for this order, or null. Only the
+     * signed-in account that placed it gets them: the server decides, from
+     * the session cookie.
+     */
+    async loadParts(id: string): Promise<OrderPart[] | null> {
+      return (await fetchOrder(id))?.parts ?? null
     },
 
     /**

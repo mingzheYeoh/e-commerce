@@ -61,14 +61,14 @@ const BADGE: Record<string, string> = {
     <li v-for="m in merchants" :key="m.id" class="flex flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3">
       <div class="min-w-[10rem] flex-1">
         <p class="text-text-primary">
-          {{ m.name }}
+          <router-link :to="`/platform/merchants/${m.id}`" class="hover:text-accent">{{ m.name }}</router-link>
           <span class="ml-2 rounded-full border px-2 py-0.5 align-middle text-xs capitalize" :class="BADGE[m.status]">{{ m.status }}</span>
         </p>
         <p class="code mt-0.5">{{ m.slug }} · joined {{ m.createdAt.slice(0, 10) }}</p>
       </div>
       <div class="nums text-sm text-text-secondary">{{ m.productCount }} product{{ m.productCount === 1 ? '' : 's' }}</div>
       <div class="nums min-w-[8rem] text-sm text-text-primary">
-        {{ formatAmounts(m.revenue) }} <span class="text-xs text-text-muted">30 days</span>
+        {{ formatAmounts(m.revenue) }} <span class="text-xs text-text-muted">net, 30 days</span>
       </div>
       <div class="ml-auto flex gap-2">
         <router-link :to="{ path: '/platform/audit', query: { merchant: m.id } }" class="btn-ghost px-3 py-1.5 text-xs">
