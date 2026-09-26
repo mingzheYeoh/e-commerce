@@ -13,6 +13,8 @@ import {
   Menu,
   Package,
   Receipt,
+  RotateCcw,
+  Star,
   ScrollText,
   ShoppingBag,
   Store,
@@ -29,7 +31,7 @@ const router = useRouter()
 const name = ref(props.scope === 'platform' ? 'NEXUS Platform' : '')
 const open = ref(false)
 
-type NavItem = { to: string; label: string; icon: unknown; exact?: boolean; badge?: 'toShip' }
+type NavItem = { to: string; label: string; icon: unknown; exact?: boolean; badge?: 'toShip' | 'returnsOpen' }
 
 const NAV: Record<'merchant' | 'platform', NavItem[]> = {
   merchant: [
@@ -39,6 +41,8 @@ const NAV: Record<'merchant' | 'platform', NavItem[]> = {
     { to: '/inventory', label: 'Inventory', icon: Boxes },
     { to: '/reports', label: 'Reports', icon: ChartColumn },
     { to: '/finance', label: 'Finance', icon: Wallet },
+    { to: '/returns', label: 'Returns', icon: RotateCcw, badge: 'returnsOpen' },
+    { to: '/reviews', label: 'Reviews', icon: Star },
   ],
   platform: [
     { to: '/platform', label: 'Overview', icon: LayoutDashboard, exact: true },
@@ -46,6 +50,8 @@ const NAV: Record<'merchant' | 'platform', NavItem[]> = {
     { to: '/platform/payments', label: 'Payments', icon: Receipt },
     { to: '/platform/reports', label: 'Reports', icon: ChartColumn },
     { to: '/platform/customers', label: 'Customers', icon: Users },
+    { to: '/platform/returns', label: 'Returns', icon: RotateCcw },
+    { to: '/platform/reviews', label: 'Reviews', icon: Star },
     { to: '/platform/merchants', label: 'Merchants', icon: Store },
     { to: '/platform/applications', label: 'Applications', icon: ClipboardCheck },
     { to: '/platform/audit', label: 'Audit log', icon: ScrollText },
@@ -59,15 +65,16 @@ const active = (item: { to: string; exact?: boolean }) =>
   route.path === item.to || (!item.exact && route.path.startsWith(`${item.to}/`))
 
 /**
- * Parts still to ship, beside Orders. Re-read on every page change, so it
+ * Parts still to ship, beside Orders, and open returns, beside Returns.
+ * Re-read on every page change, so each
  * drops as soon as the order page marks one shipped and the merchant moves on.
  * A failed read shows no badge rather than a wrong number.
  */
-const toShip = ref(0)
+const counts = ref({ toShip: 0, returnsOpen: 0 })
 async function refreshQueue() {
   if (props.scope !== 'merchant') return
   const { body } = await merchantQueue().catch(() => ({ body: { error: 'offline' } }))
-  toShip.value = 'toShip' in body ? body.toShip : 0
+  counts.value = 'toShip' in body ? { toShip: body.toShip, returnsOpen: body.returnsOpen ?? 0 } : { toShip: 0, returnsOpen: 0 }
 }
 
 // A tap on a link closes the mobile menu by way of the route change.
@@ -112,10 +119,10 @@ async function logout() {
           <component :is="item.icon" class="h-4 w-4" :class="active(item) ? 'text-accent' : ''" aria-hidden="true" />
           {{ item.label }}
           <span
-            v-if="item.badge && toShip"
+            v-if="item.badge && counts[item.badge]"
             class="nums ml-auto rounded-full border border-accent-amber/40 px-1.5 text-[11px] text-accent-amber"
-            :aria-label="`${toShip} to ship`"
-          >{{ toShip }}</span>
+            :aria-label="`${counts[item.badge]} ${item.badge === 'toShip' ? 'to ship' : 'open'}`"
+          >{{ counts[item.badge] }}</span>
         </router-link>
       </nav>
     </aside>
@@ -155,10 +162,10 @@ async function logout() {
           <component :is="item.icon" class="h-4 w-4" :class="active(item) ? 'text-accent' : ''" aria-hidden="true" />
           {{ item.label }}
           <span
-            v-if="item.badge && toShip"
+            v-if="item.badge && counts[item.badge]"
             class="nums ml-auto rounded-full border border-accent-amber/40 px-1.5 text-[11px] text-accent-amber"
-            :aria-label="`${toShip} to ship`"
-          >{{ toShip }}</span>
+            :aria-label="`${counts[item.badge]} ${item.badge === 'toShip' ? 'to ship' : 'open'}`"
+          >{{ counts[item.badge] }}</span>
         </router-link>
       </nav>
 
