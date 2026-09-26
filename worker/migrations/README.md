@@ -45,8 +45,8 @@ Verified against `sqlite_master` on 2026-09-21; production caught up on 2026-09-
 | `0010` display order | ✅ 2026-09-24 | ✅ applied 2026-09-21, rebuilt 2026-09-22 |
 | `0011` staff sessions | ✅ 2026-09-24 | ✅ applied 2026-09-22 |
 | `0012` audit merchant seq index | ✅ 2026-09-25 | ✅ 2026-09-25 |
-| `0013` order lifecycle | ❌ | ❌ |
-| `0014` platform back office indexes | ❌ | ❌ |
+| `0013` order lifecycle (+ `0013b` re-run) | ✅ 2026-09-26 | ✅ 2026-09-26 |
+| `0014` platform back office indexes | ✅ 2026-09-26 | ✅ 2026-09-26 |
 
 Until 2026-09-24 production held only `orders`, `order_lines` and the four
 tables from `0006`; the accounts tables (`users`, `sessions`, `email_tokens`,
@@ -54,6 +54,14 @@ tables from `0006`; the accounts tables (`users`, `sessions`, `email_tokens`,
 the catch-up listed under "Before production next deploys" below.
 
 ## Pending
+
+Nothing. On 2026-09-26 both databases ran the runbook below in order: `0013`,
+then nexus-api, nexus-console and the storefront, then `0013b` (production:
+2 fulfilment parts for 2 expected, stock total unchanged at 1525), then
+`0014`. The notes that follow are kept because they explain that order.
+
+### Kept for the record
+
 
 **`0013` order lifecycle, on neither database yet.** It adds
 `merchants.commission_bps` (default 800) and `order_lines.commission_bps` (the
