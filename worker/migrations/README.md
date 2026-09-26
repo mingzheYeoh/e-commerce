@@ -48,7 +48,8 @@ Verified against `sqlite_master` on 2026-09-21; production caught up on 2026-09-
 | `0013` order lifecycle (+ `0013b` re-run) | ✅ 2026-09-26 | ✅ 2026-09-26 |
 | `0014` platform back office indexes | ✅ 2026-09-26 | ✅ 2026-09-26 |
 | `0015` payment method | ✅ 2026-09-26 | ✅ 2026-09-26 |
-| `0016` customer uploads | pending | pending |
+| `0016` customer uploads | ✅ 2026-09-26 | ✅ 2026-09-26 |
+| `0017` catalogue media on R2 (data only) | ✅ 2026-09-26 | ✅ 2026-09-26 |
 
 Until 2026-09-24 production held only `orders`, `order_lines` and the four
 tables from `0006`; the accounts tables (`users`, `sessions`, `email_tokens`,
@@ -57,7 +58,7 @@ the catch-up listed under "Before production next deploys" below.
 
 ## Pending
 
-**`0016` customer uploads, on neither database yet.** It adds
+**`0016` customer uploads, applied to staging then production on 2026-09-26, each ahead of its deploys (four tables confirmed on both).** It adds
 `users.avatar_key` (nullable) and four tables: `reviews` and `review_photos`
 (one review per account and product; closing an account cascades to both),
 `return_requests` (one open request per order part, enforced by the partial

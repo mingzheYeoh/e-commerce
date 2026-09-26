@@ -9,7 +9,7 @@ export const flagship: Flagship = {
   brand: 'SENNHEISER',
   title: 'HD 900 S Reference',
   price: 649,
-  image: '/media/flagship/flagship.webp',
+  image: 'https://media.nexusohm.com/flagship/flagship.webp',
   parts: [
     {
       id: 'core',

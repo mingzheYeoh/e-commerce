@@ -31,6 +31,8 @@ function apply(mem: ReturnType<typeof memoryD1>, file: string) {
 function seeded() {
   const mem = memoryD1()
   apply(mem, '0008-seed-catalogue.sql')
+  // Production's catalogue photos live on media.nexusohm.com since 0017.
+  apply(mem, '0017-media-on-r2.sql')
   return mem
 }
 
