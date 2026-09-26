@@ -104,7 +104,13 @@ watch(
           class="flex h-10 shrink-0 items-center gap-2 rounded border border-border-hairline bg-surface-1 px-3 text-sm font-medium text-text-secondary transition-colors hover:border-border-strong hover:text-text-primary"
           :aria-label="auth.displayName ? `Account: ${auth.displayName}` : 'Sign in'"
         >
-          <User class="h-4 w-4" aria-hidden="true" />
+          <img
+            v-if="auth.user?.avatarUrl"
+            :src="auth.user.avatarUrl"
+            alt=""
+            class="h-6 w-6 rounded-full object-cover"
+          />
+          <User v-else class="h-4 w-4" aria-hidden="true" />
           <span class="hidden max-w-[7rem] truncate md:inline">
             {{ auth.firstName || 'Sign in' }}
           </span>

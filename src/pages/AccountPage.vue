@@ -14,6 +14,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useCurrency } from '@/composables/useCurrency'
 import { myOrders, type AccountOrder } from '@/lib/api'
 import AccountSettings from '@/components/account/AccountSettings.vue'
+import AvatarEditor from '@/components/account/AvatarEditor.vue'
 
 const auth = useAuthStore()
 const route = useRoute()
@@ -111,7 +112,8 @@ const when = (iso: string) =>
       <!-- ------------------------------------------------------ signed in -->
       <template v-if="auth.signedIn && auth.user">
         <div class="flex flex-wrap items-start justify-between gap-4">
-          <div>
+          <AvatarEditor />
+          <div class="mr-auto">
             <h1 class="text-2xl font-bold md:text-3xl">Hello, {{ auth.firstName }}</h1>
             <p class="mt-1 text-sm text-text-secondary">{{ auth.user.email }}</p>
           </div>
