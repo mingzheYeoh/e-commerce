@@ -6,8 +6,9 @@
  * deploy in progress returns a typed failure the UI can render, never an
  * exception that blanks a page.
  */
+import type { PayMethod } from './payment'
 
-export const BASE = import.meta.env.VITE_API_URL ?? 'https://nexus-api.mingzhe030228.workers.dev'
+export const BASE = import.meta.env.VITE_API_URL ?? 'https://api.nexusohm.com'
 
 /** Inference on a 70B model is not instant; a search box's patience is not the bar. */
 const TIMEOUT_MS = 30_000
@@ -203,7 +204,18 @@ export interface OrderRequest {
    */
   lines: { productId: string; qty: number; finish?: string }[]
   paymentCode: string
+  /** How it was paid, all simulated. Never a card number, date or CVC: only the brand. */
+  paymentMethod: PayMethod
+  /** A card brand, or a bank or wallet name from `CHANNELS`. The server checks it against the same list. */
+  paymentChannel: string
   currency: string
+}
+
+/** How an order was paid, as the server stored it. `ref` is minted there, and only the owner reads it back. */
+export interface OrderPayment {
+  method: PayMethod
+  channel: string
+  ref: string | null
 }
 
 export interface RemoteOrder {
@@ -216,7 +228,21 @@ export interface RemoteOrder {
   currency: string
   totals: { subtotal: number; shipping: number; tax: number; total: number }
   paymentCode: string
-  lines: { sku: string; title: string; qty: number; unitPriceCents: number; finish?: string }[]
+  /** Absent only from an API older than payment methods. */
+  payment?: OrderPayment
+  lines: {
+    /** The catalogue id; absent only from an API older than order details. */
+    productId?: string
+    sku: string
+    title: string
+    qty: number
+    unitPriceCents: number
+    finish?: string
+    /** The merchant that sells the line. */
+    seller?: string
+    /** That seller's part of the order. Null unless this account placed it. */
+    status?: OrderPart['status'] | null
+  }[]
   /** Present only when the signed-in account placed this order. */
   parts?: OrderPart[]
 }
@@ -250,6 +276,8 @@ export type SaveResult =
       totals?: StoredTotals
       /** The id was already stored: this describes that order, placed earlier. */
       existing?: boolean
+      /** How the server recorded the payment, with the reference it minted. */
+      payment?: OrderPayment
     }
   | { ok: false; reason: 'refused'; status: number; error: string; duplicate: boolean }
   | { ok: false; reason: 'unreachable' }
@@ -273,8 +301,8 @@ export async function saveOrder(order: OrderRequest): Promise<SaveResult> {
       signal: AbortSignal.timeout(SAVE_TIMEOUT_MS),
     })
     if (res.ok) {
-      const data = (await res.json().catch(() => ({}))) as { totals?: StoredTotals; existing?: boolean }
-      return { ok: true, totals: data.totals, existing: data.existing === true }
+      const data = (await res.json().catch(() => ({}))) as { totals?: StoredTotals; existing?: boolean; payment?: OrderPayment }
+      return { ok: true, totals: data.totals, existing: data.existing === true, payment: data.payment }
     }
     const data = (await res.json().catch(() => ({}))) as { error?: string; code?: string }
     return { ok: false, reason: 'refused', status: res.status, error: data.error ?? '', duplicate: data.code === 'duplicate' }

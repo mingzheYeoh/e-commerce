@@ -19,6 +19,7 @@ import {
   validPostal,
   validPhone,
 } from '../../src/lib/regions'
+import { CHANNELS, type PayMethod } from '../../src/lib/payment'
 
 export interface OrdersEnv {
   ORDERS: D1Database
@@ -92,6 +93,39 @@ function finishes(row: ProductRow): Set<string> {
 const PAYMENT_CODES = ['succeeded', 'card_declined', 'insufficient_funds', 'expired_card'] as const
 type PaymentCode = (typeof PAYMENT_CODES)[number]
 
+/** How an order was paid, as stored: never a card number, only its brand. */
+export interface Payment {
+  method: PayMethod
+  channel: string
+  /** Minted here. Null when the reader is not the account that placed the order. */
+  ref: string | null
+}
+
+const REF_PREFIX: Record<PayMethod, string> = { card: 'CARD', fpx: 'FPX', ewallet: 'EWALLET' }
+
+/** SIM-FPX-7K2M9Q: the order-id alphabet, so it reads aloud as cleanly. */
+function mintRef(method: PayMethod): string {
+  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+  const bytes = crypto.getRandomValues(new Uint8Array(6))
+  return `SIM-${REF_PREFIX[method]}-${[...bytes].map((b) => alphabet[b % alphabet.length]).join('')}`
+}
+
+/**
+ * The method and channel a request names, checked against the allow-list, or
+ * a refusal. A request naming neither is from a storefront built before
+ * payment methods existed, still cached in someone's browser while this worker
+ * deploys ahead of it: that one only ever took cards, so it is filed as a card
+ * with no brand rather than refused mid-checkout.
+ */
+function paymentOf(p: { paymentMethod?: unknown; paymentChannel?: unknown }): { method: PayMethod; channel: string } | string {
+  if (p.paymentMethod === undefined && p.paymentChannel === undefined) return { method: 'card', channel: '' }
+  const method = p.paymentMethod as PayMethod
+  if (!Object.keys(CHANNELS).includes(method)) return 'bad payment method'
+  const channel = p.paymentChannel
+  if (typeof channel !== 'string' || !CHANNELS[method].includes(channel)) return 'bad payment channel'
+  return { method, channel }
+}
+
 export interface OrderPayload {
   id: string
   address: {
@@ -108,6 +142,10 @@ export interface OrderPayload {
   method: string
   lines: { productId: string; qty: number; finish?: string }[]
   paymentCode: string
+  /** Absent from a storefront that predates them; see paymentOf. */
+  paymentMethod?: PayMethod
+  /** A card brand, or a bank or wallet name, from CHANNELS. */
+  paymentChannel?: string
   currency?: string
 }
 
@@ -118,6 +156,7 @@ export type PlaceResult =
         id: string
         total: number
         totals: { subtotal: number; shipping: number; tax: number; total: number }
+        payment: Payment
         /** This id was already stored: the answer describes that order, not this request. */
         existing?: true
       }
@@ -164,10 +203,20 @@ export async function placeOrder(
    * the same form, and anyone else guessing ids learns only that one is taken.
    */
   const stored = await env.ORDERS.prepare(
-    `SELECT email, subtotal_cents, shipping_cents, tax_cents, total_cents FROM orders WHERE id = ?1`,
+    `SELECT email, subtotal_cents, shipping_cents, tax_cents, total_cents, payment_method, payment_channel, payment_ref
+       FROM orders WHERE id = ?1`,
   )
     .bind(id)
-    .first<{ email: string; subtotal_cents: number; shipping_cents: number; tax_cents: number; total_cents: number }>()
+    .first<{
+      email: string
+      subtotal_cents: number
+      shipping_cents: number
+      tax_cents: number
+      total_cents: number
+      payment_method: PayMethod
+      payment_channel: string
+      payment_ref: string
+    }>()
   if (stored) {
     const sent = typeof p.address?.email === 'string' ? p.address.email.trim().toLowerCase() : ''
     if (sent !== stored.email.trim().toLowerCase()) {
@@ -179,7 +228,8 @@ export async function placeOrder(
       tax: stored.tax_cents,
       total: stored.total_cents,
     }
-    return { status: 200, body: { id, total: totals.total, totals, existing: true } }
+    const payment = { method: stored.payment_method, channel: stored.payment_channel, ref: stored.payment_ref }
+    return { status: 200, body: { id, total: totals.total, totals, payment, existing: true } }
   }
 
   // Whether this method exists at all. Whether it runs to *this* address is
@@ -189,6 +239,14 @@ export async function placeOrder(
 
   const paymentCode = str(p.paymentCode, 40)
   if (!paymentCode || !PAYMENT_CODES.includes(paymentCode as PaymentCode)) {
+    return { status: 400, body: { error: 'bad payment code' } }
+  }
+
+  const via = paymentOf(p)
+  if (typeof via === 'string') return { status: 400, body: { error: via } }
+  // The FPX and e-wallet simulator posts only an approval; a refusal there
+  // places nothing, as a declined card does. Anything else is not a checkout.
+  if (via.method !== 'card' && paymentCode !== 'succeeded') {
     return { status: 400, body: { error: 'bad payment code' } }
   }
 
@@ -347,6 +405,7 @@ export async function placeOrder(
   }
   // [productId, qty] per line; the UPDATE sums them per product itself.
   const units = JSON.stringify(lines.map((l) => [l.productId, l.qty]))
+  const payment: Payment = { ...via, ref: mintRef(via.method) }
 
   try {
     await env.ORDERS.batch([
@@ -354,8 +413,8 @@ export async function placeOrder(
         `INSERT INTO orders (id, email, ship_name, ship_phone, ship_country, ship_line1, ship_line2,
                              ship_city, ship_state, ship_postal,
                              method, currency, subtotal_cents, shipping_cents, tax_cents, total_cents,
-                             payment_status, user_id)
-         VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18)`,
+                             payment_status, user_id, payment_method, payment_channel, payment_ref)
+         VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19,?20,?21)`,
       ).bind(
         id,
         address.email,
@@ -375,6 +434,9 @@ export async function placeOrder(
         totals.total,
         paymentCode,
         userId,
+        payment.method,
+        payment.channel,
+        payment.ref,
       ),
       ...lines.map((l) =>
         env.ORDERS.prepare(
@@ -423,7 +485,7 @@ export async function placeOrder(
     return { status: 503, body: { error: 'could not store order' } }
   }
 
-  return { status: 200, body: { id, total: totals.total, totals } }
+  return { status: 200, body: { id, total: totals.total, totals, payment } }
 }
 
 export interface StoredOrder {
@@ -444,7 +506,19 @@ export interface StoredOrder {
   currency: string
   totals: { subtotal: number; shipping: number; tax: number; total: number }
   paymentCode: string
-  lines: { sku: string; title: string; qty: number; unitPriceCents: number; finish?: string }[]
+  payment: Payment
+  lines: {
+    productId: string
+    sku: string
+    title: string
+    qty: number
+    unitPriceCents: number
+    finish?: string
+    /** The merchant that sells it. */
+    seller: string
+    /** That seller's part of the order. Null unless the reader placed the order. */
+    status: string | null
+  }[]
   /** Delivery and refunds, per seller. Only ever present for the account that placed the order. */
   parts?: OrderPart[]
 }
@@ -548,6 +622,9 @@ export async function getOrder(env: OrdersEnv, id: string, userId: string | null
     total_cents: number
     payment_status: string
     user_id: string | null
+    payment_method: PayMethod
+    payment_channel: string
+    payment_ref: string
   }>()
   if (!row) return null
   const owner = userId !== null && row.user_id === userId
@@ -556,11 +633,28 @@ export async function getOrder(env: OrdersEnv, id: string, userId: string | null
   // get the first name and the town — enough for a shared link to make sense.
   const street = (v: string | null) => (owner ? (v ?? '') : '')
 
+  // Each line with its seller and that seller's part. The part's status is
+  // delivery information, so like `parts` it goes only to the owner.
   const { results } = await env.ORDERS.prepare(
-    `SELECT sku, title, qty, unit_price_cents, variant FROM order_lines WHERE order_id = ?1`,
+    `SELECT l.product_id, l.sku, l.title, l.qty, l.unit_price_cents, l.variant,
+            COALESCE(m.name, '') AS seller, f.status
+       FROM order_lines l
+       LEFT JOIN merchants m ON m.id = l.merchant_id
+       LEFT JOIN order_fulfilments f ON f.order_id = l.order_id AND f.merchant_id = l.merchant_id
+      WHERE l.order_id = ?1
+      ORDER BY l.rowid`,
   )
     .bind(id)
-    .all<{ sku: string; title: string; qty: number; unit_price_cents: number; variant: string }>()
+    .all<{
+      product_id: string
+      sku: string
+      title: string
+      qty: number
+      unit_price_cents: number
+      variant: string
+      seller: string
+      status: string | null
+    }>()
 
   return {
     id: row.id,
@@ -585,7 +679,11 @@ export async function getOrder(env: OrdersEnv, id: string, userId: string | null
       total: row.total_cents,
     },
     paymentCode: row.payment_status,
+    // The reference is what support would look an order up by, so it is the
+    // owner's. How it was paid (a method and a brand or bank name) is not.
+    payment: { method: row.payment_method, channel: row.payment_channel, ref: owner ? row.payment_ref : null },
     lines: (results ?? []).map((l) => ({
+      productId: l.product_id,
       sku: l.sku,
       title: l.title,
       qty: l.qty,
@@ -593,6 +691,8 @@ export async function getOrder(env: OrdersEnv, id: string, userId: string | null
       // Empty string is the storage shape for "no choice offered"; undefined is
       // what the rest of the app means by it.
       finish: l.variant || undefined,
+      seller: l.seller,
+      status: owner ? l.status : null,
     })),
     ...(owner ? { parts: await partsOf(env, id) } : {}),
   }

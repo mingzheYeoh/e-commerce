@@ -41,7 +41,7 @@ async function submit() {
       <button class="btn-primary" type="submit" :disabled="submitting">
         {{ submitting ? 'Signing in…' : 'Sign in' }}
       </button>
-      <router-link to="/apply" class="btn-ghost text-center">Apply to sell on NEXUS</router-link>
+      <router-link to="/apply" class="btn-ghost text-center">Apply to sell on NEXUSOHM</router-link>
     </form>
   </div>
 </template>

@@ -50,6 +50,12 @@ A walk through the whole seller-side loop, in order:
 Payments are simulated with Stripe's published test card numbers, not a real
 gateway — see [`src/lib/payment.ts`](src/lib/payment.ts) — and nothing here
 sends email except the customer-facing flows that have a Resend key bound.
+FPX online banking and e-wallets are simulated too: choosing a bank or wallet
+opens an in-app simulator screen (Approve / Decline / Time out, or a
+decorative QR with a three-minute countdown) that contacts nobody. Only an
+approval places an order. The server stores the method, the card brand or
+bank/wallet name (checked against the same allow-list) and a `SIM-…`
+reference it mints; card numbers, expiry dates and CVCs never leave the browser.
 
 ## Run it
 

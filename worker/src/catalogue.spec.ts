@@ -1,9 +1,15 @@
 import { describe, it, expect } from 'vitest'
-import { readFileSync } from 'node:fs'
+import { readFileSync as readFs } from 'node:fs'
+import { fileURLToPath } from 'node:url'
+import path from 'node:path'
 import { memoryD1 } from '../test/d1-memory'
 import { products } from '@/data/products'
 import { publishedProducts } from './catalogue'
 import { QUERY, toProduct } from '../../scripts/build-catalog.mjs'
+
+/** Paths here are from the repo root, resolved from this file so the suite also runs from `worker/`. */
+const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..')
+const readFileSync = (p: string, encoding: 'utf8') => readFs(path.join(ROOT, p), encoding)
 
 /**
  * A migration file run into a database, statement by statement.

@@ -9,6 +9,13 @@ main = "src/console.ts"
 compatibility_date = "2026-09-01"
 compatibility_flags = ["nodejs_compat"]
 
+# Production answers on nexusohm.com. A custom domain is created (DNS record and
+# certificate) by `wrangler deploy`; routes are not inherited by [env.staging],
+# so staging stays on workers.dev. workers_dev stays on so every link already
+# handed out keeps working.
+workers_dev = true
+routes = [{ pattern = "admin.nexusohm.com", custom_domain = true }]
+
 # The built SPA. run_worker_first is load-bearing: without it the asset
 # handler's SPA fallback answers every /api/* request with index.html before
 # this worker's fetch() ever runs, and the whole API goes dark behind a 200.

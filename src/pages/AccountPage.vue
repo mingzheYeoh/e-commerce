@@ -9,12 +9,14 @@
  */
 import { computed, onMounted, ref } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
-import { User, LogOut, Package, AlertCircle, MailCheck } from 'lucide-vue-next'
+import { User, LogOut, Package, AlertCircle, MailCheck, ChevronDown } from 'lucide-vue-next'
 import { useAuthStore } from '@/stores/auth'
 import { useCurrency } from '@/composables/useCurrency'
-import { myOrders, type AccountOrder } from '@/lib/api'
+import { myOrders, fetchOrder, type AccountOrder } from '@/lib/api'
+import { fromRemote, type Order } from '@/stores/checkout'
 import AccountSettings from '@/components/account/AccountSettings.vue'
 import AvatarEditor from '@/components/account/AvatarEditor.vue'
+import OrderLines from '@/components/checkout/OrderLines.vue'
 
 const auth = useAuthStore()
 const route = useRoute()
@@ -29,6 +31,20 @@ const code = ref('')
 
 const orders = ref<AccountOrder[] | null>(null)
 const loadingOrders = ref(false)
+
+/** Which rows are open, and each opened order's lines: fetched on first open, then kept. */
+const open = ref<Record<string, boolean>>({})
+const details = ref<Record<string, Order | 'loading' | 'failed'>>({})
+
+async function toggle(id: string) {
+  open.value[id] = !open.value[id]
+  if (!open.value[id] || (details.value[id] && details.value[id] !== 'failed')) return
+  details.value[id] = 'loading'
+  // The same endpoint the order page reads, with the session, so the sellers'
+  // statuses come back for this account's own orders.
+  const remote = await fetchOrder(id)
+  details.value[id] = remote ? fromRemote(remote) : 'failed'
+}
 
 /**
  * Where to go after signing in.
@@ -143,33 +159,75 @@ const when = (iso: string) =>
         </p>
 
         <ul v-else class="mt-4 divide-y divide-border-hairline rounded-card border border-border-hairline">
-          <li v-for="order in orders" :key="order.id" class="flex flex-wrap items-center gap-x-6 gap-y-2 p-4">
-            <RouterLink :to="`/order/${order.id}`" class="code font-semibold hover:text-accent">
-              {{ order.id }}
-            </RouterLink>
-            <span class="text-sm text-text-secondary">{{ when(order.placedAt) }}</span>
-            <span class="nums text-sm text-text-secondary">
-              {{ order.itemCount }} item{{ order.itemCount === 1 ? '' : 's' }}
-            </span>
-            <span
-              class="rounded-full px-2 py-0.5 text-xs"
-              :class="
-                order.paymentCode === 'succeeded'
-                  ? 'bg-accent-green/15 text-accent-green'
-                  : 'bg-accent-red/15 text-accent-red'
-              "
+          <li v-for="order in orders" :key="order.id" class="p-4">
+            <div class="flex flex-wrap items-center gap-x-6 gap-y-2">
+              <RouterLink :to="`/order/${order.id}`" class="code font-semibold hover:text-accent">
+                {{ order.id }}
+              </RouterLink>
+              <span class="text-sm text-text-secondary">{{ when(order.placedAt) }}</span>
+              <span class="nums text-sm text-text-secondary">
+                {{ order.itemCount }} item{{ order.itemCount === 1 ? '' : 's' }}
+              </span>
+              <span
+                class="rounded-full px-2 py-0.5 text-xs"
+                :class="
+                  order.paymentCode === 'succeeded'
+                    ? 'bg-accent-green/15 text-accent-green'
+                    : 'bg-accent-red/15 text-accent-red'
+                "
+              >
+                {{ PAYMENT_LABEL[order.paymentCode] ?? order.paymentCode }}
+              </span>
+              <!-- One per seller: each ships its own items. -->
+              <span v-for="(f, i) in order.fulfilment" :key="i" class="text-sm text-text-secondary">
+                {{ PART_LABEL[f.status] ?? f.status
+                }}<template v-if="f.carrier"> · {{ f.carrier }} <span class="code">{{ f.tracking }}</span></template>
+              </span>
+              <span v-if="order.refunded.length" class="nums text-sm text-accent-amber">
+                Refunded {{ order.refunded.map(formatAmount).join(' · ') }}
+              </span>
+              <span class="nums ml-auto font-semibold">{{ format(order.total) }}</span>
+              <button
+                type="button"
+                class="inline-flex items-center gap-1 text-sm text-text-secondary hover:text-text-primary"
+                :aria-expanded="open[order.id] ? 'true' : 'false'"
+                :aria-controls="`order-lines-${order.id}`"
+                @click="toggle(order.id)"
+              >
+                Details
+                <ChevronDown
+                  class="h-4 w-4 transition-transform"
+                  :class="open[order.id] && 'rotate-180'"
+                  aria-hidden="true"
+                />
+              </button>
+            </div>
+
+            <div
+              v-if="open[order.id]"
+              :id="`order-lines-${order.id}`"
+              class="mt-4 rounded border border-border-hairline bg-surface-1 p-4"
             >
-              {{ PAYMENT_LABEL[order.paymentCode] ?? order.paymentCode }}
-            </span>
-            <!-- One per seller: each ships its own items. -->
-            <span v-for="(f, i) in order.fulfilment" :key="i" class="text-sm text-text-secondary">
-              {{ PART_LABEL[f.status] ?? f.status
-              }}<template v-if="f.carrier"> · {{ f.carrier }} <span class="code">{{ f.tracking }}</span></template>
-            </span>
-            <span v-if="order.refunded.length" class="nums text-sm text-accent-amber">
-              Refunded {{ order.refunded.map(formatAmount).join(' · ') }}
-            </span>
-            <span class="nums ml-auto font-semibold">{{ format(order.total) }}</span>
+              <p v-if="details[order.id] === 'loading'" class="text-sm text-text-secondary" role="status">
+                Loading the items…
+              </p>
+              <p v-else-if="details[order.id] === 'failed'" class="text-sm text-accent-amber" role="alert">
+                Could not load this order. Close and open it to try again.
+              </p>
+              <template v-else-if="details[order.id]">
+                <OrderLines :lines="(details[order.id] as Order).lines" />
+                <dl class="nums mt-4 grid max-w-xs grid-cols-2 gap-y-1 border-t border-border-hairline pt-3 text-sm sm:ml-auto">
+                  <dt class="text-text-secondary">Subtotal</dt>
+                  <dd class="text-right">{{ format((details[order.id] as Order).totals.subtotal) }}</dd>
+                  <dt class="text-text-secondary">Shipping</dt>
+                  <dd class="text-right">{{ format((details[order.id] as Order).totals.shipping) }}</dd>
+                  <dt class="text-text-secondary">Tax</dt>
+                  <dd class="text-right">{{ format((details[order.id] as Order).totals.tax) }}</dd>
+                  <dt class="font-semibold">Total</dt>
+                  <dd class="text-right font-semibold">{{ format((details[order.id] as Order).totals.total) }}</dd>
+                </dl>
+              </template>
+            </div>
           </li>
         </ul>
 

@@ -434,6 +434,8 @@ const paymentsOut = (page: PaymentPage, limit: number) => {
       goods: e.goods,
       shipping: e.shipping,
       tax: e.tax,
+      paymentMethod: e.payment_method,
+      paymentChannel: e.payment_channel,
     })),
     totals: page.totals.map((t) => ({
       currency: t.currency,

@@ -8,15 +8,17 @@
  */
 import { computed, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
-import { CheckCircle2, Package, Truck } from 'lucide-vue-next'
+import { CheckCircle2, Package, Truck, Receipt } from 'lucide-vue-next'
 import { useCheckoutStore, type Order } from '@/stores/checkout'
 import { useCurrency } from '@/composables/useCurrency'
 import { SHIP_METHODS } from '@/lib/money'
 import { rateFor } from '@/lib/shipping'
 import { findCountry } from '@/lib/regions'
-import type { OrderPart } from '@/lib/api'
+import { fetchOrder, type OrderPart } from '@/lib/api'
+import { METHOD_LABEL } from '@/lib/payment'
 import OrderSummary from '@/components/checkout/OrderSummary.vue'
 import OrderReturns from '@/components/account/OrderReturns.vue'
+import OrderLines from '@/components/checkout/OrderLines.vue'
 import NotFoundPage from './NotFoundPage.vue'
 
 const props = defineProps<{ id: string }>()
@@ -40,7 +42,12 @@ watch(
   async (id) => {
     status.value = 'loading'
     parts.value = null
-    ;[order.value, parts.value] = await Promise.all([checkout.loadOrder(id), checkout.loadParts(id)])
+    // One request: it fills a receipt from another device, and adds to one
+    // this browser holds what only the server knows (sellers, statuses,
+    // delivery and refunds for the account that placed it).
+    const remote = await fetchOrder(id)
+    order.value = await checkout.loadOrder(id, remote)
+    parts.value = remote?.parts ?? null
     status.value = order.value ? 'found' : 'missing'
   },
   { immediate: true },
@@ -120,6 +127,21 @@ const placedOn = computed(() =>
           </div>
         </div>
 
+        <section class="mt-6 rounded-card border border-border-hairline bg-surface-1 p-5">
+          <h2 class="flex items-center gap-2 text-sm font-semibold">
+            <Receipt class="h-3.5 w-3.5 text-text-secondary" aria-hidden="true" />
+            Items
+          </h2>
+          <div class="mt-3">
+            <OrderLines :lines="order.lines" />
+          </div>
+          <p v-if="order.payment" class="mt-4 border-t border-border-hairline pt-4 text-sm text-text-secondary">
+            Paid by {{ METHOD_LABEL[order.payment.method] ?? order.payment.method
+            }}<template v-if="order.payment.channel"> · {{ order.payment.channel }}</template>
+            <template v-if="order.payment.ref"> · ref <span class="code">{{ order.payment.ref }}</span></template>
+          </p>
+        </section>
+
         <div class="mt-6 grid gap-6 md:grid-cols-[1fr_320px]">
           <div class="rounded-card border border-border-hairline bg-surface-1 p-5">
             <h2 class="flex items-center gap-2 text-sm font-semibold">
@@ -152,6 +174,7 @@ const placedOn = computed(() =>
           </div>
 
           <OrderSummary
+            hide-lines
             :lines="order.lines"
             :totals="order.totals"
             :method="order.method"

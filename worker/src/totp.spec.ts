@@ -92,8 +92,8 @@ describe('the otpauth URI', () => {
     // An entry reading only an email address is unidentifiable on a phone with
     // thirty of them.
     const uri = otpauthUri('ada@example.com', 'ABC234')
-    expect(uri.startsWith('otpauth://totp/NEXUS%3Aada%40example.com?')).toBe(true)
-    expect(uri).toContain('issuer=NEXUS')
+    expect(uri.startsWith('otpauth://totp/NEXUSOHM%3Aada%40example.com?')).toBe(true)
+    expect(uri).toContain('issuer=NEXUSOHM')
     expect(uri).toContain('secret=ABC234')
     expect(uri).toContain('digits=6')
     expect(uri).toContain('period=30')

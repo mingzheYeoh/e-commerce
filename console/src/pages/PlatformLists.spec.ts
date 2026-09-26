@@ -42,6 +42,8 @@ const entry = (ref: string): PaymentEntry => ({
   goods: null,
   shipping: null,
   tax: null,
+  paymentMethod: null,
+  paymentChannel: null,
 })
 const paid = (refs: string[], next: string | null = null) => ({
   status: 200,
@@ -108,6 +110,31 @@ describe('the payments ledger page', () => {
     ])
     const [, csv] = vi.mocked(download).mock.calls[0]
     expect(csv.slice(1).map((r) => r[2])).toEqual(['P1', 'P2'])
+  })
+
+  it('says how each charge was paid, on the page and in the export', async () => {
+    const charge: PaymentEntry = {
+      ...entry('NX-FPX01'),
+      kind: 'charge',
+      amount: 5000,
+      goods: 5000,
+      shipping: 0,
+      tax: 0,
+      paymentMethod: 'fpx',
+      paymentChannel: 'Maybank2u',
+    }
+    vi.mocked(payments).mockResolvedValue({ ...paid([]), body: { ...paid([]).body, entries: [charge, entry('Sept')] } })
+    const w = mountPage(Payments)
+    await flushPromises()
+    expect(w.text()).toContain('FPX · Maybank2u')
+    await w.findAll('button').find((b) => b.text().includes('Export CSV'))!.trigger('click')
+    await flushPromises()
+    const [, csv] = vi.mocked(download).mock.calls[0]
+    expect(csv[0].slice(-2)).toEqual(['Payment method', 'Payment channel'])
+    expect(csv.slice(1).map((r) => r.slice(-2))).toEqual([
+      ['FPX', 'Maybank2u'],
+      [null, null],
+    ])
   })
 
   it('says a merchant-filtered charge is that merchant\'s goods alone', async () => {

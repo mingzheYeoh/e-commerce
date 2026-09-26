@@ -31,6 +31,9 @@ function fill(store: ReturnType<typeof useCheckoutStore>) {
   store.address.state = 'CA'
   store.address.postal = '94016'
   store.method = 'standard'
+  // A date and CVC that pass, so each test's card number decides the outcome.
+  store.card.expiry = '12/49'
+  store.card.cvc = '123'
 }
 
 describe('checkout store', () => {
@@ -417,6 +420,121 @@ describe('orders beyond this browser', () => {
 
   it('returns null when the order does not exist anywhere', async () => {
     expect(await useCheckoutStore().loadOrder('NX-QQQQQ')).toBeNull()
+  })
+})
+
+describe('paying by card, FPX or e-wallet', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    localStorage.clear()
+    mockSave.mockReset()
+    mockSave.mockResolvedValue({ ok: true })
+    mockFetch.mockReset()
+    mockFetch.mockResolvedValue(null)
+  })
+
+  function ready() {
+    const cart = useCartStore()
+    const checkout = useCheckoutStore()
+    cart.add(inStock())
+    fill(checkout)
+    return { cart, checkout }
+  }
+
+  it('sends the card brand and nothing a gateway would need', async () => {
+    const { checkout } = ready()
+    checkout.card.number = '4242 4242 4242 4242'
+    expect((await checkout.place()).ok).toBe(true)
+    const sent = mockSave.mock.calls[0][0]
+    expect(sent).toMatchObject({ paymentMethod: 'card', paymentChannel: 'Visa' })
+    expect(JSON.stringify(sent)).not.toMatch(/4242|12\/49|"123"|cvc|expiry/i)
+  })
+
+  it('will not reach the payment button with an expired card', () => {
+    const { checkout } = ready()
+    checkout.card.number = '4242 4242 4242 4242'
+    expect(checkout.stepValid(3)).toBe(true)
+    checkout.card.expiry = '01/20'
+    expect(checkout.stepValid(3)).toBe(false)
+  })
+
+  it('places an FPX order once the simulator approves, naming only the bank', async () => {
+    const { cart, checkout } = ready()
+    checkout.payMethod = 'fpx'
+    expect(checkout.stepValid(3)).toBe(false)
+    checkout.channel = 'Maybank2u'
+    expect(checkout.stepValid(3)).toBe(true)
+    expect((await checkout.place('approved')).ok).toBe(true)
+    expect(mockSave.mock.calls[0][0]).toMatchObject({ paymentMethod: 'fpx', paymentChannel: 'Maybank2u', paymentCode: 'succeeded' })
+    expect(cart.count).toBe(0)
+  })
+
+  it('refuses a bank that is not on the list', () => {
+    const { checkout } = ready()
+    checkout.payMethod = 'fpx'
+    checkout.channel = 'A Bank Nobody Listed'
+    expect(checkout.stepValid(3)).toBe(false)
+  })
+
+  it.each(['declined', 'timeout', 'cancelled'] as const)(
+    'places nothing and keeps the cart when the simulator reports %s',
+    async (outcome) => {
+      const { cart, checkout } = ready()
+      checkout.payMethod = outcome === 'timeout' ? 'ewallet' : 'fpx'
+      checkout.channel = outcome === 'timeout' ? 'GrabPay' : 'BSN'
+      expect((await checkout.place(outcome)).ok).toBe(false)
+      expect(mockSave).not.toHaveBeenCalled()
+      expect(cart.count).toBe(1)
+      expect(checkout.error).toMatch(/Nothing was charged/)
+    },
+  )
+
+  it("keeps the server's payment reference on the receipt", async () => {
+    mockSave.mockResolvedValue({ ok: true, payment: { method: 'ewallet', channel: 'Boost', ref: 'SIM-EWALLET-ABCDEF' } })
+    const { checkout } = ready()
+    checkout.payMethod = 'ewallet'
+    checkout.channel = 'Boost'
+    const res = await checkout.place('approved')
+    expect(checkout.findOrder((res as { id: string }).id)!.payment).toEqual({
+      method: 'ewallet',
+      channel: 'Boost',
+      ref: 'SIM-EWALLET-ABCDEF',
+    })
+  })
+
+  it("adds each seller's status and the payment to a receipt this browser holds, from the server's copy", async () => {
+    const { checkout } = ready()
+    checkout.card.number = '4242 4242 4242 4242'
+    const res = await checkout.place()
+    const id = (res as { id: string }).id
+    const local = checkout.findOrder(id)!
+    const remote = {
+      id,
+      placedAt: '2026-09-20 03:06:30',
+      email: 'a•••@example.com',
+      address: { ...local.address },
+      method: 'standard',
+      currency: 'USD',
+      totals: local.totals,
+      paymentCode: 'succeeded',
+      payment: { method: 'card' as const, channel: 'Visa', ref: 'SIM-CARD-QQQQQQ' },
+      lines: [
+        {
+          productId: local.lines[0].productId,
+          sku: local.lines[0].sku,
+          title: local.lines[0].title,
+          qty: 1,
+          unitPriceCents: local.lines[0].unitPriceCents,
+          finish: local.lines[0].finish,
+          seller: 'Acme Audio',
+          status: 'shipped' as const,
+        },
+      ],
+    }
+    const order = await checkout.loadOrder(id, remote)
+    expect(order!.address.email).toBe('ada@example.com') // still the local, unmasked copy
+    expect(order!.lines[0]).toMatchObject({ seller: 'Acme Audio', status: 'shipped' })
+    expect(order!.payment).toEqual({ method: 'card', channel: 'Visa', ref: 'SIM-CARD-QQQQQQ' })
   })
 })
 

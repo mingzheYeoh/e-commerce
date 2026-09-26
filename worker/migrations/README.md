@@ -47,6 +47,7 @@ Verified against `sqlite_master` on 2026-09-21; production caught up on 2026-09-
 | `0012` audit merchant seq index | ✅ 2026-09-25 | ✅ 2026-09-25 |
 | `0013` order lifecycle (+ `0013b` re-run) | ✅ 2026-09-26 | ✅ 2026-09-26 |
 | `0014` platform back office indexes | ✅ 2026-09-26 | ✅ 2026-09-26 |
+| `0015` payment method | ✅ 2026-09-26 | ✅ 2026-09-26 |
 | `0016` customer uploads | pending | pending |
 
 Until 2026-09-24 production held only `orders`, `order_lines` and the four
@@ -81,6 +82,14 @@ The same deploy needs, before either worker goes out:
   the console has per environment), which avatar and review photo URLs are
   built from. Those objects go in the existing `nexus-media` /
   `nexus-media-staging` buckets under `avatars/` and `reviews/`.
+
+### Applied: 0015
+
+`0015` (payment method columns) ran on staging, then production, on
+2026-09-26, each ahead of its nexus-api deploy; every stored order read back
+as `card`.
+
+### Before 0015
 
 On 2026-09-26 both databases ran the runbook below in order: `0013`,
 then nexus-api, nexus-console and the storefront, then `0013b` (production:

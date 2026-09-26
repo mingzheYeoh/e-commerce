@@ -153,7 +153,7 @@ const guarantees = [
       <div
         class="flex flex-col gap-3 text-xs text-text-muted md:flex-row md:items-center md:justify-between"
       >
-        <p>© {{ YEAR }} NEXUS — demo storefront, not a real retailer.</p>
+        <p>© {{ YEAR }} NEXUSOHM — demo storefront, not a real retailer.</p>
         <p class="flex flex-wrap gap-x-5 gap-y-1">
           <span>Free delivery over $75</span>
           <span>30-day returns</span>

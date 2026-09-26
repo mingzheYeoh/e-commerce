@@ -1569,6 +1569,23 @@ describe('the console worker: the platform back office', () => {
     }
   })
 
+  it('says how each charge was paid, and nothing of the kind for a refund or payout', async () => {
+    const p = await backOffice()
+    // o_theirs predates the columns being written, so it keeps the defaults: a card.
+    p.raw.prepare(`UPDATE orders SET payment_method = 'fpx', payment_channel = 'Maybank2u' WHERE id = 'o_shared'`).run()
+    type Entry = { kind: string; ref: string; paymentMethod: string | null; paymentChannel: string | null }
+    const how = (entries: Entry[]) => entries.map((e) => `${e.kind}:${e.ref}:${e.paymentMethod}:${e.paymentChannel}`).sort()
+    const all = (await (await p.get('/api/platform/payments')).json()) as { entries: Entry[] }
+    expect(how(all.entries)).toEqual([
+      'charge:o_shared:fpx:Maybank2u',
+      'charge:o_theirs:card:',
+      'payout:Sept:null:null',
+      'refund:o_theirs:null:null',
+    ])
+    const acme = (await (await p.get(`/api/platform/payments?type=charge&merchant=${p.merchantId}`)).json()) as { entries: Entry[] }
+    expect(how(acme.entries)).toEqual(['charge:o_shared:fpx:Maybank2u'])
+  })
+
   it('lists customers with their spend, guests only as a sum, and audits every read', async () => {
     const p = await backOffice()
     const body = (await (await p.get('/api/platform/customers')).json()) as {
