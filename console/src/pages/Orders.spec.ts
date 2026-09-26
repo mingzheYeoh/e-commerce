@@ -56,6 +56,8 @@ describe('the order history', () => {
     await flushPromises()
     const ids = w.findAll('tbody tr').map((r) => r.find('td').text())
     expect(ids).toEqual(['NX-NEW'])
+    // Unmounted first: a mounted page would load again for this reset, with no answer queued.
+    w.unmount()
     route.query = { status: 'pending' }
   })
 

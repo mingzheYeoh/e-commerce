@@ -17,6 +17,13 @@ import PlatformOverview from './pages/PlatformOverview.vue'
 import Merchants from './pages/Merchants.vue'
 import Applications from './pages/Applications.vue'
 import AuditLog from './pages/AuditLog.vue'
+import MerchantDetail from './pages/MerchantDetail.vue'
+import PlatformOrders from './pages/PlatformOrders.vue'
+import PlatformOrderDetail from './pages/PlatformOrderDetail.vue'
+import Payments from './pages/Payments.vue'
+import PlatformReports from './pages/PlatformReports.vue'
+import Customers from './pages/Customers.vue'
+import CustomerDetail from './pages/CustomerDetail.vue'
 
 /** Which dashboard frame a page sits in. Pages without one (sign-in, enrol) stand alone. */
 declare module 'vue-router' {
@@ -44,6 +51,13 @@ export const routes = [
   { path: '/finance', name: 'finance', component: Finance, meta: merchant },
   { path: '/platform', name: 'platform', component: PlatformOverview, meta: platform },
   { path: '/platform/merchants', name: 'merchants', component: Merchants, meta: platform },
+  { path: '/platform/merchants/:id', name: 'merchant', component: MerchantDetail, props: true, meta: platform },
+  { path: '/platform/orders', name: 'platform-orders', component: PlatformOrders, meta: platform },
+  { path: '/platform/orders/:id', name: 'platform-order', component: PlatformOrderDetail, props: true, meta: platform },
+  { path: '/platform/payments', name: 'payments', component: Payments, meta: platform },
+  { path: '/platform/reports', name: 'platform-reports', component: PlatformReports, meta: platform },
+  { path: '/platform/customers', name: 'customers', component: Customers, meta: platform },
+  { path: '/platform/customers/:id', name: 'customer', component: CustomerDetail, props: true, meta: platform },
   { path: '/platform/applications', name: 'applications', component: Applications, meta: platform },
   { path: '/platform/audit', name: 'audit', component: AuditLog, meta: platform },
   // Neither is a real destination: the guard below redirects away from both

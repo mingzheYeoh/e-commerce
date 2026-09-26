@@ -61,7 +61,7 @@ const BADGE: Record<string, string> = {
     <li v-for="m in merchants" :key="m.id" class="flex flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3">
       <div class="min-w-[10rem] flex-1">
         <p class="text-text-primary">
-          {{ m.name }}
+          <router-link :to="`/platform/merchants/${m.id}`" class="hover:text-accent">{{ m.name }}</router-link>
           <span class="ml-2 rounded-full border px-2 py-0.5 align-middle text-xs capitalize" :class="BADGE[m.status]">{{ m.status }}</span>
         </p>
         <p class="code mt-0.5">{{ m.slug }} · joined {{ m.createdAt.slice(0, 10) }}</p>

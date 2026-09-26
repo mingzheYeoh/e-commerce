@@ -28,13 +28,22 @@ import {
 import {
   id,
   LOW_STOCK,
+  OVERDUE_DAYS,
   scopedTo,
   platformWide,
   utcDay,
   Conflict,
   Invalid,
   type AuditPage,
+  type Attention,
   type Balance,
+  type CustomerDetail,
+  type CustomerPage,
+  type MerchantDetail,
+  type PaymentFilter,
+  type PaymentKind,
+  type PaymentPage,
+  type PlatformReport,
   type Fulfilment,
   type FulfilmentStatus,
   type InventoryRow,
@@ -324,6 +333,18 @@ const orderDetail = (o: OrderDetail) => ({
   })),
   totals: o.totals,
   fulfilment: o.fulfilment.map(fulfilmentOut),
+  refunds: o.refunds.map((r) => ({
+    id: r.id,
+    merchantId: r.merchant_id,
+    productId: r.product_id,
+    finish: r.variant || null,
+    qty: r.qty,
+    amountMinor: r.amount_minor,
+    currency: r.currency,
+    reason: r.reason,
+    by: r.actor_scope,
+    at: r.created_at,
+  })),
 })
 
 const overviewOut = (o: Overview) => ({
@@ -339,6 +360,174 @@ const platformOverviewOut = ({ revenue, gross, orders, trend, products }: Overvi
   orders,
   trend,
   products,
+})
+
+/* ---------------------------------------------------------- platform io */
+
+/** The platform's order list shows whose lines each order holds. */
+const platformOrderSummary = (o: OrderSummary) => ({ ...orderSummary(o), merchantIds: o.merchant_ids })
+
+const PAYMENT_KINDS = new Set<string>(['charge', 'refund', 'payout'])
+/** A payments cursor is the last entry's `at|rank|id`. */
+const PAYMENT_CURSOR = /^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\|([123])\|([A-Za-z0-9_-]{1,64})$/
+/** A customers cursor is the last account's `created_at|id`. */
+const CUSTOMER_CURSOR = /^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\|([A-Za-z0-9_-]{1,64})$/
+const ID = /^[A-Za-z0-9_-]{1,64}$/
+
+/** A page size: ORDER_PAGE unless asked, 1 to 200. */
+function pageSize(url: URL): number | string {
+  const raw = url.searchParams.get('limit')
+  const limit = raw === null ? ORDER_PAGE : Number(raw)
+  return Number.isInteger(limit) && limit >= 1 && limit <= 200 ? limit : 'limit is a whole number from 1 to 200.'
+}
+
+/** The payments ledger's filters; the range defaults to the last 30 days and covers three years at most. */
+function paymentFilter(url: URL): (PaymentFilter & { limit: number }) | string {
+  const p = url.searchParams
+  const range = reportRange(url)
+  if (typeof range === 'string') return range
+  const kind = p.get('type') || undefined
+  if (kind && !PAYMENT_KINDS.has(kind)) return 'type is charge, refund or payout.'
+  const merchantId = p.get('merchant') || undefined
+  if (merchantId && !ID.test(merchantId)) return 'not a merchant id'
+  const currency = p.get('currency') || undefined
+  if (currency && !/^[A-Z]{3}$/.test(currency)) return 'currency is a three-letter code, such as USD.'
+  const cursor = p.get('before')
+  const at = cursor === null ? null : cursor.match(PAYMENT_CURSOR)
+  if (cursor !== null && !at) return 'before is the next value of the page before.'
+  const limit = pageSize(url)
+  if (typeof limit === 'string') return limit
+  return {
+    ...range,
+    kind: kind as PaymentKind | undefined,
+    merchantId,
+    currency,
+    before: at ? { at: at[1], rank: Number(at[2]), id: at[3] } : undefined,
+    limit,
+  }
+}
+
+const paymentsOut = (page: PaymentPage, limit: number) => {
+  const shown = page.entries.slice(0, limit)
+  const last = shown[shown.length - 1]
+  return {
+    next: page.entries.length > limit ? `${last.at}|${last.rank}|${last.id}` : null,
+    entries: shown.map((e) => ({
+      at: e.at,
+      kind: e.kind,
+      id: e.id,
+      ref: e.ref,
+      merchantIds: e.merchant_ids,
+      currency: e.currency,
+      amount: e.amount,
+      goods: e.goods,
+      shipping: e.shipping,
+      tax: e.tax,
+    })),
+    totals: page.totals.map((t) => ({
+      currency: t.currency,
+      charges: t.charges,
+      charged: t.charged,
+      goods: t.goods,
+      shipping: t.shipping,
+      tax: t.tax,
+      refunds: t.refunds,
+      refunded: t.refunded,
+      payouts: t.payouts,
+      paidOut: t.paid_out,
+    })),
+  }
+}
+
+const reportOut = (r: PlatformReport) => ({
+  charges: r.charges,
+  merchants: r.merchants.map((m) => ({
+    merchantId: m.merchant_id,
+    name: m.name,
+    currency: m.currency,
+    gross: m.gross,
+    refunds: m.refunds,
+    net: m.net,
+    commission: m.commission,
+    orders: m.orders,
+    units: m.units,
+  })),
+  health: r.health.map((h) => ({
+    merchantId: h.merchant_id,
+    parts: h.parts,
+    cancelled: h.cancelled,
+    shipped: h.shipped,
+    avgShipSeconds: h.avg_ship_seconds,
+  })),
+  signups: r.signups,
+  buyers: r.buyers,
+})
+
+const attentionOut = (a: Attention) => ({
+  pendingApplications: a.pending_applications,
+  toShip: a.to_ship,
+  overdue: a.overdue,
+  overdueDays: OVERDUE_DAYS,
+  lowStockAt: LOW_STOCK,
+  owingMerchants: a.owing_merchants,
+  owing: a.owing.map((o) => ({ merchantId: o.merchant_id, name: o.name, currency: o.currency, available: o.available })),
+  lowStock: a.low_stock.map((l) => ({ merchantId: l.merchant_id, name: l.name, products: l.products })),
+})
+
+const merchantDetailOut = (m: MerchantDetail) => ({
+  id: m.merchant_id,
+  name: m.name,
+  slug: m.slug,
+  status: m.status,
+  createdAt: m.created_at,
+  settlementCurrency: m.settlement_currency,
+  commissionBps: m.commission_bps,
+  staff: m.staff.map((s) => ({ id: s.id, email: s.email, role: s.role, totpEnrolled: s.totp_enrolled, createdAt: s.created_at })),
+  products: {
+    draft: m.products.draft,
+    published: m.products.published,
+    archived: m.products.archived,
+    lowStock: m.products.low_stock,
+    outOfStock: m.products.out_of_stock,
+  },
+  low: m.low.map((p) => ({ id: p.id, title: p.title, stockCount: p.stock_count })),
+  lowStockAt: LOW_STOCK,
+  health: {
+    toShip: m.health.to_ship,
+    overdue: m.health.overdue,
+    overdueDays: OVERDUE_DAYS,
+    parts: m.health.parts,
+    shipped: m.health.shipped,
+    cancelled: m.health.cancelled,
+    avgShipSeconds: m.health.avg_ship_seconds,
+  },
+  balances: m.balances.map(balanceOut),
+})
+
+/** A shopper account as the platform may see it: contact and standing, never a credential. */
+const customerOut = (c: CustomerPage['customers'][number]) => ({
+  id: c.id,
+  email: c.email,
+  name: c.name,
+  createdAt: c.created_at,
+  verified: c.verified,
+  twoFactor: c.two_factor,
+  orders: c.orders,
+  lastOrderAt: c.last_order_at,
+  spend: c.spend,
+})
+
+const customerDetailOut = (c: CustomerDetail) => ({
+  ...customerOut(c),
+  refunded: c.refunded,
+  recent: c.recent.map((o) => ({
+    id: o.id,
+    placedAt: o.created_at,
+    currency: o.currency,
+    total: o.total,
+    items: o.items,
+    fulfilment: o.fulfilment,
+  })),
 })
 
 const merchantOut = (m: MerchantSummary) => ({
@@ -583,6 +772,9 @@ const PLATFORM_REFUND = /^\/api\/platform\/orders\/([^/]+)\/refunds$/
 const COMMISSION = /^\/api\/platform\/merchants\/([^/]+)\/commission$/
 const PAYOUTS = /^\/api\/platform\/merchants\/([^/]+)\/payouts$/
 const PART_CANCEL = /^\/api\/platform\/orders\/([^/]+)\/parts\/([^/]+)\/cancel$/
+const PLATFORM_MERCHANT = /^\/api\/platform\/merchants\/([^/]+)$/
+const MERCHANT_SALES = /^\/api\/platform\/merchants\/([^/]+)\/sales$/
+const CUSTOMER = /^\/api\/platform\/customers\/([^/]+)$/
 
 async function route(request: Request, env: ConsoleEnv, url: URL, ctx: ExecutionContext): Promise<Response> {
   const path = url.pathname
@@ -880,6 +1072,102 @@ async function route(request: Request, env: ConsoleEnv, url: URL, ctx: Execution
 
   /* ------------------------------------------------------------ platform */
 
+  /* The platform's back office. Every read is audited by the repository
+     wrapper, one statement however many merchants it drew on, and carries
+     orders, money or personal data, so none of it may be cached. */
+
+  if (path === '/api/platform/orders' && method === 'GET') {
+    const repo = await platformRepo(env, request)
+    if (repo instanceof Response) return repo
+    const filter = orderFilter(url)
+    if (typeof filter === 'string') return json({ error: filter }, 400)
+    const merchant = url.searchParams.get('merchant') || undefined
+    if (merchant && !ID.test(merchant)) return json({ error: 'not a merchant id' }, 400)
+    const limit = filter.limit ?? ORDER_PAGE
+    const orders = await repo.orders.list({ ...filter, merchant })
+    const page = orders.slice(0, limit)
+    const last = page[page.length - 1]
+    return json(
+      {
+        from: filter.from ?? null,
+        to: filter.to ?? null,
+        next: orders.length > limit ? `${last.created_at}|${last.id}` : null,
+        orders: page.map(platformOrderSummary),
+      },
+      200,
+      PRIVATE,
+    )
+  }
+
+  if (path === '/api/platform/merchants/names' && method === 'GET') {
+    const repo = await platformRepo(env, request)
+    if (repo instanceof Response) return repo
+    return json({ merchants: await repo.merchants.names() }, 200, PRIVATE)
+  }
+
+  if (path === '/api/platform/payments' && method === 'GET') {
+    const repo = await platformRepo(env, request)
+    if (repo instanceof Response) return repo
+    const filter = paymentFilter(url)
+    if (typeof filter === 'string') return json({ error: filter }, 400)
+    return json({ from: filter.from, to: filter.to, ...paymentsOut(await repo.payments.list(filter), filter.limit) }, 200, PRIVATE)
+  }
+
+  if (path === '/api/platform/reports' && method === 'GET') {
+    const repo = await platformRepo(env, request)
+    if (repo instanceof Response) return repo
+    const range = reportRange(url)
+    if (typeof range === 'string') return json({ error: range }, 400)
+    const [sales, extra] = await Promise.all([repo.stats.sales(range), repo.analytics.report(range)])
+    return json({ ...salesOut(sales), ...reportOut(extra) }, 200, PRIVATE)
+  }
+
+  if (path === '/api/platform/customers' && method === 'GET') {
+    const repo = await platformRepo(env, request)
+    if (repo instanceof Response) return repo
+    const q = (url.searchParams.get('q') ?? '').trim()
+    if (q.length > 80) return json({ error: 'Search by at most 80 characters.' }, 400)
+    const cursor = url.searchParams.get('before')
+    const at = cursor === null ? null : cursor.match(CUSTOMER_CURSOR)
+    if (cursor !== null && !at) return json({ error: 'before is the next value of the page before.' }, 400)
+    const limit = pageSize(url)
+    if (typeof limit === 'string') return json({ error: limit }, 400)
+    const page = await repo.customers.list({ q: q || undefined, before: at ? { at: at[1], id: at[2] } : undefined, limit })
+    const shown = page.customers.slice(0, limit)
+    const last = shown[shown.length - 1]
+    return json(
+      {
+        next: page.customers.length > limit ? `${last.created_at}|${last.id}` : null,
+        customers: shown.map(customerOut),
+        guests: page.guests,
+      },
+      200,
+      PRIVATE,
+    )
+  }
+
+  const customerId = path.match(CUSTOMER)?.[1]
+  if (customerId && method === 'GET') {
+    const repo = await platformRepo(env, request)
+    if (repo instanceof Response) return repo
+    if (!ID.test(customerId)) return json({ error: 'not found' }, 404, PRIVATE)
+    const customer = await repo.customers.get(customerId)
+    return customer ? json(customerDetailOut(customer), 200, PRIVATE) : json({ error: 'not found' }, 404, PRIVATE)
+  }
+
+  const salesFor = path.match(MERCHANT_SALES)?.[1]
+  if (salesFor && method === 'GET') {
+    const repo = await platformRepo(env, request)
+    if (repo instanceof Response) return repo
+    const range = reportRange(url)
+    if (typeof range === 'string') return json({ error: range }, 400)
+    if (!ID.test(salesFor)) return json({ error: 'not found' }, 404)
+    const report = await repo.merchants.sales(salesFor, range)
+    if (!report) return json({ error: 'not found' }, 404)
+    const { merchant_id: _m, ...rest } = report
+    return json(salesOut(rest), 200, PRIVATE)
+  }
+
   /* Any order, every merchant's part of it. Audited against each merchant
      whose lines it read, by the repository wrapper. */
   const platformOrder = path.match(PLATFORM_ORDER)?.[1]
@@ -941,14 +1229,32 @@ async function route(request: Request, env: ConsoleEnv, url: URL, ctx: Execution
     if (repo instanceof Response) return repo
     // Ranking and the pending/active/suspended counts are read off the one
     // merchant list rather than asked for again.
-    const [overview, merchants] = await Promise.all([repo.stats.overview(), repo.merchants.list()])
-    return json({ overview: platformOverviewOut(overview), merchants: merchants.map(merchantOut) })
+    const [overview, merchants, attention] = await Promise.all([
+      repo.stats.overview(),
+      repo.merchants.list(),
+      repo.analytics.attention(),
+    ])
+    return json(
+      { overview: platformOverviewOut(overview), merchants: merchants.map(merchantOut), attention: attentionOut(attention) },
+      200,
+      PRIVATE,
+    )
   }
 
   if (path === '/api/platform/merchants/all' && method === 'GET') {
     const repo = await platformRepo(env, request)
     if (repo instanceof Response) return repo
     return json({ merchants: (await repo.merchants.list()).map(merchantOut) })
+  }
+
+  // After /all and /names, which this pattern would otherwise take for ids.
+  const merchantId = path.match(PLATFORM_MERCHANT)?.[1]
+  if (merchantId && method === 'GET') {
+    const repo = await platformRepo(env, request)
+    if (repo instanceof Response) return repo
+    if (!ID.test(merchantId)) return json({ error: 'not found' }, 404)
+    const detail = await repo.merchants.get(merchantId)
+    return detail ? json(merchantDetailOut(detail), 200, PRIVATE) : json({ error: 'not found' }, 404)
   }
 
   const transition = path.match(TRANSITION)

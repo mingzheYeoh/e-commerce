@@ -189,6 +189,14 @@ const PLATFORM_ROUTES = [
   ['POST', '/api/platform/merchants/mch_x/payouts'],
   ['GET', '/api/platform/balances'],
   ['POST', '/api/platform/orders/o1/parts/mch_x/cancel'],
+  ['GET', '/api/platform/orders'],
+  ['GET', '/api/platform/merchants/names'],
+  ['GET', '/api/platform/merchants/mch_x'],
+  ['GET', '/api/platform/merchants/mch_x/sales'],
+  ['GET', '/api/platform/payments'],
+  ['GET', '/api/platform/reports'],
+  ['GET', '/api/platform/customers'],
+  ['GET', '/api/platform/customers/usr_x'],
 ] as const
 
 describe('the console worker: who may reach what', () => {
@@ -1447,5 +1455,199 @@ describe('the console worker: platform merchant management', () => {
     const fifty = await statementsFor(49)
     expect(fifty).toBe(one)
     expect(fifty).toBeLessThan(50)
+  })
+})
+
+describe('the console worker: the platform back office', () => {
+  /**
+   * sharedOrders(), with its parts open, the shared order placed by an account
+   * and o_theirs by a guest, one refund and one payout. The account's password
+   * hash, TOTP secret and recovery code are markers no response may carry.
+   */
+  async function backOffice() {
+    const mem = await activeMerchant()
+    sharedOrders(mem.raw, mem.merchantId)
+    mem.raw
+      .prepare(
+        `INSERT INTO order_fulfilments (order_id, merchant_id) VALUES ('o_shared', ?), ('o_shared', 'mch_other'), ('o_theirs', 'mch_other')`,
+      )
+      .run(mem.merchantId)
+    mem.raw
+      .prepare(
+        `INSERT INTO users (id, email, name, password_hash, password_salt, iterations, totp_secret, totp_confirmed_at)
+         VALUES ('usr_1', 'ada@example.com', 'Ada', 'SECRET_HASH', 'SECRET_SALT', 1, 'SECRET_TOTP', '2026-01-01')`,
+      )
+      .run()
+    mem.raw.prepare(`INSERT INTO recovery_codes (code_hash, user_id) VALUES ('SECRET_CODE', 'usr_1')`).run()
+    mem.raw.prepare(`UPDATE orders SET user_id = 'usr_1' WHERE id = 'o_shared'`).run()
+    const cookie = await platformSession(mem)
+    const get = (path: string) => call(mem.db, 'GET', path, { cookie })
+    const post = (path: string, body: unknown = {}) => call(mem.db, 'POST', path, { cookie, body })
+    expect((await post('/api/platform/orders/o_theirs/refunds', { productId: 'prd_theirs', qty: 0, amountMinor: 100, reason: 'Late' })).status).toBe(201)
+    expect((await post('/api/platform/merchants/mch_other/payouts', { currency: 'USD', amountMinor: 500, reference: 'Sept' })).status).toBe(201)
+    return { ...mem, cookie, get, post }
+  }
+
+  const READS = [
+    '/api/platform/orders',
+    '/api/platform/merchants/names',
+    '/api/platform/payments',
+    '/api/platform/reports',
+    '/api/platform/customers',
+    '/api/platform/customers/usr_1',
+    '/api/platform/merchants/mch_other',
+    '/api/platform/merchants/mch_other/sales',
+    '/api/platform/overview',
+  ]
+
+  it('answers every back office read uncached, with no contact detail or credential but a customer email', async () => {
+    const p = await backOffice()
+    const staffHash = (p.raw.prepare(`SELECT password_hash FROM staff WHERE merchant_id = ?`).get(p.merchantId) as { password_hash: string })
+      .password_hash
+    for (const path of READS) {
+      const res = await p.get(path)
+      expect(res.status, path).toBe(200)
+      expect(res.headers.get('cache-control'), path).toBe('no-store')
+      const text = await res.text()
+      expect(text, path).not.toMatch(/SECRET_|555 0199|shopper@example\.com/)
+      expect(text, path).not.toContain(staffHash)
+      // Only the customer pages carry an account's email.
+      if (!path.startsWith('/api/platform/customers')) expect(text, path).not.toContain('ada@example.com')
+    }
+  })
+
+  it('lists every order, narrowed by merchant and by that merchant part status', async () => {
+    const p = await backOffice()
+    const ids = async (q: string) => ((await (await p.get(`/api/platform/orders?${q}`)).json()) as { orders: { id: string }[] }).orders.map((o) => o.id).sort()
+    expect(await ids('')).toEqual(['o_shared', 'o_theirs'])
+    expect(await ids(`merchant=${p.merchantId}`)).toEqual(['o_shared'])
+    expect(await ids('merchant=mch_other&status=pending')).toEqual(['o_shared', 'o_theirs'])
+    expect(await ids(`merchant=${p.merchantId}&status=shipped`)).toEqual([])
+    const body = (await (await p.get('/api/platform/orders?q=shared')).json()) as { orders: { merchantIds: string[] }[] }
+    expect(body.orders[0].merchantIds.sort()).toEqual([p.merchantId, 'mch_other'].sort())
+    for (const q of ['merchant=a%20b', 'status=lost', 'from=2026-02-30', 'limit=0', 'before=x']) {
+      expect((await p.get(`/api/platform/orders?${q}`)).status, q).toBe(400)
+    }
+    const detail = (await (await p.get('/api/platform/orders/o_theirs')).json()) as { refunds: { amountMinor: number; by: string }[] }
+    expect(detail.refunds).toEqual([expect.objectContaining({ amountMinor: 100, by: 'platform' })])
+  })
+
+  it('states the payments ledger with totals per currency, and refuses a filter it cannot read', async () => {
+    const p = await backOffice()
+    const body = (await (await p.get('/api/platform/payments')).json()) as {
+      entries: { kind: string; ref: string }[]
+      totals: { currency: string; charges: number; charged: number; refunded: number; paidOut: number }[]
+      next: string | null
+    }
+    expect(body.entries.map((e) => `${e.kind}:${e.ref}`).sort()).toEqual(['charge:o_shared', 'charge:o_theirs', 'payout:Sept', 'refund:o_theirs'])
+    // Each order was charged its stored total, 3000; every product here is USD.
+    expect(body.totals).toEqual([expect.objectContaining({ currency: 'USD', charges: 2, charged: 6000, refunded: 100, paidOut: 500 })])
+    const page = (await (await p.get('/api/platform/payments?limit=1')).json()) as { next: string; entries: unknown[] }
+    expect(page.entries).toHaveLength(1)
+    expect((await p.get(`/api/platform/payments?limit=1&before=${encodeURIComponent(page.next)}`)).status).toBe(200)
+    // Narrowed to Acme, the shared order's charge is Acme's 2000 of goods alone, with no shipping or tax.
+    const acme = (await (await p.get(`/api/platform/payments?type=charge&merchant=${p.merchantId}`)).json()) as {
+      entries: { ref: string; amount: number; goods: number; shipping: number | null; tax: number | null }[]
+    }
+    expect(acme.entries).toEqual([expect.objectContaining({ ref: 'o_shared', amount: 2000, goods: 2000, shipping: null, tax: null })])
+    for (const q of ['type=gift', 'currency=usd', 'before=x', 'merchant=a%20b', 'from=2020-01-01&to=2026-01-01']) {
+      expect((await p.get(`/api/platform/payments?${q}`)).status, q).toBe(400)
+    }
+  })
+
+  it('lists customers with their spend, guests only as a sum, and audits every read', async () => {
+    const p = await backOffice()
+    const body = (await (await p.get('/api/platform/customers')).json()) as {
+      customers: { id: string; email: string; twoFactor: boolean; orders: number; spend: unknown }[]
+      guests: { orders: number; spend: unknown }
+    }
+    expect(body.customers).toEqual([
+      expect.objectContaining({ id: 'usr_1', email: 'ada@example.com', twoFactor: true, orders: 1, spend: [{ currency: 'USD', minor: 3000 }] }),
+    ])
+    expect(body.guests).toEqual({ orders: 1, spend: [{ currency: 'USD', minor: 3000 }] })
+    expect((await p.get('/api/platform/customers/usr_nobody')).status).toBe(404)
+    expect((await p.get('/api/platform/customers?before=x')).status).toBe(400)
+    expect(p.raw.prepare(`SELECT action, subject FROM audit_log WHERE action LIKE 'customers.%' ORDER BY rowid`).all()).toEqual([
+      { action: 'customers.list', subject: null },
+      { action: 'customers.get', subject: 'usr_nobody' },
+    ])
+  })
+
+  it("shows one merchant's profile, staff, health and balance, and 404 for no such merchant", async () => {
+    const p = await backOffice()
+    const m = (await (await p.get(`/api/platform/merchants/${p.merchantId}`)).json()) as {
+      name: string
+      commissionBps: number
+      staff: { email: string; role: string; totpEnrolled: boolean }[]
+      health: { toShip: number }
+      balances: { currency: string; available: number }[]
+    }
+    // The owner signed up through the route and never enrolled TOTP here.
+    expect(m).toMatchObject({ name: 'Acme', commissionBps: 800, health: { toShip: 1 } })
+    expect(m.staff).toEqual([expect.objectContaining({ email: 'owner@example.com', role: 'owner', totpEnrolled: false })])
+    // 2000 sold at 8%: 160 commission.
+    expect(m.balances).toEqual([expect.objectContaining({ currency: 'USD', available: 1840 })])
+    expect((await p.get('/api/platform/merchants/mch_nope')).status).toBe(404)
+    expect((await p.get('/api/platform/merchants/mch_nope/sales')).status).toBe(404)
+    for (const bad of ['/api/platform/merchants/a%20b', '/api/platform/merchants/a%20b/sales', '/api/platform/customers/a%20b']) {
+      expect((await p.get(bad)).status, bad).toBe(404)
+    }
+    const sales = (await (await p.get(`/api/platform/merchants/${p.merchantId}/sales`)).json()) as { totals: { gross: number }[] }
+    expect(sales.totals).toEqual([expect.objectContaining({ currency: 'USD', gross: 2000 })])
+  })
+
+  it('reports the platform and names what needs attention on the overview', async () => {
+    const p = await backOffice()
+    const r = (await (await p.get('/api/platform/reports')).json()) as {
+      totals: { currency: string; gross: number; commission: number }[]
+      charges: { period: string; currency: string; orders: number; total: number }[]
+      merchants: { merchantId: string }[]
+      buyers: { accounts: number; guests: number }
+    }
+    // 4000 of goods: Acme's 2000 (160 at 8%) and mch_other's 2000 less 100 refunded (1900 at 8%, 152), floored per merchant.
+    expect(r.totals).toEqual([expect.objectContaining({ currency: 'USD', gross: 4000, commission: 160 + 152 })])
+    expect(r.charges).toEqual([{ period: 'now', currency: 'USD', orders: 2, goods: 6000, shipping: 0, tax: 0, total: 6000 }])
+    expect(r.buyers).toEqual({ accounts: 1, guests: 1 })
+    expect(r.merchants.map((m) => m.merchantId).sort()).toEqual([p.merchantId, 'mch_other'].sort())
+    const { attention } = (await (await p.get('/api/platform/overview')).json()) as { attention: Record<string, unknown> }
+    expect(attention).toMatchObject({ pendingApplications: 0, toShip: 3, overdue: 0, owingMerchants: 0, owing: [], lowStock: [] })
+  })
+
+  it('costs the same number of D1 statements for 50 merchants as for 1 on every back office read', async () => {
+    const statementsFor = async (extra: number) => {
+      const p = await backOffice()
+      const seed = p.raw.prepare(`INSERT INTO merchants (id, slug, name, settlement_currency, status) VALUES (?, ?, 'M', 'USD', 'active')`)
+      for (let i = 0; i < extra; i++) {
+        seed.run(`mch_n${i}`, `n${i}`)
+        seedProduct(p.raw, `mch_n${i}`, `prd_n${i}`)
+        p.raw
+          .prepare(
+            `INSERT INTO orders (id, email, ship_name, ship_line1, ship_city, ship_state, ship_postal, method,
+                                 subtotal_cents, shipping_cents, tax_cents, total_cents, payment_status)
+             VALUES (?, 'x@example.com', 'X', '1 Road', 'Town', 'OR', '97201', 'standard', 1000, 0, 0, 1000, 'succeeded')`,
+          )
+          .run(`o_n${i}`)
+        p.raw
+          .prepare(`INSERT INTO order_lines (order_id, product_id, merchant_id, sku, title, qty, unit_price_cents) VALUES (?, ?, ?, 'S', 'T', 1, 1000)`)
+          .run(`o_n${i}`, `prd_n${i}`, `mch_n${i}`)
+        p.raw.prepare(`INSERT INTO order_fulfilments (order_id, merchant_id) VALUES (?, ?)`).run(`o_n${i}`, `mch_n${i}`)
+      }
+      const counts: number[] = []
+      for (const path of READS) {
+        let count = 0
+        const counting = { ...p.db, prepare: (sql: string) => (count++, p.db.prepare(sql)) } as unknown as D1Database
+        const res = await call(counting, 'GET', path, { cookie: p.cookie })
+        expect(res.status, path).toBe(200)
+        counts.push(count)
+      }
+      // The payments page drew on (nearly) every merchant: a row each, from one statement.
+      const drawn = p.raw.prepare(`SELECT COUNT(DISTINCT merchant_id) AS n FROM audit_log WHERE action = 'payments.list'`).get() as { n: number }
+      expect(drawn.n).toBeGreaterThanOrEqual(Math.min(2 + extra, 40))
+      return counts
+    }
+    const one = await statementsFor(0)
+    const fifty = await statementsFor(49)
+    expect(fifty).toEqual(one)
+    for (const n of fifty) expect(n).toBeLessThan(20)
   })
 })

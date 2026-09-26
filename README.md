@@ -406,6 +406,44 @@ Known limits:
   that would bound them (`ponytail:` comments on `orders.list`, `stats.sales`
   and `finance.ledger`).
 
+### The platform back office
+
+A platform admin's sidebar has Orders, Payments, Reports and Customers beside
+Merchants, Applications and the audit log. Every read goes through
+`platformWide`, is refused to merchant staff and to a session still enrolling
+TOTP, is `no-store`, and is audited by the repository wrapper in one
+statement however many merchants it drew on (a test pins the statement count
+for 1 and 50 merchants on every read).
+
+- **Orders**: every order, filtered by any part's status, by merchant (status
+  then reads that merchant's part), by id and dates, keyset-paged, CSV without
+  contact details. The order page shows each merchant's part, lines, refunds and
+  timeline; the platform can refund any line or cancel any pending part.
+- **Payments**: charges (each paid order's total, goods, shipping and tax),
+  refunds and payouts, newest first, with totals per currency over the filter.
+  Filtered to one merchant, a charge is that merchant's goods on the order
+  alone, per currency; shipping and tax belong to the whole order and drop out.
+- **Reports**: `stats.sales` in platform scope beside order-level figures —
+  shipping and tax, orders, average order — a merchant leaderboard (net, take,
+  refund rate, ship time, cancellations), products, and sign-ups by week.
+- **Customers**: shopper accounts with orders and spend; guest checkouts only as
+  a total. Reading one account is recorded against each merchant whose order it
+  shows, like any order read. Explicit columns only, and a test fails if any statement names a
+  password, salt, TOTP secret, token or recovery code.
+- **A merchant's page**: sales, fulfilment health, catalogue, staff (whether
+  TOTP is enrolled, nothing more), balance, and the set-commission and
+  record-payout actions.
+
+Order-level money has a currency only when all of an order's lines do:
+checkout adds lines into one subtotal whatever their currency, so an order
+spanning two is reported under `XXX` rather than guessed into either. The
+four indexes these reads needed are migration `0014`.
+
+The merchant rule above holds here too, with two reads named as exceptions:
+the overview's "owing" card sums every balance from all history (as
+`/api/platform/balances` already does), and the customer list's guest total
+sums every guest order. Both carry `ponytail:` notes on what would bound them.
+
 ## Asset pipeline
 
 `scripts/fetch-assets.mjs` downloads real, licensed photography into
@@ -485,10 +523,6 @@ rather than trusted from the request. What is genuinely still missing:
   their password has no self-serve way back in; a customer does.
 - **Merchant staff beyond the owner.** One login per merchant; no inviting a
   teammate.
-- **Platform pages for the money.** Merchants have theirs (see
-  [the merchant back office](#the-merchant-back-office)); commission, payouts
-  and every merchant's balance are console routes for the platform, with no
-  pages yet.
 - **Tracking for guest orders.** Carrier, tracking number and refunds are shown
   only to the account that placed an order; a guest's order link shows what it
   always did.
