@@ -82,6 +82,10 @@ const apply = () => {
   void router.replace({ query: q })
 }
 
+const METHOD: Record<NonNullable<PaymentEntry['paymentMethod']>, string> = { card: 'Card', fpx: 'FPX', ewallet: 'E-wallet' }
+/** "FPX · Maybank2u" for a charge; empty for a refund or payout. */
+const paidBy = (e: PaymentEntry) =>
+  e.paymentMethod ? [METHOD[e.paymentMethod], e.paymentChannel].filter(Boolean).join(' · ') : ''
 const who = (e: PaymentEntry) => e.merchantIds.map(nameOf).join(', ')
 const parts = (e: PaymentEntry) =>
   e.kind === 'charge' && e.shipping !== null ? `goods ${formatMinor(e.goods ?? 0, e.currency)} · shipping ${formatMinor(e.shipping ?? 0, e.currency)} · tax ${formatMinor(e.tax ?? 0, e.currency)}` : ''
@@ -89,7 +93,7 @@ const parts = (e: PaymentEntry) =>
 async function exportCsv() {
   exporting.value = true
   error.value = null
-  const rows: Cell[][] = [['Date (UTC)', 'Type', 'Order or reference', 'Merchants', 'Currency', 'Amount', 'Goods', 'Shipping', 'Tax']]
+  const rows: Cell[][] = [['Date (UTC)', 'Type', 'Order or reference', 'Merchants', 'Currency', 'Amount', 'Goods', 'Shipping', 'Tax', 'Payment method', 'Payment channel']]
   let before: string | null = null
   const dec = (v: number | null) => (v === null ? null : minorToDecimal(v))
   // One filter for the whole export, whatever the page's does meanwhile.
@@ -101,7 +105,7 @@ async function exportCsv() {
         error.value = isError(body) ? body.error : 'The export stopped part way. Try again.'
         return
       }
-      for (const e of body.entries) rows.push([e.at, KIND[e.kind], e.ref, who(e), e.currency, minorToDecimal(e.amount), dec(e.goods), dec(e.shipping), dec(e.tax)])
+      for (const e of body.entries) rows.push([e.at, KIND[e.kind], e.ref, who(e), e.currency, minorToDecimal(e.amount), dec(e.goods), dec(e.shipping), dec(e.tax), e.paymentMethod ? METHOD[e.paymentMethod] : null, e.paymentChannel])
       before = body.next
     } while (before)
     download(`payments-${f.from}-to-${f.to}.csv`, rows)
@@ -198,6 +202,7 @@ async function exportCsv() {
                 <router-link v-if="e.kind !== 'payout'" :to="`/platform/orders/${e.ref}`" class="font-mono text-xs text-accent hover:text-accent-hover">{{ e.ref }}</router-link>
                 <span v-else class="text-text-primary">{{ e.ref }}</span>
                 <p v-if="parts(e)" class="nums mt-0.5 whitespace-nowrap text-xs text-text-muted">{{ parts(e) }}</p>
+                <p v-if="paidBy(e)" class="mt-0.5 whitespace-nowrap text-xs text-text-secondary">{{ paidBy(e) }}</p>
               </td>
               <td class="px-4 py-3 text-text-primary">{{ who(e) }}</td>
               <td class="nums whitespace-nowrap px-4 py-3 text-right" :class="e.amount < 0 ? 'text-text-secondary' : 'text-text-primary'">

@@ -233,6 +233,10 @@ export interface PaymentEntry {
   goods: number | null
   shipping: number | null
   tax: number | null
+  /** A charge's: card, fpx or ewallet. Null on a refund or payout. */
+  payment_method: string | null
+  /** A charge's card brand, or bank or wallet name ('' for orders before 0015). Null on a refund or payout. */
+  payment_channel: string | null
 }
 
 export interface PaymentPage {
@@ -1530,7 +1534,8 @@ function platformOnly(env: TenancyEnv, staffId: string): Omit<PlatformRepository
           branches.push({
             sql: `SELECT o.created_at AS at, 1 AS rank, 'charge' AS kind, o.id || '-' || ${CURRENCY} AS id, o.id AS ref,
                          json_array(l.merchant_id) AS merchant_ids, ${CURRENCY} AS currency, SUM(${GROSS}) AS amount,
-                         SUM(${GROSS}) AS goods, NULL AS shipping, NULL AS tax
+                         SUM(${GROSS}) AS goods, NULL AS shipping, NULL AS tax,
+                         o.payment_method, o.payment_channel
                     ${SALES}${w.sql}
                    GROUP BY o.id, ${CURRENCY}`,
             args: w.args,
@@ -1541,7 +1546,8 @@ function platformOnly(env: TenancyEnv, staffId: string): Omit<PlatformRepository
             sql: `SELECT o.created_at AS at, 1 AS rank, 'charge' AS kind, o.id AS id, o.id AS ref,
                          (SELECT json_group_array(DISTINCT m.merchant_id) FROM order_lines m WHERE m.order_id = o.id) AS merchant_ids,
                          ${ORDER_CURRENCY('o')} AS currency, o.total_cents AS amount, o.subtotal_cents AS goods,
-                         o.shipping_cents AS shipping, o.tax_cents AS tax
+                         o.shipping_cents AS shipping, o.tax_cents AS tax,
+                         o.payment_method, o.payment_channel
                     FROM orders o${w.sql}`,
             args: w.args,
           })
@@ -1551,7 +1557,8 @@ function platformOnly(env: TenancyEnv, staffId: string): Omit<PlatformRepository
           branches.push({
             sql: `SELECT r.created_at AS at, 2 AS rank, 'refund' AS kind, r.id AS id, r.order_id AS ref,
                          json_array(r.merchant_id) AS merchant_ids, ${CURRENCY} AS currency, -r.amount_minor AS amount,
-                         NULL AS goods, NULL AS shipping, NULL AS tax
+                         NULL AS goods, NULL AS shipping, NULL AS tax,
+                         NULL AS payment_method, NULL AS payment_channel
                     FROM refunds r LEFT JOIN products p ON p.id = r.product_id${w.sql}`,
             args: w.args,
           })
@@ -1561,7 +1568,8 @@ function platformOnly(env: TenancyEnv, staffId: string): Omit<PlatformRepository
           branches.push({
             sql: `SELECT y.created_at AS at, 3 AS rank, 'payout' AS kind, y.id AS id, y.reference AS ref,
                          json_array(y.merchant_id) AS merchant_ids, y.currency AS currency, -y.amount_minor AS amount,
-                         NULL AS goods, NULL AS shipping, NULL AS tax
+                         NULL AS goods, NULL AS shipping, NULL AS tax,
+                         NULL AS payment_method, NULL AS payment_channel
                     FROM payouts y${w.sql}`,
             args: w.args,
           })
