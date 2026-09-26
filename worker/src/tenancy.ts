@@ -12,6 +12,7 @@
  * the same way the check was meant to prevent.
  */
 import type { OrdersEnv } from './orders'
+import { authorOf } from './text'
 
 export interface TenancyEnv extends OrdersEnv {}
 
@@ -122,6 +123,34 @@ export interface Repository {
     /** Every payout, newest first. */
     payouts(): Promise<(Payout & { created_at: string })[]>
   }
+  /**
+   * Shoppers' reviews of the scope's products, newest first, hidden ones
+   * included and marked. Read-only: a merchant cannot edit or hide a review
+   * of its own product. Never given to the AI (see rag.ts, tools.ts).
+   */
+  reviews: {
+    list(filter: { limit?: number }): Promise<ReviewRow[]>
+  }
+  /**
+   * Return requests on the scope's parts. The platform reads them; deciding
+   * is the merchant's own act, so approve and reject throw in platform scope,
+   * as fulfilment does.
+   */
+  returns: {
+    /** Newest first, at most RETURN_CAP. */
+    list(filter: { status?: ReturnStatus }): Promise<ReturnSummary[]>
+    get(id: string): Promise<ReturnDetail | null>
+    /**
+     * Refunds `amountMinor` (at most the part's refundable remainder) through
+     * the refund path, spread over the part's lines in order, and marks the
+     * request approved: the refunds, their audit rows, the decision and its
+     * audit row in one batch, ending in the refund cap guard. Null when the
+     * request is not in scope; Conflict when it is decided or over the cap.
+     */
+    approve(id: string, input: { amountMinor: number; note: string }): Promise<ReturnDetail | null>
+    /** Marks the request rejected with a note the shopper will read. Invalid without one. */
+    reject(id: string, input: { note: string }): Promise<ReturnDetail | null>
+  }
 }
 
 /**
@@ -199,6 +228,15 @@ export interface PlatformRepository extends Repository {
     list(filter: CustomerFilter): Promise<CustomerPage>
     /** One account and its paid orders, newest first. Null for no such account. */
     get(id: string): Promise<CustomerDetail | null>
+  }
+  /**
+   * Taking a review out of the product page and its average, and putting it
+   * back. Audited by the wrapper against the review's merchant. Null for no
+   * such review.
+   */
+  moderation: {
+    hide(reviewId: string): Promise<{ id: string; merchant_id: string; hidden: boolean } | null>
+    unhide(reviewId: string): Promise<{ id: string; merchant_id: string; hidden: boolean } | null>
   }
 }
 
@@ -418,6 +456,65 @@ export interface Queue {
   low_stock: number
   /** Published, none left. */
   out_of_stock: number
+  /** Return requests still waiting for a decision. */
+  returns_open: number
+}
+
+export type ReturnStatus = 'open' | 'approved' | 'rejected'
+/** What a shopper may give as the reason for a return. The table's CHECK holds the same list. */
+export const RETURN_REASONS = ['damaged', 'wrong_item', 'not_as_described', 'changed_mind', 'other'] as const
+export type ReturnReason = (typeof RETURN_REASONS)[number]
+
+/** One shopper's request for money back on one merchant's delivered part of an order. */
+export interface ReturnSummary {
+  id: string
+  order_id: string
+  merchant_id: string
+  reason: ReturnReason
+  note: string
+  status: ReturnStatus
+  /** What the approval refunded, in `currency`; null until approved. */
+  refund_minor: number | null
+  /** The part's lines' currency, or XXX when they span more than one. */
+  currency: string
+  decision_note: string | null
+  decided_at: string | null
+  created_at: string
+  delivered_at: string | null
+}
+
+export interface ReturnDetail extends ReturnSummary {
+  /** The part's lines, with what was paid and refunded on each. */
+  lines: {
+    product_id: string
+    variant: string
+    sku: string
+    title: string
+    qty: number
+    unit_price_cents: number
+    paid: number
+    refunded_minor: number
+  }[]
+  /** Minor units still refundable across the part: the most an approval can refund. */
+  refundable: number
+  /** Photo names, oldest first: returnKey(id, name) in the private bucket. */
+  photos: string[]
+}
+
+/** A review as staff see it: the author as a first name and initial, never an email. */
+export interface ReviewRow {
+  id: string
+  product_id: string
+  product_title: string
+  merchant_id: string
+  rating: number
+  body: string
+  hidden: boolean
+  author: string
+  /** Photo names, oldest first: reviewKey(id, name, size) in the public bucket. */
+  photos: string[]
+  created_at: string
+  updated_at: string
 }
 
 /**
@@ -708,6 +805,9 @@ export const ORDER_CAP = 1000
 export const OVERDUE_DAYS = 3
 /** The most orders a customer's page lists. */
 export const CUSTOMER_ORDERS = 100
+/** The most return requests, and reviews, one console list returns. */
+export const RETURN_CAP = 200
+export const REVIEW_CAP = 200
 
 /** Exported so staff-auth mints `mch_`/`stf_` the one way this worker mints ids. */
 export const id = (prefix: string) =>
@@ -764,6 +864,9 @@ const READS = new Set([
   'finance.balance',
   'finance.ledger',
   'finance.payouts',
+  'reviews.list',
+  'returns.list',
+  'returns.get',
 ])
 
 /**
@@ -782,6 +885,8 @@ export const SELF_AUDITED = new Set([
   'refunds.create',
   'payouts.create',
   'parts.cancel',
+  'returns.approve',
+  'returns.reject',
 ])
 
 /**
@@ -1122,6 +1227,46 @@ const refundCapGuard = (env: TenancyEnv, orderId: string) =>
 
 /** What the guard's refusal looks like once D1 reports it. */
 const overCap = (err: unknown) => /CHECK constraint failed/.test(String(err)) && /qty >= 0/.test(String(err))
+
+/**
+ * One refund and its audit row, as statements for the caller's batch — which
+ * must end with refundCapGuard. The one way a refund is written: refunds.create
+ * and returns.approve both build their batches from this.
+ *
+ * `onlyIf` names an audit row written earlier in the same batch; both
+ * statements then land only if it exists, which is how an approval's refunds
+ * follow its conditional status change (the pattern cancelEffects uses).
+ */
+function refundWrites(
+  env: TenancyEnv,
+  actor: Scope,
+  orderId: string,
+  line: { merchant_id: string; currency: string },
+  r: { refundId: string; productId: string; variant: string; qty: number; amount: number; reason: string },
+  onlyIf: string | null = null,
+): D1PreparedStatement[] {
+  const cond = onlyIf ? ' WHERE EXISTS (SELECT 1 FROM audit_log WHERE id = ?)' : ''
+  const condArgs = onlyIf ? [onlyIf] : []
+  return [
+    env.ORDERS.prepare(
+      `INSERT INTO refunds (id, order_id, merchant_id, product_id, variant, qty, amount_minor,
+                            reason, actor_id, actor_scope)
+       SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?${cond}`,
+    ).bind(r.refundId, orderId, line.merchant_id, r.productId, r.variant, r.qty, r.amount, r.reason, actor.staffId, actor.kind, ...condArgs),
+    env.ORDERS.prepare(
+      `INSERT INTO audit_log (id, actor_id, actor_scope, merchant_id, action, subject, detail)
+       SELECT ?, ?, ?, ?, 'refunds.create', ?, ?${cond}`,
+    ).bind(
+      id('aud'),
+      actor.staffId,
+      actor.kind,
+      line.merchant_id,
+      orderId,
+      JSON.stringify({ refund_id: r.refundId, product_id: r.productId, variant: r.variant, qty: r.qty, amount_minor: r.amount, currency: line.currency }),
+      ...condArgs,
+    ),
+  ]
+}
 
 /** The fulfilment state machine: each action's one legal `from` and its `to`. Anything else is a 409. */
 const MOVES = {
@@ -1820,7 +1965,25 @@ function platformOnly(env: TenancyEnv, staffId: string): Omit<PlatformRepository
         }
       },
     },
+
+    moderation: {
+      hide: (reviewId: string) => setHidden(env, reviewId, true),
+      unhide: (reviewId: string) => setHidden(env, reviewId, false),
+    },
   }
+}
+
+/**
+ * A review in or out of the product page. updated_at is the author's last
+ * edit, so moderation leaves it alone; the audit log is where this is dated.
+ */
+async function setHidden(env: TenancyEnv, reviewId: string, hidden: boolean) {
+  const { meta } = await env.ORDERS.prepare(`UPDATE reviews SET hidden = ? WHERE id = ?`).bind(hidden ? 1 : 0, reviewId).run()
+  if (meta.changes !== 1) return null
+  const row = await env.ORDERS.prepare(`SELECT id, merchant_id FROM reviews WHERE id = ?`)
+    .bind(reviewId)
+    .first<{ id: string; merchant_id: string }>()
+  return row && { ...row, hidden }
 }
 
 /**
@@ -1957,6 +2120,55 @@ function build(env: TenancyEnv, scope: Scope): Repository {
   }
   const move = (orderId: string, action: keyof typeof MOVES, ...rest: MoveRest) =>
     movePart(env, scope, orderId, own(), action, `fulfilment.${action}`, ...rest)
+
+  /** Return requests in scope matching `clauses`, newest first, with their part's currency and delivery date. */
+  const returnRows = async (clauses: (readonly [string, ...unknown[]] | null)[]) => {
+    const w = where([...clauses, tenant(scope, 'rr.merchant_id')])
+    const { results } = await env.ORDERS.prepare(
+      `SELECT rr.id, rr.order_id, rr.merchant_id, rr.reason, rr.note, rr.status, rr.refund_minor,
+              (SELECT CASE WHEN COUNT(DISTINCT ${CURRENCY}) = 1 THEN MIN(${CURRENCY}) ELSE 'XXX' END
+                 FROM order_lines l LEFT JOIN products p ON p.id = l.product_id
+                WHERE l.order_id = rr.order_id AND l.merchant_id = rr.merchant_id) AS currency,
+              rr.decision_note, rr.decided_at, rr.created_at, f.delivered_at
+         FROM return_requests rr
+         LEFT JOIN order_fulfilments f ON f.order_id = rr.order_id AND f.merchant_id = rr.merchant_id${w.sql}
+        ORDER BY rr.created_at DESC, rr.id DESC
+        LIMIT ?`,
+    )
+      .bind(...w.args, RETURN_CAP)
+      .all<ReturnSummary>()
+    return results ?? []
+  }
+
+  /** One request in scope, with its part's lines, what is left to refund and its photos. */
+  const getReturn = async (returnId: string): Promise<ReturnDetail | null> => {
+    const [row] = await returnRows([['rr.id = ?', returnId]])
+    // Not this scope's: the same answer as no such request.
+    if (!row) return null
+    const [lines, photos] = await Promise.all([
+      env.ORDERS.prepare(
+        `SELECT l.product_id, l.variant, l.sku, l.title, l.qty, l.unit_price_cents,
+                ${GROSS} AS paid, ${REFUNDED_MINOR} AS refunded_minor
+           FROM order_lines l WHERE l.order_id = ? AND l.merchant_id = ?
+          ORDER BY l.title, l.variant`,
+      )
+        .bind(row.order_id, row.merchant_id)
+        .all<ReturnDetail['lines'][number]>(),
+      env.ORDERS.prepare(`SELECT name FROM return_photos WHERE return_id = ? ORDER BY created_at, rowid`)
+        .bind(returnId)
+        .all<{ name: string }>(),
+    ])
+    const ls = lines.results ?? []
+    return {
+      ...row,
+      lines: ls,
+      refundable: ls.reduce((sum, l) => sum + l.paid - l.refunded_minor, 0),
+      photos: (photos.results ?? []).map((p) => p.name),
+    }
+  }
+
+  /** A decision's refusal when the request is not open any more. */
+  const decided = (status: string) => new Conflict(`This return is already ${status}.`)
 
   const raw: Repository = {
     products: {
@@ -2283,33 +2495,14 @@ function build(env: TenancyEnv, scope: Scope): Repository {
         const refundId = id('rfd')
         try {
           await env.ORDERS.batch([
-            env.ORDERS.prepare(
-              `INSERT INTO refunds (id, order_id, merchant_id, product_id, variant, qty, amount_minor,
-                                    reason, actor_id, actor_scope)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            ).bind(
+            ...refundWrites(env, scope, orderId, line, {
               refundId,
-              orderId,
-              line.merchant_id,
-              input.productId,
-              input.variant,
-              input.qty,
+              productId: input.productId,
+              variant: input.variant,
+              qty: input.qty,
               amount,
-              input.reason,
-              scope.staffId,
-              scope.kind,
-            ),
-            env.ORDERS.prepare(
-              `INSERT INTO audit_log (id, actor_id, actor_scope, merchant_id, action, subject, detail)
-               VALUES (?, ?, ?, ?, 'refunds.create', ?, ?)`,
-            ).bind(
-              id('aud'),
-              scope.staffId,
-              scope.kind,
-              line.merchant_id,
-              orderId,
-              JSON.stringify({ refund_id: refundId, product_id: input.productId, variant: input.variant, qty: input.qty, amount_minor: amount, currency: line.currency }),
-            ),
+              reason: input.reason,
+            }),
             refundCapGuard(env, orderId),
           ])
         } catch (err) {
@@ -2425,6 +2618,113 @@ function build(env: TenancyEnv, scope: Scope): Repository {
       },
     },
 
+    reviews: {
+      async list({ limit }: { limit?: number }) {
+        const w = where([tenant(scope, 'r.merchant_id')])
+        const { results } = await env.ORDERS.prepare(
+          `SELECT r.id, r.product_id, COALESCE(p.title, '') AS product_title, r.merchant_id, r.rating, r.body,
+                  r.hidden, u.name AS author, r.created_at, r.updated_at,
+                  (SELECT json_group_array(name) FROM (
+                     SELECT name FROM review_photos WHERE review_id = r.id ORDER BY created_at, rowid)) AS photos
+             FROM reviews r JOIN users u ON u.id = r.user_id
+             LEFT JOIN products p ON p.id = r.product_id${w.sql}
+            ORDER BY r.created_at DESC, r.id DESC
+            LIMIT ?`,
+        )
+          .bind(...w.args, Math.min(limit ?? REVIEW_CAP, REVIEW_CAP))
+          .all<Omit<ReviewRow, 'hidden' | 'photos'> & { hidden: number; photos: string }>()
+        return (results ?? []).map((r) => ({
+          ...r,
+          hidden: r.hidden === 1,
+          // The full name stays in the users table: staff see what shoppers see.
+          author: authorOf(r.author),
+          photos: JSON.parse(r.photos) as string[],
+        }))
+      },
+    },
+
+    returns: {
+      list: ({ status }: { status?: ReturnStatus }) => returnRows([status ? ['rr.status = ?', status] : null]),
+
+      get: getReturn,
+
+      async approve(returnId: string, { amountMinor, note }: { amountMinor: number; note: string }) {
+        const merchantId = own()
+        assertIntegerMinor(amountMinor, 'amountMinor')
+        if (amountMinor <= 0) throw new Invalid('An approval refunds some money: state an amount.')
+        const r = await getReturn(returnId)
+        if (!r) return null
+        if (r.status !== 'open') throw decided(r.status)
+        if (r.currency === 'XXX') {
+          throw new Invalid('This part was sold in more than one currency. Refund its lines one at a time from the order.')
+        }
+        if (amountMinor > r.refundable) {
+          throw new Conflict(`Only ${shown(r.refundable, r.currency)} is left to refund on this part.`)
+        }
+        // Each line takes what it still has, in order, until the amount is
+        // placed. Money only (qty 0): a refund is money, not a restock.
+        let left = amountMinor
+        const refunds = r.lines.flatMap((l) => {
+          const take = Math.min(left, l.paid - l.refunded_minor)
+          left -= take
+          return take > 0
+            ? [{ refundId: id('rfd'), productId: l.product_id, variant: l.variant, qty: 0, amount: take, reason: `Return ${returnId} (${r.reason})` }]
+            : []
+        })
+        const auditId = id('aud')
+        try {
+          const [update] = await env.ORDERS.batch([
+            env.ORDERS.prepare(
+              `UPDATE return_requests
+                  SET status = 'approved', refund_minor = ?, decision_note = ?, decided_by = ?, decided_at = datetime('now')
+                WHERE id = ? AND merchant_id = ? AND status = 'open'`,
+            ).bind(amountMinor, note || null, scope.staffId, returnId, merchantId),
+            env.ORDERS.prepare(
+              `INSERT INTO audit_log (id, actor_id, actor_scope, merchant_id, action, subject, detail)
+               SELECT ?, ?, ?, ?, 'returns.approve', ?, ? WHERE changes() = 1`,
+            ).bind(
+              auditId,
+              scope.staffId,
+              scope.kind,
+              merchantId,
+              returnId,
+              JSON.stringify({ order_id: r.order_id, amount_minor: amountMinor, currency: r.currency, refund_ids: refunds.map((x) => x.refundId) }),
+            ),
+            // The refund path itself, each write conditional on the decision above.
+            ...refunds.flatMap((x) => refundWrites(env, scope, r.order_id, { merchant_id: merchantId, currency: r.currency }, x, auditId)),
+            refundCapGuard(env, r.order_id),
+          ])
+          if (update.meta.changes !== 1) throw new Conflict('This return changed in the meantime. Reload and try again.')
+        } catch (err) {
+          // The checks above read a moment ago; the guard reads now.
+          if (overCap(err)) throw new Conflict('Another refund landed on this part in the meantime. Reload and try again.')
+          throw err
+        }
+        return getReturn(returnId)
+      },
+
+      async reject(returnId: string, { note }: { note: string }) {
+        const merchantId = own()
+        if (!note.trim()) throw new Invalid('Say why, so the shopper knows: a rejection needs a note.')
+        const r = await getReturn(returnId)
+        if (!r) return null
+        if (r.status !== 'open') throw decided(r.status)
+        const [update] = await env.ORDERS.batch([
+          env.ORDERS.prepare(
+            `UPDATE return_requests
+                SET status = 'rejected', decision_note = ?, decided_by = ?, decided_at = datetime('now')
+              WHERE id = ? AND merchant_id = ? AND status = 'open'`,
+          ).bind(note, scope.staffId, returnId, merchantId),
+          env.ORDERS.prepare(
+            `INSERT INTO audit_log (id, actor_id, actor_scope, merchant_id, action, subject, detail)
+             SELECT ?, ?, ?, ?, 'returns.reject', ?, ? WHERE changes() = 1`,
+          ).bind(id('aud'), scope.staffId, scope.kind, merchantId, returnId, JSON.stringify({ order_id: r.order_id, note })),
+        ])
+        if (update.meta.changes !== 1) throw new Conflict('This return changed in the meantime. Reload and try again.')
+        return getReturn(returnId)
+      },
+    },
+
     stats: {
       async overview() {
         // One clock for every boundary, so the windows and the trend agree.
@@ -2529,14 +2829,17 @@ function build(env: TenancyEnv, scope: Scope): Repository {
         const parts = where([['f.status = ?', 'pending'], PAID, tenant(scope, 'f.merchant_id')])
         const low = where([['status = ?', 'published'], ['stock_count BETWEEN 1 AND ?', LOW_STOCK], tenant(scope)])
         const out = where([['status = ?', 'published'], ['stock_count = ?', 0], tenant(scope)])
+        // A seek on return_requests_merchant_idx (merchant_id, status).
+        const open = where([['status = ?', 'open'], tenant(scope)])
         const row = await env.ORDERS.prepare(
           `SELECT (SELECT COUNT(*) FROM order_fulfilments f JOIN orders o ON o.id = f.order_id${parts.sql}) AS to_ship,
                   (SELECT COUNT(*) FROM products${low.sql}) AS low_stock,
-                  (SELECT COUNT(*) FROM products${out.sql}) AS out_of_stock`,
+                  (SELECT COUNT(*) FROM products${out.sql}) AS out_of_stock,
+                  (SELECT COUNT(*) FROM return_requests${open.sql}) AS returns_open`,
         )
-          .bind(...parts.args, ...low.args, ...out.args)
+          .bind(...parts.args, ...low.args, ...out.args, ...open.args)
           .first<Queue>()
-        return row ?? { to_ship: 0, low_stock: 0, out_of_stock: 0 }
+        return row ?? { to_ship: 0, low_stock: 0, out_of_stock: 0, returns_open: 0 }
       },
 
       sales: (range: OrderRange) => salesReport(env, scope, range),
@@ -2552,6 +2855,8 @@ function build(env: TenancyEnv, scope: Scope): Repository {
     fulfilment: wrap('fulfilment', raw.fulfilment) as Repository['fulfilment'],
     refunds: wrap('refunds', raw.refunds) as Repository['refunds'],
     finance: wrap('finance', raw.finance) as Repository['finance'],
+    reviews: wrap('reviews', raw.reviews) as Repository['reviews'],
+    returns: wrap('returns', raw.returns) as Repository['returns'],
   }
   return audited
 }
@@ -2613,6 +2918,7 @@ export const platformWide = async (env: TenancyEnv, staffId: string): Promise<Pl
     payments: wrapGroup(env, scope, 'payments', only.payments) as PlatformRepository['payments'],
     analytics: wrapGroup(env, scope, 'analytics', only.analytics) as PlatformRepository['analytics'],
     customers: wrapGroup(env, scope, 'customers', only.customers) as PlatformRepository['customers'],
+    moderation: wrapGroup(env, scope, 'moderation', only.moderation) as PlatformRepository['moderation'],
   }
 }
 

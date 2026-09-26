@@ -17,6 +17,7 @@ import { findCountry } from '@/lib/regions'
 import { fetchOrder, type OrderPart } from '@/lib/api'
 import { METHOD_LABEL } from '@/lib/payment'
 import OrderSummary from '@/components/checkout/OrderSummary.vue'
+import OrderReturns from '@/components/account/OrderReturns.vue'
 import OrderLines from '@/components/checkout/OrderLines.vue'
 import NotFoundPage from './NotFoundPage.vue'
 
@@ -210,6 +211,8 @@ const placedOn = computed(() =>
             </li>
           </ul>
         </section>
+
+        <OrderReturns :order-id="order.id" />
 
         <p class="mt-6 text-xs text-text-muted">
           This is a demonstration store. No payment was taken and nothing will ship.

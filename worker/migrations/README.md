@@ -47,7 +47,8 @@ Verified against `sqlite_master` on 2026-09-21; production caught up on 2026-09-
 | `0012` audit merchant seq index | ✅ 2026-09-25 | ✅ 2026-09-25 |
 | `0013` order lifecycle (+ `0013b` re-run) | ✅ 2026-09-26 | ✅ 2026-09-26 |
 | `0014` platform back office indexes | ✅ 2026-09-26 | ✅ 2026-09-26 |
-| `0015` payment method | pending | pending |
+| `0015` payment method | ✅ 2026-09-26 | ✅ 2026-09-26 |
+| `0016` customer uploads | pending | pending |
 
 Until 2026-09-24 production held only `orders`, `order_lines` and the four
 tables from `0006`; the accounts tables (`users`, `sessions`, `email_tokens`,
@@ -56,23 +57,37 @@ the catch-up listed under "Before production next deploys" below.
 
 ## Pending
 
-**`0015` payment method, on neither database yet.** Three columns on
-`orders`: `payment_method` (`card` | `fpx` | `ewallet`, default `card`, with a
-CHECK), `payment_channel` (a card brand or a bank or wallet name, default `''`)
-and `payment_ref` (the server-minted `SIM-…` reference, default `''`). Every
-order already stored reads as a card payment with no channel or reference.
-Additive, so it goes **before** the `nexus-api` that writes the columns — that
-worker's insert names all three and fails every checkout (503) against a
-database without them, and its `GET /api/orders/:id` and the console's
-payments ledger read them. The old worker names none, so the migration is safe
-ahead of it. The ALTERs make it run once only. Staging first, then production:
+**`0016` customer uploads, on neither database yet.** It adds
+`users.avatar_key` (nullable) and four tables: `reviews` and `review_photos`
+(one review per account and product; closing an account cascades to both),
+`return_requests` (one open request per order part, enforced by the partial
+unique index `return_requests_open_idx`) and `return_photos`. Additive only, so
+it is safe ahead of the workers and must land before them: the phase 3
+`nexus-api` reads `users.avatar_key` on every `/api/auth/me`, and both workers
+read the new tables. Staging first, then production, each before its deploys:
+`npx wrangler d1 execute <db> --remote --file=migrations/0016-customer-uploads.sql`
 
-1. `npx wrangler d1 execute <db> --remote --file=migrations/0015-payment-method.sql`
-2. Check: `SELECT payment_method, COUNT(*) FROM orders GROUP BY payment_method`
-   gives `card` and the order count, nothing else.
-3. Deploy `nexus-api`, then `nexus-console`, then the storefront. The API
-   files a request naming no method (a storefront page still cached from
-   before) as a card, so the storefront may follow at any time.
+It runs **once** (its `ALTER TABLE` fails a second time). Check afterwards with
+`SELECT name FROM sqlite_master WHERE name IN ('reviews','review_photos','return_requests','return_photos')`
+— four rows.
+
+The same deploy needs, before either worker goes out:
+
+- **Two private R2 buckets**, bound as `PRIVATE` by both `wrangler.toml` and
+  `wrangler.console.toml`: `npx wrangler r2 bucket create nexus-private` and
+  `npx wrangler r2 bucket create nexus-private-staging`. Return photos go
+  there. Never attach a public domain to either: they are served only through
+  the authenticated `return-photos` routes.
+- **`MEDIA_BASE` on nexus-api** (already in `wrangler.toml`, the same value
+  the console has per environment), which avatar and review photo URLs are
+  built from. Those objects go in the existing `nexus-media` /
+  `nexus-media-staging` buckets under `avatars/` and `reviews/`.
+
+### Applied: 0015
+
+`0015` (payment method columns) ran on staging, then production, on
+2026-09-26, each ahead of its nexus-api deploy; every stored order read back
+as `card`.
 
 ### Before 0015
 

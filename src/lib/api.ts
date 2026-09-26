@@ -8,7 +8,7 @@
  */
 import type { PayMethod } from './payment'
 
-const BASE = import.meta.env.VITE_API_URL ?? 'https://api.nexusohm.com'
+export const BASE = import.meta.env.VITE_API_URL ?? 'https://api.nexusohm.com'
 
 /** Inference on a 70B model is not instant; a search box's patience is not the bar. */
 const TIMEOUT_MS = 30_000
@@ -335,6 +335,8 @@ export interface Account {
   id: string
   email: string
   name: string
+  /** The account's photo, or null. Set on the account page. */
+  avatarUrl?: string | null
 }
 
 export interface AccountOrder {
