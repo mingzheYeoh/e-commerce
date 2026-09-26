@@ -437,9 +437,12 @@ let names: Promise<MerchantName[]> | null = null
  * change only when a merchant is approved.
  */
 export function merchantNames(): Promise<MerchantName[]> {
-  names ??= call<{ merchants: MerchantName[] } | ErrorBody>('/api/platform/merchants/names').then(({ body }) =>
-    'merchants' in body ? body.merchants : [],
-  )
+  names ??= call<{ merchants: MerchantName[] } | ErrorBody>('/api/platform/merchants/names').then(({ body }) => {
+    if ('merchants' in body) return body.merchants
+    // Not kept: the next page to ask tries again. Labels fall back to ids meanwhile.
+    names = null
+    return []
+  })
   return names
 }
 
