@@ -15,12 +15,14 @@ import { passageFor } from '../../src/lib/passages'
 
 const BASE = 'https://api.test/media/u/'
 let r2: MemoryR2
+let priv: MemoryR2
 let ai: FakeAi
 let vec: FakeVectorize
 let bg: ReturnType<typeof fakeCtx>
 beforeEach(stubPwned)
 beforeEach(() => {
   r2 = memoryR2()
+  priv = memoryR2()
   ai = fakeAi()
   vec = fakeVectorize()
   bg = fakeCtx()
@@ -64,7 +66,7 @@ async function call(
       headers,
       body: form ?? (opts.body === undefined ? undefined : JSON.stringify(opts.body)),
     }),
-    { ...env(db), MEDIA: r2.bucket, MEDIA_BASE: BASE, AI: ai.binding, VECTORIZE: vec.binding, ...opts.extra },
+    { ...env(db), MEDIA: r2.bucket, PRIVATE: priv.bucket, MEDIA_BASE: BASE, AI: ai.binding, VECTORIZE: vec.binding, ...opts.extra },
     bg.ctx,
   )
 }
@@ -173,6 +175,12 @@ const MERCHANT_ROUTES = [
   ['GET', '/api/merchant/inventory'],
   ['GET', '/api/merchant/finance/ledger'],
   ['GET', '/api/merchant/finance/payouts'],
+  ['GET', '/api/merchant/returns'],
+  ['GET', '/api/merchant/returns/ret_x'],
+  ['POST', '/api/merchant/returns/ret_x/approve'],
+  ['POST', '/api/merchant/returns/ret_x/reject'],
+  ['GET', '/api/merchant/return-photos/returns/ret_x/ph_x.webp'],
+  ['GET', '/api/merchant/reviews'],
 ] as const
 
 const PLATFORM_ROUTES = [
@@ -197,6 +205,12 @@ const PLATFORM_ROUTES = [
   ['GET', '/api/platform/reports'],
   ['GET', '/api/platform/customers'],
   ['GET', '/api/platform/customers/usr_x'],
+  ['GET', '/api/platform/returns'],
+  ['GET', '/api/platform/returns/ret_x'],
+  ['GET', '/api/platform/return-photos/returns/ret_x/ph_x.webp'],
+  ['GET', '/api/platform/reviews'],
+  ['POST', '/api/platform/reviews/rev_x/hide'],
+  ['POST', '/api/platform/reviews/rev_x/unhide'],
 ] as const
 
 describe('the console worker: who may reach what', () => {
@@ -1649,5 +1663,106 @@ describe('the console worker: the platform back office', () => {
     const fifty = await statementsFor(49)
     expect(fifty).toEqual(one)
     for (const n of fifty) expect(n).toBeLessThan(20)
+  })
+})
+
+describe('the console worker: returns and reviews', () => {
+  /**
+   * sharedOrders, both parts delivered, a return with a photo on each: the
+   * signed-in merchant's (ret_mine, on 2 x 1000 USD) and mch_other's.
+   */
+  async function withReturns() {
+    const s = await activeSession()
+    sharedOrders(s.raw, s.merchantId)
+    const part = s.raw.prepare(
+      `INSERT INTO order_fulfilments (order_id, merchant_id, status, carrier, tracking, shipped_at, delivered_at)
+       VALUES (?, ?, 'delivered', 'UPS', '1Z', datetime('now'), datetime('now'))`,
+    )
+    part.run('o_shared', s.merchantId)
+    part.run('o_theirs', 'mch_other')
+    const request = s.raw.prepare(`INSERT INTO return_requests (id, order_id, merchant_id, reason, note) VALUES (?, ?, ?, 'damaged', 'Dented')`)
+    request.run('ret_mine', 'o_shared', s.merchantId)
+    request.run('ret_theirs', 'o_theirs', 'mch_other')
+    for (const r of ['ret_mine', 'ret_theirs']) {
+      s.raw.prepare(`INSERT INTO return_photos (return_id, name) VALUES (?, 'ph_a')`).run(r)
+      await priv.bucket.put(`returns/${r}/ph_a.webp`, webpBytes().buffer as ArrayBuffer)
+    }
+    s.raw
+      .prepare(`INSERT INTO users (id, email, name, password_hash, password_salt, iterations) VALUES ('usr_ada', 'ada@example.com', 'Ada Lovelace', 'h', 's', 1)`)
+      .run()
+    const review = s.raw.prepare(`INSERT INTO reviews (id, user_id, product_id, merchant_id, rating, body) VALUES (?, 'usr_ada', ?, ?, 4, 'Nice')`)
+    review.run('rev_mine', 'prd_mine', s.merchantId)
+    review.run('rev_theirs', 'prd_theirs', 'mch_other')
+    return s
+  }
+  const get = async (db: D1Database, path: string, cookie: string) => {
+    const res = await call(db, 'GET', path, { cookie })
+    return { status: res.status, body: (await res.json()) as Record<string, any> }
+  }
+
+  it("shows a merchant its own returns and their photos, never another merchant's", async () => {
+    const { db, cookie } = await withReturns()
+    const list = await get(db, '/api/merchant/returns', cookie)
+    expect(list.body.returns.map((r: { id: string }) => r.id)).toEqual(['ret_mine'])
+    expect((await get(db, '/api/merchant/returns?status=bogus', cookie)).status).toBe(400)
+    const detail = await get(db, '/api/merchant/returns/ret_mine', cookie)
+    expect(detail.body).toMatchObject({ id: 'ret_mine', orderId: 'o_shared', status: 'open', refundable: 2000, currency: 'USD' })
+    expect(detail.body.photos).toEqual(['/api/merchant/return-photos/returns/ret_mine/ph_a.webp'])
+    const photo = await call(db, 'GET', detail.body.photos[0], { cookie })
+    expect(photo.status).toBe(200)
+    expect(photo.headers.get('cache-control')).toBe('private, no-store')
+    expect(photo.headers.get('content-type')).toBe('image/webp')
+    expect((await get(db, '/api/merchant/returns/ret_theirs', cookie)).status).toBe(404)
+    expect((await call(db, 'GET', '/api/merchant/return-photos/returns/ret_theirs/ph_a.webp', { cookie })).status).toBe(404)
+    expect((await call(db, 'GET', '/api/merchant/return-photos/returns/ret_mine/ph_zz.webp', { cookie })).status).toBe(404)
+  })
+
+  it('approves with a refund through the refund path, once, and rejects only with a note', async () => {
+    const { db, raw, cookie } = await withReturns()
+    const over = await call(db, 'POST', '/api/merchant/returns/ret_mine/approve', { cookie, body: { amountMinor: 2001 } })
+    expect(over.status).toBe(409)
+    const approved = await call(db, 'POST', '/api/merchant/returns/ret_mine/approve', { cookie, body: { amountMinor: 1500, note: 'Sorry' } })
+    expect(approved.status).toBe(200)
+    expect(await approved.json()).toMatchObject({ status: 'approved', refundMinor: 1500, refundable: 500, decisionNote: 'Sorry' })
+    expect(raw.prepare(`SELECT amount_minor, qty FROM refunds`).all()).toEqual([{ amount_minor: 1500, qty: 0 }])
+    expect((await call(db, 'POST', '/api/merchant/returns/ret_mine/approve', { cookie, body: { amountMinor: 1 } })).status).toBe(409)
+    expect((await call(db, 'POST', '/api/merchant/returns/ret_mine/reject', { cookie, body: { note: '' } })).status).toBe(400)
+    expect((await call(db, 'POST', '/api/merchant/returns/ret_theirs/reject', { cookie, body: { note: 'No' } })).status).toBe(404)
+    expect((await call(db, 'POST', '/api/merchant/returns/ret_mine/approve', { cookie, body: { amountMinor: 0 } })).status).toBe(400)
+  })
+
+  it("shows a merchant the reviews of its own products, with photo URLs, read-only", async () => {
+    const { db, raw, cookie } = await withReturns()
+    raw.prepare(`INSERT INTO review_photos (review_id, name) VALUES ('rev_mine', 'ph_r')`).run()
+    const { body } = await get(db, '/api/merchant/reviews', cookie)
+    expect(body.reviews).toEqual([
+      expect.objectContaining({
+        id: 'rev_mine',
+        productId: 'prd_mine',
+        author: 'Ada L.',
+        rating: 4,
+        hidden: false,
+        photos: [{ large: `${BASE}reviews/rev_mine/ph_r-1600.webp`, thumb: `${BASE}reviews/rev_mine/ph_r-400.webp` }],
+      }),
+    ])
+  })
+
+  it('lets the platform read every return and its photos, and hide or unhide any review, audited', async () => {
+    const mem = await withReturns()
+    const admin = await platformSession(mem)
+    const list = await get(mem.db, '/api/platform/returns', admin)
+    expect(list.body.returns.map((r: { id: string }) => r.id).sort()).toEqual(['ret_mine', 'ret_theirs'])
+    const photo = await call(mem.db, 'GET', '/api/platform/return-photos/returns/ret_theirs/ph_a.webp', { cookie: admin })
+    expect(photo.status).toBe(200)
+    expect(photo.headers.get('cache-control')).toBe('private, no-store')
+    const hidden = await call(mem.db, 'POST', '/api/platform/reviews/rev_theirs/hide', { cookie: admin })
+    expect(await hidden.json()).toEqual({ id: 'rev_theirs', hidden: true })
+    expect((await call(mem.db, 'POST', '/api/platform/reviews/rev_nobody/hide', { cookie: admin })).status).toBe(404)
+    expect((await get(mem.db, '/api/platform/reviews', admin)).body.reviews).toHaveLength(2)
+    expect(
+      mem.raw.prepare(`SELECT merchant_id, subject FROM audit_log WHERE action = 'moderation.hide' AND subject = 'rev_theirs'`).all(),
+    ).toEqual([{ merchant_id: 'mch_other', subject: 'rev_theirs' }])
+    // Deciding is the merchant's: the platform has no approve route to call.
+    expect((await call(mem.db, 'POST', '/api/platform/returns/ret_mine/approve', { cookie: admin, body: { amountMinor: 1 } })).status).toBe(404)
   })
 })

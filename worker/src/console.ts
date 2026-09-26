@@ -63,6 +63,10 @@ import {
   type ProductPatch,
   type ProductRow,
   type Repository,
+  type ReturnDetail,
+  type ReturnStatus,
+  type ReturnSummary,
+  type ReviewRow,
 } from './tenancy'
 import { guard, type IpDefences } from './auth'
 import {
@@ -71,11 +75,15 @@ import {
   MAX_THUMB_BYTES,
   isPhotoKey,
   isPhotoName,
+  isReturnKey,
   keyFor,
   mediaFor,
   namesIn,
   newPhotoName,
+  privatePhoto,
   readWebpForm,
+  returnKey,
+  reviewPhotoUrls,
   type Media,
 } from './photos'
 import { reindex } from './indexing'
@@ -91,6 +99,8 @@ export { IpThrottle } from './throttle'
 export interface ConsoleEnv extends StaffEnv, IpDefences {
   /** Product photos. One bucket per environment, never shared. */
   MEDIA: R2Bucket
+  /** Return photos, read here for the part's merchant and the platform. Never public. */
+  PRIVATE: R2Bucket
   /** Where nexus-api serves MEDIA from, ending in '/'. Photo URLs are this plus a key. */
   MEDIA_BASE: string
   /** Embeds a product's passage when it goes on sale or changes (indexing.ts). */
@@ -531,6 +541,56 @@ const customerDetailOut = (c: CustomerDetail) => ({
   })),
 })
 
+/* --------------------------------------------------- returns, reviews io */
+
+const RETURN_STATUSES = new Set<string>(['open', 'approved', 'rejected'])
+
+const returnOut = (r: ReturnSummary) => ({
+  id: r.id,
+  orderId: r.order_id,
+  merchantId: r.merchant_id,
+  reason: r.reason,
+  note: r.note,
+  status: r.status,
+  refundMinor: r.refund_minor,
+  currency: r.currency,
+  decisionNote: r.decision_note,
+  decidedAt: r.decided_at,
+  createdAt: r.created_at,
+  deliveredAt: r.delivered_at,
+})
+
+/** Photos as paths on this console's own origin, which checks the session again on each. */
+const returnDetailOut = (d: ReturnDetail, scope: string) => ({
+  ...returnOut(d),
+  lines: d.lines.map((l) => ({
+    productId: l.product_id,
+    finish: l.variant || null,
+    sku: l.sku,
+    title: l.title,
+    qty: l.qty,
+    unitMinor: l.unit_price_cents,
+    paid: l.paid,
+    refundedMinor: l.refunded_minor,
+  })),
+  refundable: d.refundable,
+  photos: d.photos.map((name) => `/api/${scope}/return-photos/${returnKey(d.id, name)}`),
+})
+
+const reviewOut = (r: ReviewRow, base: string) => ({
+  id: r.id,
+  productId: r.product_id,
+  productTitle: r.product_title,
+  merchantId: r.merchant_id,
+  rating: r.rating,
+  body: r.body,
+  hidden: r.hidden,
+  author: r.author,
+  photos: r.photos.map((name) => reviewPhotoUrls(base, r.id, name)),
+  createdAt: r.created_at,
+  updatedAt: r.updated_at,
+})
+
 const merchantOut = (m: MerchantSummary) => ({
   id: m.merchant_id,
   name: m.name,
@@ -765,6 +825,10 @@ const PART_CANCEL = /^\/api\/platform\/orders\/([^/]+)\/parts\/([^/]+)\/cancel$/
 const PLATFORM_MERCHANT = /^\/api\/platform\/merchants\/([^/]+)$/
 const MERCHANT_SALES = /^\/api\/platform\/merchants\/([^/]+)\/sales$/
 const CUSTOMER = /^\/api\/platform\/customers\/([^/]+)$/
+const RETURN = /^\/api\/(merchant|platform)\/returns\/([^/]+)$/
+const RETURN_ACTION = /^\/api\/merchant\/returns\/([^/]+)\/(approve|reject)$/
+const RETURN_PHOTO = /^\/api\/(merchant|platform)\/return-photos\/(.+)$/
+const MODERATE = /^\/api\/platform\/reviews\/([^/]+)\/(hide|unhide)$/
 
 async function route(request: Request, env: ConsoleEnv, url: URL, ctx: ExecutionContext): Promise<Response> {
   const path = url.pathname
@@ -1047,6 +1111,76 @@ async function route(request: Request, env: ConsoleEnv, url: URL, ctx: Execution
     const repo = await merchantRepo(env, request)
     if (repo instanceof Response) return repo
     return json({ balances: (await repo.finance.balance()).map(balanceOut) }, 200, PRIVATE)
+  }
+
+  /* ------------------------------------------------ returns and reviews */
+
+  /* The same reads for a merchant (its own) and the platform (every one,
+     audited by the wrapper): the repository decides which, from the session. */
+  const scoped = path.match(/^\/api\/(merchant|platform)\//)?.[1] as 'merchant' | 'platform' | undefined
+  const repoOf = () => (scoped === 'merchant' ? merchantRepo(env, request) : platformRepo(env, request))
+
+  if (scoped && path === `/api/${scoped}/returns` && method === 'GET') {
+    const repo = await repoOf()
+    if (repo instanceof Response) return repo
+    const status = url.searchParams.get('status') || undefined
+    if (status && !RETURN_STATUSES.has(status)) return json({ error: 'status is open, approved or rejected.' }, 400)
+    return json({ returns: (await repo.returns.list({ status: status as ReturnStatus | undefined })).map(returnOut) }, 200, PRIVATE)
+  }
+
+  const returnId = path.match(RETURN)
+  if (returnId && method === 'GET') {
+    const repo = await repoOf()
+    if (repo instanceof Response) return repo
+    const detail = await repo.returns.get(returnId[2])
+    return detail ? json(returnDetailOut(detail, returnId[1]), 200, PRIVATE) : json({ error: 'not found' }, 404)
+  }
+
+  /* Deciding is the merchant's own act; there is no platform route for it. */
+  const returnAction = path.match(RETURN_ACTION)
+  if (returnAction && method === 'POST') {
+    const repo = await merchantRepo(env, request)
+    if (repo instanceof Response) return repo
+    const [, target, verb] = returnAction
+    const body = fields(await readBody(request))
+    const note = body.note === undefined || body.note === null || body.note === '' ? '' : text(body.note, 1000)
+    if (note === null) return json({ error: 'A note is 1000 characters at most.' }, 400)
+    if (verb === 'reject') {
+      if (!note) return json({ error: 'Say why, so the shopper knows: a rejection needs a note.' }, 400)
+      return outcome(() => repo.returns.reject(target, { note }), (d) => returnDetailOut(d, 'merchant'))
+    }
+    const amountMinor = whole(body.amountMinor)
+    if (!amountMinor) return json({ error: 'amountMinor is a whole number of minor units, more than zero.' }, 400)
+    return outcome(() => repo.returns.approve(target, { amountMinor, note }), (d) => returnDetailOut(d, 'merchant'))
+  }
+
+  /* A return photo, to the part's merchant or the platform: only a photo of a
+     request the repository hands back for this session. */
+  const returnPhoto = path.match(RETURN_PHOTO)
+  if (returnPhoto && method === 'GET') {
+    const repo = await repoOf()
+    if (repo instanceof Response) return repo
+    const key = isReturnKey(returnPhoto[2])
+    const detail = key && (await repo.returns.get(key.returnId))
+    const object = detail && detail.photos.includes(key.name) ? await env.PRIVATE.get(returnPhoto[2]) : null
+    return object ? privatePhoto(object) : json({ error: 'not found' }, 404)
+  }
+
+  if (scoped && path === `/api/${scoped}/reviews` && method === 'GET') {
+    const repo = await repoOf()
+    if (repo instanceof Response) return repo
+    return json({ reviews: (await repo.reviews.list({})).map((r) => reviewOut(r, env.MEDIA_BASE)) }, 200, PRIVATE)
+  }
+
+  const moderate = path.match(MODERATE)
+  if (moderate && method === 'POST') {
+    const repo = await platformRepo(env, request)
+    if (repo instanceof Response) return repo
+    const [, reviewId, verb] = moderate
+    return outcome(
+      () => (verb === 'hide' ? repo.moderation.hide(reviewId) : repo.moderation.unhide(reviewId)),
+      (r) => ({ id: r.id, hidden: r.hidden }),
+    )
   }
 
   /* ------------------------------------------------------------ platform */
@@ -1358,7 +1492,10 @@ export default {
     // Every merchant and platform answer is private, the refusals too: a 400
     // or 403 cached by something in between would outlive the reason for it,
     // and a route that forgets PRIVATE on one branch is not a leak here.
-    if (/^\/api\/(merchant|platform)\//.test(url.pathname)) res.headers.set('cache-control', 'no-store')
+    // A private photo keeps its own, stricter 'private, no-store'.
+    if (/^\/api\/(merchant|platform)\//.test(url.pathname) && res.headers.get('cache-control') !== 'private, no-store') {
+      res.headers.set('cache-control', 'no-store')
+    }
     return res
   },
 }
