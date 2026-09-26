@@ -3,7 +3,8 @@
 // Every figure is summed by the worker; this page only divides for a ratio
 // and formats. Currencies are never added together, so each gets its own
 // section.
-import { computed, onMounted, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { Download } from 'lucide-vue-next'
 import StatCard from '../components/StatCard.vue'
 import SalesChart from '../components/SalesChart.vue'
@@ -13,6 +14,9 @@ import { PRESETS, buckets, presetRange, type Preset } from '../dates'
 import { CATEGORIES } from '../categories'
 import { download } from '../csv'
 
+const route = useRoute()
+const router = useRouter()
+
 const preset = ref<Preset | 'custom'>('30')
 const from = ref('')
 const to = ref('')
@@ -20,23 +24,48 @@ const report = ref<SalesReport | null>(null)
 const error = ref<string | null>(null)
 const loading = ref(false)
 
+/**
+ * Only the newest request may land. A preset clicked while another is loading
+ * would otherwise be overwritten by the older answer arriving second.
+ */
+let latest = 0
 async function load() {
+  const mine = ++latest
   loading.value = true
   error.value = null
   const { body } = await salesReport(from.value, to.value)
+  if (mine !== latest) return
   if (isError(body)) error.value = body.error
   else if ('totals' in body) report.value = body
   else error.value = 'Something went wrong. Reload and try again.'
   loading.value = false
 }
 
-function pick(p: Preset) {
-  preset.value = p
-  ;({ from: from.value, to: to.value } = presetRange(p))
-  void load()
-}
+/*
+ * The range lives in the URL (?range=7|30|90|month|last-month, or
+ * ?range=custom&from=&to=), so a report can be reloaded, shared or returned to
+ * with Back. The URL is read here and nowhere else; the buttons only write it.
+ */
+const PRESET_IDS = new Set<string>(PRESETS.map((p) => p.id))
+watch(
+  () => route.query,
+  (q) => {
+    if (route.path !== '/reports') return
+    const range = typeof q.range === 'string' ? q.range : '30'
+    if (range === 'custom' && typeof q.from === 'string' && typeof q.to === 'string') {
+      preset.value = 'custom'
+      ;[from.value, to.value] = [q.from, q.to]
+    } else {
+      preset.value = PRESET_IDS.has(range) ? (range as Preset) : '30'
+      ;({ from: from.value, to: to.value } = presetRange(preset.value))
+    }
+    void load()
+  },
+  { immediate: true },
+)
 
-onMounted(() => pick('30'))
+const pick = (p: Preset) => void router.replace({ query: { range: p } })
+const custom = () => void router.replace({ query: { range: 'custom', from: from.value, to: to.value } })
 
 const EMPTY = (currency: string): ReportTotals => ({ currency, gross: 0, refunds: 0, net: 0, commission: 0, earnings: 0, orders: 0, units: 0 })
 
@@ -60,8 +89,8 @@ const sections = computed(() => {
       categories,
       catMax: Math.max(1, ...categories.map((c) => c.net)),
       top: products.slice(0, 10),
-      // The weakest sellers that are not already in the top ten.
-      bottom: products.length > 10 ? products.slice(-5).reverse() : [],
+      // The weakest sellers outside the top ten, weakest first: none overlap it, so 12 products give 2.
+      bottom: products.slice(Math.max(10, products.length - 5)).reverse(),
       products,
     }
   })
@@ -124,7 +153,7 @@ function exportProducts() {
         Custom
       </button>
     </div>
-    <form v-if="preset === 'custom'" class="flex flex-wrap items-end gap-3" @submit.prevent="load">
+    <form v-if="preset === 'custom'" class="flex flex-wrap items-end gap-3" @submit.prevent="custom">
       <div class="min-w-[9rem] flex-1 sm:flex-none">
         <label class="label mb-1 block" for="report-from">From</label>
         <input id="report-from" v-model="from" class="input" type="date" required />
@@ -139,12 +168,18 @@ function exportProducts() {
 
   <p v-if="error" class="mb-4 text-sm text-accent-amber" role="alert">{{ error }}</p>
   <p v-if="loading && !report" class="text-text-secondary">Loading…</p>
-  <template v-else-if="report">
-    <p class="mb-6 text-xs text-text-muted">
+  <div v-else-if="report" :aria-busy="loading" class="transition-opacity" :class="loading ? 'opacity-50' : ''">
+    <p v-if="loading" class="mb-4 text-sm text-text-secondary" role="status">Updating…</p>
+    <p class="mb-2 text-xs text-text-muted">
       {{ report.from }} to {{ report.to }} (UTC), against {{ report.previous.from }} to {{ report.previous.to }}.
-      Sales are your lines on paid orders placed in the range; refunds are those orders' refunds, whenever made.
-      Commission is your rate on the range's net, and earnings are net less commission.
+      Sales are your lines on paid orders placed in the range; refunds are those orders' refunds, whenever made
+      (the Finance statement dates a refund on the day it was made instead).
     </p>
+    <ul class="mb-6 list-disc pl-5 text-xs text-text-muted">
+      <li>Net is gross less refunds. Commission is charged on each sale at the rate it was sold at; earnings are net less commission.</li>
+      <li>Orders are orders with a line of yours, cancelled ones included. Average order is net ÷ orders.</li>
+      <li>Units sold are counted before refunds (Inventory's 30-day figure is after them). Refund rate is refunds ÷ gross.</li>
+    </ul>
     <p v-if="sections.length === 0" class="card p-6 text-text-secondary">No sales in this range or the one before it.</p>
 
     <section v-for="s in sections" :key="s.currency" class="mb-10 flex flex-col gap-6" :aria-label="`${s.currency} sales`">
@@ -189,7 +224,7 @@ function exportProducts() {
             </li>
           </ol>
           <template v-if="s.bottom.length">
-            <h3 class="mb-2 mt-6 text-sm font-semibold text-text-primary">Bottom 5 of those that sold</h3>
+            <h3 class="mb-2 mt-6 text-sm font-semibold text-text-primary">Lowest {{ s.bottom.length }} of the rest</h3>
             <ul class="flex flex-col divide-y divide-border-hairline">
               <li v-for="p in s.bottom" :key="p.productId" class="flex items-center gap-3 py-2">
                 <router-link :to="`/products/${p.productId}`" class="min-w-0 flex-1 truncate text-sm text-text-primary hover:text-accent">{{ p.title }}</router-link>
@@ -232,5 +267,5 @@ function exportProducts() {
         </table>
       </div>
     </section>
-  </template>
+  </div>
 </template>

@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { flushPromises, mount, RouterLinkStub } from '@vue/test-utils'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { enableAutoUnmount, flushPromises, mount, RouterLinkStub } from '@vue/test-utils'
 import { reactive } from 'vue'
 import Orders from './Orders.vue'
 import { listOrders, type OrderSummary } from '../api'
@@ -7,6 +7,9 @@ import { download } from '../csv'
 
 const route = reactive({ path: '/orders', query: { status: 'pending' } as Record<string, string> })
 const replace = vi.fn()
+// A page left mounted would react to the next test's route change.
+enableAutoUnmount(afterEach)
+
 vi.mock('vue-router', () => ({ useRoute: () => route, useRouter: () => ({ replace }) }))
 vi.mock('../api', async (actual) => ({ ...(await actual<typeof import('../api')>()), listOrders: vi.fn() }))
 vi.mock('../csv', async (actual) => ({ ...(await actual<typeof import('../csv')>()), download: vi.fn() }))
