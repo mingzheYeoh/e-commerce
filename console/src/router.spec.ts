@@ -41,6 +41,9 @@ describe('redirectFor', () => {
       '/reports',
       '/inventory',
       '/finance',
+      '/returns',
+      '/returns/ret_abc',
+      '/reviews',
     ]) {
       expect(redirectFor(session, allowed), allowed).toBeNull()
     }

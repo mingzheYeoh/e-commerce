@@ -287,9 +287,86 @@ export const listOrders = (filter: OrderFilter) =>
     `/api/merchant/orders?${query(filter)}`,
   )
 
-export type Queue = { toShip: number; lowStock: number; outOfStock: number; lowStockAt: number }
+export type Queue = { toShip: number; lowStock: number; outOfStock: number; lowStockAt: number; returnsOpen: number }
 
 export const merchantQueue = () => call<Queue | ErrorBody>('/api/merchant/queue')
+
+/* ------------------------------------------------------ returns, reviews */
+
+/** Which side of the console is asking: a merchant reads its own, the platform every one. */
+export type Scope = 'merchant' | 'platform'
+export type ReturnStatus = 'open' | 'approved' | 'rejected'
+export type ReturnReason = 'damaged' | 'wrong_item' | 'not_as_described' | 'changed_mind' | 'other'
+
+export type ReturnSummary = {
+  id: string
+  orderId: string
+  merchantId: string
+  reason: ReturnReason
+  note: string
+  status: ReturnStatus
+  refundMinor: number | null
+  currency: string
+  decisionNote: string | null
+  decidedAt: string | null
+  createdAt: string
+  deliveredAt: string | null
+}
+
+export type ReturnDetail = ReturnSummary & {
+  lines: {
+    productId: string
+    finish: string | null
+    sku: string
+    title: string
+    qty: number
+    unitMinor: number
+    paid: number
+    refundedMinor: number
+  }[]
+  refundable: number
+  /** Same-origin paths; the console checks the session again for each. */
+  photos: string[]
+}
+
+export type StaffReview = {
+  id: string
+  productId: string
+  productTitle: string
+  merchantId: string
+  rating: number
+  body: string
+  hidden: boolean
+  author: string
+  photos: { large: string; thumb: string }[]
+  createdAt: string
+  updatedAt: string
+}
+
+export const listReturns = (scope: Scope, status: ReturnStatus | '' = '') =>
+  call<{ returns: ReturnSummary[] } | ErrorBody>(`/api/${scope}/returns${status ? `?status=${status}` : ''}`)
+
+export const getReturn = (scope: Scope, id: string) =>
+  call<ReturnDetail | ErrorBody>(`/api/${scope}/returns/${encodeURIComponent(id)}`)
+
+export const approveReturn = (id: string, amountMinor: number, note: string) =>
+  call<ReturnDetail | ErrorBody>(`/api/merchant/returns/${encodeURIComponent(id)}/approve`, {
+    method: 'POST',
+    body: JSON.stringify({ amountMinor, note }),
+  })
+
+export const rejectReturn = (id: string, note: string) =>
+  call<ReturnDetail | ErrorBody>(`/api/merchant/returns/${encodeURIComponent(id)}/reject`, {
+    method: 'POST',
+    body: JSON.stringify({ note }),
+  })
+
+export const listReviews = (scope: Scope) => call<{ reviews: StaffReview[] } | ErrorBody>(`/api/${scope}/reviews`)
+
+export const setReviewHidden = (id: string, hidden: boolean) =>
+  call<{ id: string; hidden: boolean } | ErrorBody>(`/api/platform/reviews/${encodeURIComponent(id)}/${hidden ? 'hide' : 'unhide'}`, {
+    method: 'POST',
+  })
 
 export type ReportTotals = {
   currency: string

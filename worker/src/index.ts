@@ -11,7 +11,24 @@ import { facts, queryOrError } from './graph'
 import { converse } from './agent'
 import { placeOrder, getOrder, type OrdersEnv } from './orders'
 import { publishedProducts } from './catalogue'
-import { isPhotoKey } from './photos'
+import { isPhotoKey, privatePhoto } from './photos'
+import {
+  addReturnPhoto,
+  addReviewPhoto,
+  avatarOf,
+  deleteReview,
+  openReturn,
+  orderReturns,
+  ownReturnPhoto,
+  productReviews,
+  publicObjectsOf,
+  removeAvatar,
+  removeReviewPhoto,
+  saveReview,
+  setAvatar,
+  type Reply,
+  type UploadsEnv,
+} from './uploads'
 
 /*
  * Re-exported because Cloudflare resolves a Durable Object class by name from
@@ -42,11 +59,22 @@ import {
   type AuthResult,
 } from './auth'
 
-export interface Env extends RagEnv, OrdersEnv, AuthEnv {
+/**
+ * MEDIA holds product photos (written by nexus-console) and shoppers' avatars
+ * and review photos (written here); PRIVATE holds return photos. See uploads.ts.
+ */
+export interface Env extends RagEnv, OrdersEnv, AuthEnv, UploadsEnv {
   ALLOWED_ORIGIN?: string
-  /** Product photos the merchant console uploaded. Written only by nexus-console. */
-  MEDIA?: R2Bucket
 }
+
+/* Customer uploads (uploads.ts). Ids are checked for shape before any statement runs. */
+const REVIEWS = /^\/api\/products\/([A-Za-z0-9_-]{1,64})\/reviews$/
+const REVIEW = /^\/api\/products\/([A-Za-z0-9_-]{1,64})\/review$/
+const REVIEW_PHOTOS = /^\/api\/products\/([A-Za-z0-9_-]{1,64})\/review\/photos$/
+const REVIEW_PHOTO = /^\/api\/products\/([A-Za-z0-9_-]{1,64})\/review\/photos\/([^/]+)$/
+const ORDER_RETURNS = /^\/api\/account\/orders\/([A-Za-z0-9_-]{1,64})\/returns$/
+const RETURN_PHOTOS = /^\/api\/account\/returns\/(ret_[a-z0-9]+)\/photos$/
+const RETURN_PHOTO = '/api/account/return-photos/'
 
 /**
  * A wildcard on a service that writes orders would let any page place them on a
@@ -68,7 +96,7 @@ function cors(env: Env, request: Request): Record<string, string> {
   const allowed = allowedOrigins(env)
   return {
     'access-control-allow-origin': allowed.includes(origin) ? origin : allowed[0],
-    'access-control-allow-methods': 'GET, POST, OPTIONS',
+    'access-control-allow-methods': 'GET, POST, DELETE, OPTIONS',
     'access-control-allow-headers': 'content-type',
     /*
      * Sessions ride a cookie, and a browser will not attach one to a
@@ -283,7 +311,60 @@ export default {
       /* Who this browser is. 200 with a null user rather than a 401: not being
          signed in is an answer, not a failure, and the header renders off it. */
       if (url.pathname === '/api/auth/me' && request.method === 'GET') {
-        return json({ user: await sessionUser(env, request) }, { headers })
+        const user = await sessionUser(env, request)
+        return json({ user: user && { ...user, avatarUrl: await avatarOf(env, user.id) } }, { headers })
+      }
+
+      /*
+       * Customer uploads: avatars, reviews, return requests (uploads.ts).
+       * Answers depend on who is asking, so none is cached anywhere.
+       */
+      const noStore = { ...headers, 'cache-control': 'private, no-store' }
+      const answer = (r: Reply) => json(r.body, { status: r.status, headers: noStore })
+      const reviewsOf = url.pathname.match(REVIEWS)?.[1]
+      if (reviewsOf && request.method === 'GET') {
+        const page = Number(url.searchParams.get('page') ?? 0)
+        if (!Number.isInteger(page) || page < 0 || page > 1000) return answer({ status: 400, body: { error: 'page is a whole number from 0.' } })
+        return answer(await productReviews(env, reviewsOf, page, await sessionUser(env, request)))
+      }
+      const review = url.pathname.match(REVIEW)?.[1]
+      const reviewPhotos = url.pathname.match(REVIEW_PHOTOS)?.[1]
+      const reviewPhoto = url.pathname.match(REVIEW_PHOTO)
+      const orderReturnsOf = url.pathname.match(ORDER_RETURNS)?.[1]
+      const returnPhotos = url.pathname.match(RETURN_PHOTOS)?.[1]
+      if (
+        review ||
+        reviewPhotos ||
+        reviewPhoto ||
+        orderReturnsOf ||
+        returnPhotos ||
+        url.pathname === '/api/account/avatar' ||
+        url.pathname.startsWith(RETURN_PHOTO)
+      ) {
+        const user = await sessionUser(env, request)
+        if (!user) return answer({ status: 401, body: { error: 'not signed in' } })
+        const body = () => request.json().catch(() => null)
+        const m = request.method
+        if (url.pathname === '/api/account/avatar') {
+          if (m === 'POST') return answer(await setAvatar(env, user, request))
+          if (m === 'DELETE') return answer(await removeAvatar(env, user))
+        }
+        if (review && m === 'POST') return answer(await saveReview(env, user, review, await body()))
+        if (review && m === 'DELETE') return answer(await deleteReview(env, user, review))
+        if (reviewPhotos && m === 'POST') return answer(await addReviewPhoto(env, user, reviewPhotos, request))
+        if (reviewPhoto && m === 'DELETE') return answer(await removeReviewPhoto(env, user, reviewPhoto[1], reviewPhoto[2]))
+        if (orderReturnsOf && m === 'GET') return answer(await orderReturns(env, user, orderReturnsOf))
+        if (orderReturnsOf && m === 'POST') return answer(await openReturn(env, user, orderReturnsOf, await body()))
+        if (returnPhotos && m === 'POST') return answer(await addReturnPhoto(env, user, returnPhotos, request))
+        if (url.pathname.startsWith(RETURN_PHOTO) && m === 'GET') {
+          const object = await ownReturnPhoto(env, user, url.pathname.slice(RETURN_PHOTO.length))
+          if (!object) return answer({ status: 404, body: { error: 'not found' } })
+          const res = privatePhoto(object)
+          // The storefront shows it in an <img>, from its own origin.
+          for (const [k, v] of Object.entries(headers)) res.headers.set(k, v)
+          return res
+        }
+        return answer({ status: 404, body: { error: 'not found' } })
       }
 
       if (url.pathname === '/api/account/orders' && request.method === 'GET') {
@@ -313,7 +394,16 @@ export default {
           if (route === 'password') return authJson(await changePassword(env, user, await payload()), headers)
           if (route === 'email') return authJson(await requestEmailChange(env, user, await payload(), request), headers)
           if (route === 'sessions/revoke') return authJson(await revokeOtherSessions(env, user, request), headers)
-          if (route === 'delete') return authJson(await deleteAccount(env, user, await payload()), headers)
+          if (route === 'delete') {
+            // The avatar and review photos are public objects: read their keys
+            // while the rows still name them, and delete them once the account is gone.
+            const objects = await publicObjectsOf(env, user.id)
+            const result = await deleteAccount(env, user, await payload())
+            if (result.status === 200 && objects.length) {
+              await env.MEDIA?.delete(objects).catch((err) => console.error('orphaned photo objects', { objects, err }))
+            }
+            return authJson(result, headers)
+          }
           if (route === 'totp/start') return authJson(await startTotpEnrolment(env, user, await payload()), headers)
           if (route === 'totp/confirm') return authJson(await confirmTotpEnrolment(env, user, await payload()), headers)
           if (route === 'totp/disable') return authJson(await disableTotp(env, user, await payload()), headers)

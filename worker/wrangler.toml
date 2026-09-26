@@ -33,6 +33,12 @@ database_id = "7aa62821-d17f-43a2-b605-2643780e9690"
 binding = "MEDIA"
 bucket_name = "nexus-media"
 
+# Return photos: private, never given a public domain. Read only through the
+# authenticated return-photos routes (the shopper here, staff in nexus-console).
+[[r2_buckets]]
+binding = "PRIVATE"
+bucket_name = "nexus-private"
+
 [vars]
 # The deployed storefront and the dev server, in that order. The first entry is
 # what an unrecognised origin gets echoed back, so it must not be localhost.
@@ -41,6 +47,11 @@ ALLOWED_ORIGIN = "https://nexusohm.com,https://www.nexusohm.com,https://nexus-te
 # Who verification email comes from. The domain must be verified with the mail
 # provider, or every send is refused with a reason only the log sees.
 MAIL_FROM = "NEXUSOHM <no-reply@nexusohm.com>"
+
+# Where this worker serves MEDIA from (/media/u/). Avatar and review photo URLs
+# are this plus the key. The same value as nexus-console's MEDIA_BASE, per
+# environment, so every photo URL on the platform has one prefix.
+MEDIA_BASE = "https://nexus-api.mingzhe030228.workers.dev/media/u/"
 
 # Guessing throttles. Two namespaces because signing in and signing up deserve
 # different budgets, and a shared counter would let one starve the other.
@@ -138,9 +149,14 @@ database_id = "aedb0572-7924-4068-8d30-11b6e61eeed5"
 binding = "MEDIA"
 bucket_name = "nexus-media-staging"
 
+[[env.staging.r2_buckets]]
+binding = "PRIVATE"
+bucket_name = "nexus-private-staging"
+
 [env.staging.vars]
 ALLOWED_ORIGIN = "https://nexus-tech-collective-staging.mingzhe030228.workers.dev,http://localhost:5173"
 MAIL_FROM = "NEXUSOHM <no-reply@nexusohm.com>"
+MEDIA_BASE = "https://nexus-api-staging.mingzhe030228.workers.dev/media/u/"
 
 [[env.staging.ratelimits]]
 name = "LOGIN_LIMITER"

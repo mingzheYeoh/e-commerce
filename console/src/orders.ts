@@ -18,3 +18,19 @@ export const shipTime = (seconds: number | null) =>
 
 /** A share as a percentage, or a dash when there is nothing to divide by. */
 export const rate = (part: number, whole: number) => (whole ? `${((part / whole) * 100).toFixed(1)}%` : '—')
+
+/** A shopper's reason for a return, in words. */
+export const REASON: Record<string, string> = {
+  damaged: 'Arrived damaged',
+  wrong_item: 'Wrong item',
+  not_as_described: 'Not as described',
+  changed_mind: 'Changed their mind',
+  other: 'Other',
+}
+
+/** Where a return request stands, and the badge it wears. */
+export const RETURN_STATUS: Record<string, { label: string; badge: string }> = {
+  open: { label: 'Open', badge: 'border-accent-amber/40 text-accent-amber' },
+  approved: { label: 'Approved', badge: 'border-accent-green/40 text-accent-green' },
+  rejected: { label: 'Rejected', badge: 'border-border-strong text-text-secondary' },
+}
