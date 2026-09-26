@@ -116,7 +116,8 @@ describe('the deployment config', () => {
   // deploys silently: so each half of each file is checked on its own.
   const halves = (file: string) => {
     const s = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', file), 'utf8').replace(/\r\n/g, '\n')
-    const at = s.indexOf('[env.staging]')
+    // The table header at the start of a line, not a mention of it in a comment.
+    const at = s.search(/^\[env\.staging\]/m)
     return { production: s.slice(0, at), staging: s.slice(at) }
   }
   const privateBucket = (toml: string) => toml.match(/binding = "PRIVATE"\nbucket_name = "([^"]+)"/)?.[1]
