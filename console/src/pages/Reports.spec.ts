@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { enableAutoUnmount, flushPromises, mount, RouterLinkStub } from '@vue/test-utils'
 import { reactive } from 'vue'
 import Reports from './Reports.vue'
-import { salesReport, type SalesReport } from '../api'
+import { salesReport, UNREACHABLE, type SalesReport } from '../api'
 
 const route = reactive({ path: '/reports', query: {} as Record<string, string> })
 const replace = vi.fn(({ query }: { query: Record<string, string> }) => {
@@ -83,14 +83,10 @@ describe('the reports page', () => {
   })
 
   it('shows an error, not an endless Loading, when the server cannot be reached', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => Promise.reject(new TypeError('Failed to fetch'))))
-    vi.mocked(salesReport).mockImplementation(async (...args) => {
-      const real = (await vi.importActual<typeof import('../api')>('../api')).salesReport
-      return real(...args)
-    })
+    // What call() answers a rejected fetch with (Overview.spec drives the real one).
+    vi.mocked(salesReport).mockResolvedValue({ status: 0, body: { error: UNREACHABLE } })
     const w = await mountIt()
     expect(w.text()).toContain("Couldn't reach the server")
     expect(w.text()).not.toContain('Loading…')
-    vi.unstubAllGlobals()
   })
 })

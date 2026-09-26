@@ -1,5 +1,28 @@
-import { describe, it, expect } from 'vitest'
-import { toCsv } from './csv'
+import { describe, it, expect, vi } from 'vitest'
+import { readFileSync } from 'node:fs'
+import { BOM, download, toCsv } from './csv'
+
+describe('download', () => {
+  it('starts the file with a BOM, written as an escape rather than an invisible character in the source', () => {
+    expect(BOM).toBe(String.fromCharCode(0xfeff))
+    expect(readFileSync('console/src/csv.ts', 'utf8')).not.toContain(String.fromCharCode(0xfeff))
+  })
+
+  it('revokes the file URL only after the click has been handled', () => {
+    vi.useFakeTimers()
+    const created = vi.fn((_: Blob) => 'blob:x')
+    const revoked = vi.fn()
+    Object.assign(URL, { createObjectURL: created, revokeObjectURL: revoked })
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
+    download('a.csv', [['x']])
+    expect(click).toHaveBeenCalled()
+    expect(revoked).not.toHaveBeenCalled()
+    vi.runAllTimers()
+    expect(revoked).toHaveBeenCalledWith('blob:x')
+    vi.useRealTimers()
+    click.mockRestore()
+  })
+})
 import { minorToDecimal, formatBps, change } from './money'
 
 describe('toCsv', () => {

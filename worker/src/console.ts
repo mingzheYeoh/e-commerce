@@ -1061,13 +1061,19 @@ export default {
       return json({ error: 'cross-origin request refused' }, 403)
     }
 
+    let res: Response
     try {
-      return await route(request, env, url, ctx)
+      res = await route(request, env, url, ctx)
     } catch (err) {
       // Logged, not returned: internal detail in an error body is how binding
       // names and stack traces end up in someone else's console.
       console.error('unhandled', err)
-      return json({ error: 'internal error' }, 500)
+      res = json({ error: 'internal error' }, 500)
     }
+    // Every merchant and platform answer is private, the refusals too: a 400
+    // or 403 cached by something in between would outlive the reason for it,
+    // and a route that forgets PRIVATE on one branch is not a leak here.
+    if (/^\/api\/(merchant|platform)\//.test(url.pathname)) res.headers.set('cache-control', 'no-store')
+    return res
   },
 }

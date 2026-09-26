@@ -1074,6 +1074,16 @@ describe('the console worker: the back office', () => {
     })
   })
 
+  it('keeps refusals out of every cache too', async () => {
+    const s = await office()
+    const bad = await s.get('/api/merchant/reports/sales?from=nope')
+    expect(bad.res.status).toBe(400)
+    expect(bad.res.headers.get('cache-control')).toBe('no-store')
+    const anonymous = await call(s.db, 'GET', '/api/merchant/finance/ledger')
+    expect(anonymous.status).toBe(401)
+    expect(anonymous.headers.get('cache-control')).toBe('no-store')
+  })
+
   it('refuses a report or statement range it cannot read, or one longer than three years', async () => {
     const s = await office()
     for (const path of ['/api/merchant/reports/sales', '/api/merchant/finance/ledger']) {
