@@ -24,7 +24,7 @@ async function submit() {
 
 <template>
   <div class="mx-auto flex min-h-screen max-w-md flex-col justify-center px-6">
-    <h1 class="mb-6 font-display text-2xl font-bold text-text-primary">Sell on NEXUS</h1>
+    <h1 class="mb-6 font-display text-2xl font-bold text-text-primary">Sell on NEXUSOHM</h1>
 
     <div v-if="done" class="card p-6">
       <p class="text-text-primary">

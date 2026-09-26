@@ -33,7 +33,7 @@ ALLOWED_ORIGIN = "https://nexus-tech-collective.mingzhe030228.workers.dev,http:/
 
 # Who verification email comes from. The domain must be verified with the mail
 # provider, or every send is refused with a reason only the log sees.
-MAIL_FROM = "NEXUS <no-reply@nexusohm.com>"
+MAIL_FROM = "NEXUSOHM <no-reply@nexusohm.com>"
 
 # Guessing throttles. Two namespaces because signing in and signing up deserve
 # different budgets, and a shared counter would let one starve the other.
@@ -133,7 +133,7 @@ bucket_name = "nexus-media-staging"
 
 [env.staging.vars]
 ALLOWED_ORIGIN = "https://nexus-tech-collective-staging.mingzhe030228.workers.dev,http://localhost:5173"
-MAIL_FROM = "NEXUS <no-reply@nexusohm.com>"
+MAIL_FROM = "NEXUSOHM <no-reply@nexusohm.com>"
 
 [[env.staging.ratelimits]]
 name = "LOGIN_LIMITER"

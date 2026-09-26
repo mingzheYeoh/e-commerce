@@ -34,8 +34,8 @@ watch(
     class="fixed inset-x-0 top-0 z-50 h-16 border-b border-border-hairline bg-void/85 backdrop-blur-xl"
   >
     <nav class="mx-auto flex h-full max-w-[1600px] items-center justify-between px-4 md:px-8">
-      <RouterLink to="/" class="flex shrink-0 items-center gap-2" aria-label="NEXUS home">
-        <span class="font-display text-lg font-extrabold tracking-tight md:text-xl">NEXUS</span>
+      <RouterLink to="/" class="flex shrink-0 items-center gap-2" aria-label="NEXUSOHM home">
+        <span class="font-display text-lg font-extrabold tracking-tight md:text-xl">NEXUSOHM</span>
         <span class="hidden text-xs text-text-muted lg:inline">Consumer Electronics</span>
       </RouterLink>
 

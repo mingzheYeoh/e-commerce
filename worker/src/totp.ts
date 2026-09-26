@@ -149,7 +149,7 @@ export async function verifyTotp(secret: string, code: string): Promise<boolean>
  * a parameter — because different apps read different ones, and an entry that
  * says only an email address is unidentifiable on a phone with thirty of them.
  */
-export function otpauthUri(email: string, secret: string, issuer = 'NEXUS'): string {
+export function otpauthUri(email: string, secret: string, issuer = 'NEXUSOHM'): string {
   const label = encodeURIComponent(`${issuer}:${email}`)
   const params = new URLSearchParams({
     secret,
