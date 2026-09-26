@@ -18,7 +18,7 @@ export interface Mailer {
 export interface MailEnv {
   /** Set with `wrangler secret put RESEND_API_KEY`. Absent means no transport. */
   RESEND_API_KEY?: string
-  /** e.g. "NEXUS <orders@yourdomain.com>" — must be a domain verified with the provider. */
+  /** e.g. "NEXUSOHM <orders@yourdomain.com>" — must be a domain verified with the provider. */
   MAIL_FROM?: string
 }
 
@@ -79,7 +79,7 @@ const shell = (heading: string, body: string, action?: { href: string; label: st
     <tr><td align="center">
       <table role="presentation" width="100%" style="max-width:520px;background:#141417;border:1px solid #26262b;border-radius:12px;padding:32px">
         <tr><td>
-          <p style="margin:0 0 24px;font-size:15px;font-weight:800;letter-spacing:-0.02em">NEXUS</p>
+          <p style="margin:0 0 24px;font-size:15px;font-weight:800;letter-spacing:-0.02em">NEXUSOHM</p>
           <h1 style="margin:0 0 16px;font-size:20px;line-height:1.3">${heading}</h1>
           <div style="margin:0 0 24px;font-size:14px;line-height:1.6;color:#a8a8b0">${body}</div>
           ${
@@ -96,8 +96,8 @@ const shell = (heading: string, body: string, action?: { href: string; label: st
 </body></html>`
 
 export const verificationEmail = (link: string) => ({
-  subject: 'Confirm your NEXUS account',
-  text: `Confirm your email to finish setting up your NEXUS account:\n\n${link}\n\nThe link is good for 24 hours. If you did not ask for an account, ignore this — nothing was created you need to undo.`,
+  subject: 'Confirm your NEXUSOHM account',
+  text: `Confirm your email to finish setting up your NEXUSOHM account:\n\n${link}\n\nThe link is good for 24 hours. If you did not ask for an account, ignore this — nothing was created you need to undo.`,
   html: shell(
     'Confirm your email',
     'One click and your account is ready. The link is good for 24 hours.<br><br>If you did not ask for an account, ignore this message — nothing happens without it.',
@@ -114,7 +114,7 @@ export const verificationEmail = (link: string) => ({
  * make, is handed something useful rather than a dead end.
  */
 export const alreadyRegisteredEmail = (signInUrl: string) => ({
-  subject: 'Someone tried to create a NEXUS account with your email',
+  subject: 'Someone tried to create a NEXUSOHM account with your email',
   text: `Someone just tried to sign up with this address, which already has an account.\n\nIf it was you, sign in instead: ${signInUrl}\n\nIf it was not, no action is needed — no second account was created and nothing about yours has changed. Your password still works and has not been seen by anyone.`,
   html: shell(
     'That address already has an account',
@@ -132,7 +132,7 @@ export const alreadyRegisteredEmail = (signInUrl: string) => ({
  * should not be left wondering whether their account is in danger.
  */
 export const passwordResetEmail = (link: string) => ({
-  subject: 'Reset your NEXUS password',
+  subject: 'Reset your NEXUSOHM password',
   text: `Use this link to choose a new password:\n\n${link}\n\nIt is good for one hour and works once. If you did not ask for this, ignore it — your password has not changed and nobody has seen it.`,
   html: shell(
     'Choose a new password',
