@@ -1545,6 +1545,11 @@ describe('the console worker: the platform back office', () => {
     const page = (await (await p.get('/api/platform/payments?limit=1')).json()) as { next: string; entries: unknown[] }
     expect(page.entries).toHaveLength(1)
     expect((await p.get(`/api/platform/payments?limit=1&before=${encodeURIComponent(page.next)}`)).status).toBe(200)
+    // Narrowed to Acme, the shared order's charge is Acme's 2000 of goods alone, with no shipping or tax.
+    const acme = (await (await p.get(`/api/platform/payments?type=charge&merchant=${p.merchantId}`)).json()) as {
+      entries: { ref: string; amount: number; goods: number; shipping: number | null; tax: number | null }[]
+    }
+    expect(acme.entries).toEqual([expect.objectContaining({ ref: 'o_shared', amount: 2000, goods: 2000, shipping: null, tax: null })])
     for (const q of ['type=gift', 'currency=usd', 'before=x', 'merchant=a%20b', 'from=2020-01-01&to=2026-01-01']) {
       expect((await p.get(`/api/platform/payments?${q}`)).status, q).toBe(400)
     }
@@ -1584,6 +1589,9 @@ describe('the console worker: the platform back office', () => {
     expect(m.balances).toEqual([expect.objectContaining({ currency: 'USD', available: 1840 })])
     expect((await p.get('/api/platform/merchants/mch_nope')).status).toBe(404)
     expect((await p.get('/api/platform/merchants/mch_nope/sales')).status).toBe(404)
+    for (const bad of ['/api/platform/merchants/a%20b', '/api/platform/merchants/a%20b/sales', '/api/platform/customers/a%20b']) {
+      expect((await p.get(bad)).status, bad).toBe(404)
+    }
     const sales = (await (await p.get(`/api/platform/merchants/${p.merchantId}/sales`)).json()) as { totals: { gross: number }[] }
     expect(sales.totals).toEqual([expect.objectContaining({ currency: 'USD', gross: 2000 })])
   })
@@ -1602,7 +1610,7 @@ describe('the console worker: the platform back office', () => {
     expect(r.buyers).toEqual({ accounts: 1, guests: 1 })
     expect(r.merchants.map((m) => m.merchantId).sort()).toEqual([p.merchantId, 'mch_other'].sort())
     const { attention } = (await (await p.get('/api/platform/overview')).json()) as { attention: Record<string, unknown> }
-    expect(attention).toMatchObject({ pendingApplications: 0, toShip: 3, overdue: 0, owing: [], lowStock: [] })
+    expect(attention).toMatchObject({ pendingApplications: 0, toShip: 3, overdue: 0, owingMerchants: 0, owing: [], lowStock: [] })
   })
 
   it('costs the same number of D1 statements for 50 merchants as for 1 on every back office read', async () => {

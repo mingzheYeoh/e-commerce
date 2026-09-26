@@ -2135,9 +2135,21 @@ describe('the payments ledger', () => {
     expect(await refs({ merchantId: 'mch_b' })).toEqual(['charge:o1', 'charge:o6', 'payout:B Sept', 'refund:o6'])
     expect(await refs({ kind: 'refund', currency: 'USD' })).toEqual(['refund:o2', 'refund:o3'])
     expect(await refs({ kind: 'charge', from: utcDay(45), to: utcDay(5) })).toEqual(['charge:o3', 'charge:o4'])
-    const b = await platform.payments.list({ ...EVER, merchantId: 'mch_b', currency: 'SGD' })
+    // Narrowed to B, a charge is B's goods alone: o1's 700 SGD, not the shared order's 3300 XXX, and no
+    // shipping or tax, which belong to the whole order. o6 is B's alone: 2100 of goods.
+    const b = await platform.payments.list({ ...EVER, merchantId: 'mch_b' })
+    expect(b.entries.filter((e) => e.kind === 'charge').map((e) => [e.ref, e.currency, e.amount, e.goods, e.shipping, e.tax, e.merchant_ids]).sort()).toEqual([
+      ['o1', 'SGD', 700, 700, null, null, ['mch_b']],
+      ['o6', 'SGD', 2100, 2100, null, null, ['mch_b']],
+    ])
     expect(b.totals).toEqual([
-      { currency: 'SGD', charges: 1, charged: 2700, goods: 2100, shipping: 500, tax: 100, refunds: 1, refunded: 100, payouts: 1, paid_out: 1000 },
+      { currency: 'SGD', charges: 2, charged: 2800, goods: 2800, shipping: 0, tax: 0, refunds: 1, refunded: 100, payouts: 1, paid_out: 1000 },
+    ])
+    // A sells o1 in USD and o7 in SGD: each of its charges is in its own lines' currency.
+    const a = await platform.payments.list({ ...EVER, merchantId: 'mch_a', kind: 'charge', limit: 2 })
+    const rest = await platform.payments.list({ ...EVER, merchantId: 'mch_a', kind: 'charge', before: a.entries[1] })
+    expect([...a.entries.slice(0, 2), ...rest.entries].map((e) => `${e.ref}:${e.currency}:${e.amount}`).sort()).toEqual([
+      'o1:USD:2000', 'o2:USD:2500', 'o3:USD:6000', 'o4:USD:5000', 'o7:SGD:1000',
     ])
   })
 
@@ -2215,6 +2227,7 @@ describe('the platform report', () => {
       overdue: 2,
       // A SGD: 1000 − 1000 refunded − 0 commission − 967 paid out.
       owing: [{ merchant_id: 'mch_a', name: 'MCH_A', currency: 'SGD', available: -967 }],
+      owing_merchants: 1,
       // pa1 at 3 and pa_sgd at 0; the draft is not on sale.
       low_stock: [{ merchant_id: 'mch_a', name: 'MCH_A', products: 2 }],
       merchant_ids: ['mch_a'],
@@ -2393,9 +2406,13 @@ describe('customers', () => {
     for (const sql of reads) {
       expect(sql, sql).not.toMatch(/password|salt|totp_secret|token|recovery|sessions|kdf|iterations|failed_attempts|locked_until|pending_email|SELECT \*|\.\*/i)
     }
-    expect(raw.prepare(`SELECT action, merchant_id, subject FROM audit_log WHERE action LIKE 'customers.%' ORDER BY rowid`).all()).toEqual([
+    // The list reads no merchant's data; the account's page shows o1 (A and B) and o3 (A), so both are told.
+    expect(
+      raw.prepare(`SELECT action, merchant_id, subject FROM audit_log WHERE action LIKE 'customers.%' ORDER BY rowid, merchant_id`).all(),
+    ).toEqual([
       { action: 'customers.list', merchant_id: null, subject: null },
-      { action: 'customers.get', merchant_id: null, subject: 'usr_1' },
+      { action: 'customers.get', merchant_id: 'mch_a', subject: 'usr_1' },
+      { action: 'customers.get', merchant_id: 'mch_b', subject: 'usr_1' },
     ])
   })
 })

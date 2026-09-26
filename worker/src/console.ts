@@ -469,6 +469,7 @@ const attentionOut = (a: Attention) => ({
   overdue: a.overdue,
   overdueDays: OVERDUE_DAYS,
   lowStockAt: LOW_STOCK,
+  owingMerchants: a.owing_merchants,
   owing: a.owing.map((o) => ({ merchantId: o.merchant_id, name: o.name, currency: o.currency, available: o.available })),
   lowStock: a.low_stock.map((l) => ({ merchantId: l.merchant_id, name: l.name, products: l.products })),
 })
@@ -1160,6 +1161,7 @@ async function route(request: Request, env: ConsoleEnv, url: URL, ctx: Execution
     if (repo instanceof Response) return repo
     const range = reportRange(url)
     if (typeof range === 'string') return json({ error: range }, 400)
+    if (!ID.test(salesFor)) return json({ error: 'not found' }, 404)
     const report = await repo.merchants.sales(salesFor, range)
     if (!report) return json({ error: 'not found' }, 404)
     const { merchant_id: _m, ...rest } = report
@@ -1250,6 +1252,7 @@ async function route(request: Request, env: ConsoleEnv, url: URL, ctx: Execution
   if (merchantId && method === 'GET') {
     const repo = await platformRepo(env, request)
     if (repo instanceof Response) return repo
+    if (!ID.test(merchantId)) return json({ error: 'not found' }, 404)
     const detail = await repo.merchants.get(merchantId)
     return detail ? json(merchantDetailOut(detail), 200, PRIVATE) : json({ error: 'not found' }, 404)
   }

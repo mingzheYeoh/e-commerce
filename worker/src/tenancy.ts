@@ -288,10 +288,12 @@ export interface Attention {
   pending_applications: number
   /** Parts of paid orders still pending. */
   to_ship: number
-  /** Of those, placed more than OVERDUE_DAYS ago. */
+  /** Of those, placed before the UTC day OVERDUE_DAYS ago began. */
   overdue: number
-  /** Balances below zero: the merchant owes the platform. */
+  /** Balances below zero, the deepest 20: the merchant owes the platform. */
   owing: { merchant_id: string; name: string; currency: string; available: number }[]
+  /** How many merchants owe, however many `owing` lists. */
+  owing_merchants: number
   /** Merchants with a published product at LOW_STOCK units or fewer. */
   low_stock: { merchant_id: string; name: string; products: number }[]
   merchant_ids: string[]
@@ -353,6 +355,8 @@ export interface CustomerPage {
 export interface CustomerDetail extends CustomerRow {
   /** Refunded on those orders, per line currency. */
   refunded: Amount[]
+  /** Every merchant whose order `recent` shows: the audit records the read against each. */
+  merchant_ids: string[]
   /** Newest first, at most CUSTOMER_ORDERS. */
   recent: { id: string; created_at: string; currency: string; total: number; items: number; fulfilment: FulfilmentStatus[] }[]
 }
@@ -1366,7 +1370,7 @@ function platformOnly(env: TenancyEnv, staffId: string): Omit<PlatformRepository
           // A seek on order_fulfilments_merchant_idx: this merchant's parts only.
           one<MerchantDetail['health']>(
             `SELECT COALESCE(SUM(f.status = 'pending'), 0) AS to_ship,
-                    COALESCE(SUM(f.status = 'pending' AND o.created_at < datetime('now', ?)), 0) AS overdue,
+                    COALESCE(SUM(f.status = 'pending' AND o.created_at < date('now', ?)), 0) AS overdue,
                     COUNT(*) AS parts, COALESCE(SUM(f.shipped_at IS NOT NULL), 0) AS shipped,
                     COALESCE(SUM(f.status = 'cancelled'), 0) AS cancelled,
                     ${AVG_SHIP} AS avg_ship_seconds
@@ -1514,14 +1518,25 @@ function platformOnly(env: TenancyEnv, staffId: string): Omit<PlatformRepository
             [`${col} < date(?, '+1 day')`, filter.to],
           ] as const
         const branches: { sql: string; args: unknown[] }[] = []
-        if (!filter.kind || filter.kind === 'charge') {
-          const w = where([
-            PAID,
-            ...when('o.created_at'),
-            filter.merchantId
-              ? ['EXISTS (SELECT 1 FROM order_lines m WHERE m.order_id = o.id AND m.merchant_id = ?)', filter.merchantId]
-              : null,
-          ])
+        if ((!filter.kind || filter.kind === 'charge') && filter.merchantId) {
+          /*
+           * Narrowed to one merchant, a charge is that merchant's goods on the
+           * order, per currency of its lines: never the order's total, which
+           * holds other merchants' goods, nor its shipping and tax, which
+           * belong to the whole order. The id carries the currency so the
+           * keyset stays unique when one order holds two.
+           */
+          const w = where([PAID, ...when('o.created_at'), ['l.merchant_id = ?', filter.merchantId]])
+          branches.push({
+            sql: `SELECT o.created_at AS at, 1 AS rank, 'charge' AS kind, o.id || '-' || ${CURRENCY} AS id, o.id AS ref,
+                         json_array(l.merchant_id) AS merchant_ids, ${CURRENCY} AS currency, SUM(${GROSS}) AS amount,
+                         SUM(${GROSS}) AS goods, NULL AS shipping, NULL AS tax
+                    ${SALES}${w.sql}
+                   GROUP BY o.id, ${CURRENCY}`,
+            args: w.args,
+          })
+        } else if (!filter.kind || filter.kind === 'charge') {
+          const w = where([PAID, ...when('o.created_at')])
           branches.push({
             sql: `SELECT o.created_at AS at, 1 AS rank, 'charge' AS kind, o.id AS id, o.id AS ref,
                          (SELECT json_group_array(DISTINCT m.merchant_id) FROM order_lines m WHERE m.order_id = o.id) AS merchant_ids,
@@ -1657,11 +1672,11 @@ function platformOnly(env: TenancyEnv, staffId: string): Omit<PlatformRepository
 
       async attention() {
         const b = balances({ kind: 'platform', staffId })
-        const [counts, owing, low] = await Promise.all([
+        const [counts, owing, owingCount, low] = await Promise.all([
           // Platform-wide, so pending parts are found by order_fulfilments_status_idx (0014).
           env.ORDERS.prepare(
             `SELECT (SELECT COUNT(*) FROM merchants WHERE status = 'pending') AS pending_applications,
-                    COUNT(*) AS to_ship, COALESCE(SUM(o.created_at < datetime('now', ?)), 0) AS overdue
+                    COUNT(*) AS to_ship, COALESCE(SUM(o.created_at < date('now', ?)), 0) AS overdue
                FROM order_fulfilments f JOIN orders o ON o.id = f.order_id
               WHERE f.status = 'pending' AND o.payment_status = ?`,
           )
@@ -1678,6 +1693,12 @@ function platformOnly(env: TenancyEnv, staffId: string): Omit<PlatformRepository
             .bind(...b.args)
             .all<Attention['owing'][number]>(),
           env.ORDERS.prepare(
+            `SELECT COUNT(DISTINCT b.merchant_id) AS n FROM (${b.sql}) b
+              WHERE b.gross - b.refunds - b.commission - b.payouts < 0`,
+          )
+            .bind(...b.args)
+            .first<{ n: number }>(),
+          env.ORDERS.prepare(
             `SELECT p.merchant_id, m.name, COUNT(*) AS products
                FROM products p JOIN merchants m ON m.id = p.merchant_id
               WHERE p.status = 'published' AND p.stock_count <= ? AND m.status = 'active'
@@ -1691,6 +1712,7 @@ function platformOnly(env: TenancyEnv, staffId: string): Omit<PlatformRepository
         return {
           ...(counts ?? { pending_applications: 0, to_ship: 0, overdue: 0 }),
           owing: o,
+          owing_merchants: owingCount?.n ?? 0,
           low_stock: l,
           merchant_ids: [...new Set([...o.map((r) => r.merchant_id), ...l.map((r) => r.merchant_id)])],
         }
@@ -1766,23 +1788,27 @@ function platformOnly(env: TenancyEnv, staffId: string): Omit<PlatformRepository
           env.ORDERS.prepare(
             `SELECT o.id, o.created_at, ${ORDER_CURRENCY('o')} AS currency, o.total_cents AS total,
                     (SELECT COALESCE(SUM(q.qty), 0) FROM order_lines q WHERE q.order_id = o.id) AS items,
+                    (SELECT json_group_array(DISTINCT q.merchant_id) FROM order_lines q WHERE q.order_id = o.id) AS merchant_ids,
                     (SELECT json_group_array(status) FROM (
                        SELECT f.status FROM order_fulfilments f WHERE f.order_id = o.id ORDER BY f.merchant_id)) AS fulfilment
                FROM orders o WHERE o.user_id = ? AND o.payment_status = ?
               ORDER BY o.created_at DESC, o.id DESC LIMIT ?`,
           )
             .bind(userId, 'succeeded', CUSTOMER_ORDERS)
-            .all<Omit<CustomerDetail['recent'][number], 'fulfilment'> & { fulfilment: string }>(),
+            .all<Omit<CustomerDetail['recent'][number], 'fulfilment'> & { fulfilment: string; merchant_ids: string }>(),
         ])
         if (!user) return null
         const s = spent.results ?? []
+        const orders = recent.results ?? []
         return {
           ...account(user),
           orders: s.reduce((n, r) => n + r.orders, 0),
           last_order_at: s.reduce<string | null>((m, r) => (m === null || r.last > m ? r.last : m), null),
           spend: amountsOf(s),
           refunded: amountsOf(refunded.results ?? []),
-          recent: (recent.results ?? []).map((o) => ({ ...o, fulfilment: JSON.parse(o.fulfilment) as FulfilmentStatus[] })),
+          recent: orders.map(({ merchant_ids: _m, ...o }) => ({ ...o, fulfilment: JSON.parse(o.fulfilment) as FulfilmentStatus[] })),
+          // Each merchant whose order this page shows finds the read in its own log, as with orders.list.
+          merchant_ids: [...new Set(orders.flatMap((o) => JSON.parse(o.merchant_ids) as string[]))],
         }
       },
     },
