@@ -36,8 +36,13 @@ const FLAGSHIP = 'DJI-MV4-115'
  * the catalogue alphabetically by id — phones interleaved with laptops. See
  * migrations/0010-display-order.sql.
  */
+// Byte-for-byte worker/src/catalogue.ts's LIVE_RATING: ratings come from the
+// visible reviews, not the seed's invented figures in products.rating.
+const LIVE_RATING = `(SELECT ROUND(AVG(rv.rating), 1) FROM reviews rv WHERE rv.product_id = p.id AND rv.hidden = 0) AS live_rating,
+  (SELECT COUNT(*) FROM reviews rv WHERE rv.product_id = p.id AND rv.hidden = 0) AS live_reviews`
+
 export const QUERY =
-  `SELECT p.* FROM products p JOIN merchants m ON m.id = p.merchant_id
+  `SELECT p.*, ${LIVE_RATING} FROM products p JOIN merchants m ON m.id = p.merchant_id
       WHERE p.status = 'published' AND m.status = 'active'
       ORDER BY p.display_order, p.created_at DESC, p.id`
 
@@ -56,8 +61,8 @@ export const toProduct = (r) => ({
   // undefined rather than null, so JSON.stringify drops the key and the
   // optional property stays absent as it was when hand-written.
   badge: r.badge ?? undefined,
-  rating: r.rating,
-  reviewCount: r.review_count,
+  rating: r.live_rating ?? 0,
+  reviewCount: r.live_reviews,
   specsSummary: JSON.parse(r.specs_summary),
   specs: JSON.parse(r.specs),
   media: JSON.parse(r.media),
