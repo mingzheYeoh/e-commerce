@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import { memoryD1 } from '../test/d1-memory'
 import { products } from '@/data/products'
-import { publishedProducts } from './catalogue'
+import { publishedProducts, LIVE_RATING } from './catalogue'
 import { QUERY, toProduct } from '../../scripts/build-catalog.mjs'
 
 /** Paths here are from the repo root, resolved from this file so the suite also runs from `worker/`. */
@@ -241,6 +241,23 @@ describe('publishedProducts', () => {
     expect(rows).toHaveLength(45)
     const merchants = new Set(rows.map((r) => r.merchantId))
     expect(merchants.size).toBeGreaterThan(1)
+  })
+
+  it('rates each product from its visible reviews, never the seeded numbers', async () => {
+    // The seed carried invented figures ("4.8, 2317 reviews") that disagreed
+    // with the review list under them. The card and the list read one source.
+    const { db, raw } = seeded()
+    const [a, b] = (await publishedProducts({ ORDERS: db })).map((r) => r.id)
+    for (const [uid, stars, hidden] of [['usr_1', 5, 0], ['usr_2', 4, 0], ['usr_3', 1, 1]] as const) {
+      raw.prepare(`INSERT INTO users (id, email, name, password_hash, password_salt, iterations) VALUES (?, ?, 'N', 'h', 's', 1)`).run(uid, `${uid}@x.test`)
+      raw.prepare(`INSERT INTO reviews (id, user_id, product_id, merchant_id, rating, hidden) SELECT ?, ?, id, merchant_id, ?, ? FROM products WHERE id = ?`).run(`rev_${uid}`, uid, stars, hidden, a)
+    }
+    const rows = await publishedProducts({ ORDERS: db })
+    expect(rows.find((r) => r.id === a)).toMatchObject({ rating: 4.5, reviewCount: 2 })
+    expect(rows.find((r) => r.id === b)).toMatchObject({ rating: 0, reviewCount: 0 })
+    // The generated snapshot reads the same way, from the same SQL.
+    expect(QUERY).toContain(LIVE_RATING)
+    expect(raw.prepare(QUERY).all().map(toProduct).find((p) => p.id === a)).toMatchObject({ rating: 4.5, reviewCount: 2 })
   })
 
   it('hides drafts and archived products from the storefront', async () => {

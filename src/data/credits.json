@@ -1459,25 +1459,25 @@
     "file": "media/products/xps-16-2.webp",
     "photographer": "Dell",
     "profileUrl": "https://i.dell.com",
-    "sourceUrl": "https://i.dell.com/assetlink/img/global/pattern-day-one-uhp-desk-2560x1066-dl12takc-original.jpg?fmt=pjpg&pscan=auto&scl=1&hei=900&wid=2560&resMode=sharp2&size=2560,900&op_usm=1.75,0.3,2,0",
+    "sourceUrl": "https://i.dell.com/is/image/DellContent/content/dam/ss2/product-images/dell-client-products/notebooks/xps-notebooks/xps-16-da16260/media-gallery/touch/notebook-da16260-t-gray-gallery-2.psd",
     "source": "i.dell.com",
-    "licence": "© Dell, official product image — demonstration use, retrieved 2026-09-19"
+    "licence": "© Dell, official product image — demonstration use, retrieved 2026-09-27"
   },
   {
     "file": "media/products/xps-16-3.webp",
     "photographer": "Dell",
     "profileUrl": "https://i.dell.com",
-    "sourceUrl": "https://i.dell.com/assetlink/img/global/alienware-gaming-monitor--aw2726dm-dl2odd-original.jpg",
+    "sourceUrl": "https://i.dell.com/is/image/DellContent/content/dam/ss2/product-images/dell-client-products/notebooks/xps-notebooks/xps-16-da16260/media-gallery/touch/notebook-da16260-t-gray-gallery-6.psd",
     "source": "i.dell.com",
-    "licence": "© Dell, official product image — demonstration use, retrieved 2026-09-19"
+    "licence": "© Dell, official product image — demonstration use, retrieved 2026-09-27"
   },
   {
     "file": "media/products/xps-16-4.webp",
     "photographer": "Dell",
     "profileUrl": "https://i.dell.com",
-    "sourceUrl": "https://i.dell.com/assetlink/img/global/pb16250-office-setup-dell-pro-plus-16-p2425he-wl5024-km7321w-wd22tb4-p1129311-1610x906-dl12sklb-original.jpg",
+    "sourceUrl": "https://i.dell.com/is/image/DellContent/content/dam/ss2/product-images/dell-client-products/notebooks/xps-notebooks/xps-16-da16260/media-gallery/touch/notebook-da16260-t-gray-gallery-4.psd",
     "source": "i.dell.com",
-    "licence": "© Dell, official product image — demonstration use, retrieved 2026-09-19"
+    "licence": "© Dell, official product image — demonstration use, retrieved 2026-09-27"
   },
   {
     "file": "media/products/zenbook-duo-3.webp",
@@ -1526,5 +1526,21 @@
     "sourceUrl": "https://unsplash.com/photos/black-and-blue-laptop-computer-_yC2htzMYnI",
     "licence": "Unsplash Licence",
     "source": "Unsplash"
+  },
+  {
+    "file": "media/products/xiaomi-17-ultra-4.webp",
+    "photographer": "Xiaomi",
+    "profileUrl": "https://i02.appmifile.com",
+    "sourceUrl": "https://i02.appmifile.com/mi-com-product/fly-birds/xiaomi-17-ultra/pc/2a8ea992feb06aa9a0068c5d9e2f1462.jpg",
+    "source": "i02.appmifile.com",
+    "licence": "© Xiaomi, official product image — demonstration use, retrieved 2026-09-27"
+  },
+  {
+    "file": "media/products/galaxy-s26-ultra-4.webp",
+    "photographer": "Samsung",
+    "profileUrl": "https://images.samsung.com",
+    "sourceUrl": "https://images.samsung.com/my/smartphones/galaxy-s26-ultra/buy/product_color_cobaltViolet_PC.jpg",
+    "source": "images.samsung.com",
+    "licence": "© Samsung, official product image — demonstration use, retrieved 2026-09-27"
   }
 ]

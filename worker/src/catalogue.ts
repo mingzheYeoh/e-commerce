@@ -48,13 +48,21 @@ interface Row {
   currency: string
   stock_count: number
   badge: string | null
-  rating: number
-  review_count: number
+  live_rating: number | null
+  live_reviews: number
   specs: string
   specs_summary: string
   colorways: string
   media: string
 }
+
+/**
+ * The average and count of a product's visible reviews, as two columns.
+ * scripts/build-catalog.mjs selects the identical text, so the snapshot and
+ * the endpoint rate every product the same way.
+ */
+export const LIVE_RATING = `(SELECT ROUND(AVG(rv.rating), 1) FROM reviews rv WHERE rv.product_id = p.id AND rv.hidden = 0) AS live_rating,
+  (SELECT COUNT(*) FROM reviews rv WHERE rv.product_id = p.id AND rv.hidden = 0) AS live_reviews`
 
 /** JSON columns are stored as text; a bad row must not take the page down. */
 const parse = <T>(text: string, fallback: T): T => {
@@ -75,7 +83,12 @@ export async function publishedProducts(env: { ORDERS: D1Database }): Promise<Ca
     // Joined to merchants because a suspended merchant's products leave the
     // storefront (schema.sql, on merchants.status). p.* rather than *: the
     // join would otherwise bring merchants.id and friends into every row.
-    `SELECT p.* FROM products p JOIN merchants m ON m.id = p.merchant_id
+    //
+    // rating and review_count come from the reviews shoppers wrote, not from
+    // products' own columns: those hold the seed's invented figures, which
+    // disagreed with the review list on the same page. Hidden reviews count
+    // for nothing, the same as on that list.
+    `SELECT p.*, ${LIVE_RATING} FROM products p JOIN merchants m ON m.id = p.merchant_id
       WHERE p.status = 'published' AND m.status = 'active'
       ORDER BY p.display_order, p.created_at DESC, p.id`,
   ).all<Row>()
@@ -91,8 +104,8 @@ export async function publishedProducts(env: { ORDERS: D1Database }): Promise<Ca
     currency: r.currency,
     stockCount: r.stock_count,
     badge: r.badge,
-    rating: r.rating,
-    reviewCount: r.review_count,
+    rating: r.live_rating ?? 0,
+    reviewCount: r.live_reviews,
     specs: parse(r.specs, []),
     specsSummary: parse(r.specs_summary, []),
     colorways: parse(r.colorways, []),

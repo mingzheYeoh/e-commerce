@@ -15,9 +15,24 @@ const SUPPORTED: readonly CurrencyCode[] = ['USD', 'EUR', 'GBP', 'SGD', 'MYR']
 export const isCurrencyCode = (v: unknown): v is CurrencyCode =>
   typeof v === 'string' && (SUPPORTED as readonly string[]).includes(v)
 
+/**
+ * The shopper's currency, kept in this browser so a page reload does not put
+ * every price back in USD. A per-viewer convenience: storage can be blocked,
+ * and then the site simply starts in USD.
+ */
+const CURRENCY_KEY = 'nexus:currency'
+const storedCurrency = (): CurrencyCode => {
+  try {
+    const v = localStorage.getItem(CURRENCY_KEY)
+    return isCurrencyCode(v) ? v : 'USD'
+  } catch {
+    return 'USD'
+  }
+}
+
 export const useUiStore = defineStore('ui', {
   state: () => ({
-    currency: 'USD' as CurrencyCode,
+    currency: storedCurrency(),
     searchOpen: false,
     /** Brand id whose hover portal is showing, or null. */
     activeBrand: null as string | null,
@@ -27,7 +42,13 @@ export const useUiStore = defineStore('ui', {
     setCurrency(code: CurrencyCode) {
       // Keep the last good currency rather than adopt a bad one: a wrong
       // symbol is recoverable, NaN on every price tag is not.
-      if (isCurrencyCode(code)) this.currency = code
+      if (!isCurrencyCode(code)) return
+      this.currency = code
+      try {
+        localStorage.setItem(CURRENCY_KEY, code)
+      } catch {
+        /* blocked storage: the choice lasts until the page reloads */
+      }
     },
     openSearch() {
       this.searchOpen = true
