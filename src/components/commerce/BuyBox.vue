@@ -4,6 +4,7 @@ import { Check, Star, Truck, RotateCcw, ShieldCheck, Minus, Plus, Scale } from '
 import PriceTag from './PriceTag.vue'
 import { useCartStore } from '@/stores/cart'
 import { useCompareStore } from '@/stores/compare'
+import { useCurrency } from '@/composables/useCurrency'
 import { brandName } from '@/data/brands'
 import type { Product } from '@/types'
 
@@ -11,6 +12,7 @@ const props = defineProps<{ product: Product }>()
 
 const cart = useCartStore()
 const compare = useCompareStore()
+const { freeDelivery } = useCurrency()
 const variant = ref(props.product.colorways[0])
 
 const comparing = computed(() => compare.has(props.product.id))
@@ -37,11 +39,11 @@ function addToCart() {
   window.setTimeout(() => (added.value = false), 1200)
 }
 
-const assurances = [
-  { icon: Truck, text: 'Free standard delivery over $75' },
+const assurances = computed(() => [
+  { icon: Truck, text: `Free standard delivery to ${freeDelivery.value.name} over ${freeDelivery.value.label}` },
   { icon: RotateCcw, text: '30-day free returns' },
   { icon: ShieldCheck, text: '2-year warranty included' },
-]
+])
 </script>
 
 <template>

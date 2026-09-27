@@ -10,6 +10,7 @@
  * countries' worth of rows would be a table nobody maintains, drifting out of
  * date one country at a time.
  */
+import type { CurrencyCode } from '@/stores/ui'
 import { findCountry } from './regions'
 
 export type ShipMethod = 'standard' | 'express' | 'overnight'
@@ -157,11 +158,22 @@ export function shippingCents(method: ShipMethod, subtotalCents: number, country
 export const isInternational = (country: string): boolean =>
   Boolean(findCountry(country)) && zoneFor(country)?.id !== 'domestic'
 
+
 /**
- * The domestic free-delivery bar, for the cart's "spend X more" nudge.
- *
- * The cart has no address yet, so there is no zone to read — and promising an
- * international shopper free delivery at $75 would be a promise checkout then
- * breaks. The UI that uses this says "in the US" out loud for that reason.
+ * Where a shopper paying in this currency most likely ships to. Copy shown
+ * before there is an address (product page, footer, cart) quotes this
+ * destination's bar and names it, rather than promising every shopper the US
+ * one. EUR has no single home; Germany is the largest euro destination here.
  */
-export const DOMESTIC_FREE_ABOVE = ZONES.domestic.rates.standard!.freeAbove!
+const HOME_COUNTRY: Record<CurrencyCode, string> = { USD: 'US', EUR: 'DE', GBP: 'GB', SGD: 'SG', MYR: 'MY' }
+
+export function freeDeliveryFor(currency: CurrencyCode): {
+  country: string
+  name: string
+  freeAbove: number
+  transit: string
+} {
+  const country = HOME_COUNTRY[currency]
+  const rate = rateFor('standard', country)!
+  return { country, name: findCountry(country)!.name, freeAbove: rate.freeAbove!, transit: rate.transit }
+}

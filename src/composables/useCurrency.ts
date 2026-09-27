@@ -1,5 +1,6 @@
 import { computed } from 'vue'
 import { useUiStore, type CurrencyCode } from '@/stores/ui'
+import { freeDeliveryFor } from '@/lib/shipping'
 
 /**
  * Fixed rates, mid-market as at 2026-09-17. A storefront this size does not
@@ -54,5 +55,10 @@ export function useCurrency() {
     formatAmount,
     code: computed(() => ui.currency),
     symbol: computed(() => SYMBOLS[ui.currency]),
+    /** The free-delivery bar for this currency's home destination, ready to print. */
+    freeDelivery: computed(() => {
+      const f = freeDeliveryFor(ui.currency)
+      return { ...f, label: format(f.freeAbove) }
+    }),
   }
 }
