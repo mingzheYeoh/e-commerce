@@ -4,12 +4,11 @@ import { X, Minus, Plus, Trash2, Lock } from 'lucide-vue-next'
 import { useRouter } from 'vue-router'
 import { useCartStore, lineKey } from '@/stores/cart'
 import { useCurrency } from '@/composables/useCurrency'
-import { DOMESTIC_FREE_ABOVE } from '@/lib/shipping'
 import { useFocusTrap } from '@/composables/useFocusTrap'
 import { brandName } from '@/data/brands'
 
 const cart = useCartStore()
-const { format } = useCurrency()
+const { format, freeDelivery } = useCurrency()
 
 const router = useRouter()
 const panel = ref<HTMLElement | null>(null)
@@ -23,10 +22,9 @@ useFocusTrap(panel, toRef(cart, 'isOpen'), () => cart.close())
 // Read from the shipping table rather than repeated here: the drawer promising
 // one threshold while checkout charged against another is how a storefront ends
 // up lying to its customers in a way nobody notices.
-const FREE_DELIVERY_CENTS = DOMESTIC_FREE_ABOVE
-const remaining = computed(() => Math.max(0, FREE_DELIVERY_CENTS - cart.subtotalCents))
+const remaining = computed(() => Math.max(0, freeDelivery.value.freeAbove - cart.subtotalCents))
 const progress = computed(() =>
-  Math.min(100, Math.round((cart.subtotalCents / FREE_DELIVERY_CENTS) * 100)),
+  Math.min(100, Math.round((cart.subtotalCents / freeDelivery.value.freeAbove) * 100)),
 )
 </script>
 
@@ -76,7 +74,7 @@ const progress = computed(() =>
 
         <div class="border-b border-border-hairline px-5 py-3">
           <p class="flex items-center justify-between text-xs">
-            <span class="text-text-secondary">Free US standard delivery</span>
+            <span class="text-text-secondary">Free standard delivery to {{ freeDelivery.name }}</span>
             <span :class="remaining ? 'text-text-secondary' : 'font-medium text-accent-green'">
               {{ remaining ? `${format(remaining)} away` : 'Unlocked' }}
             </span>

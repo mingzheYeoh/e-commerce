@@ -11,18 +11,18 @@ import { useCartStore } from '@/stores/cart'
 import { useCurrency } from '@/composables/useCurrency'
 
 const cart = useCartStore()
-const { format } = useCurrency()
+const { format, freeDelivery } = useCurrency()
 
 /** Hidden once the live catalogue says the pick is no longer published. */
 const drop = computed(
   () => findProduct(featuredDrop.id) ?? (catalogueStatus.value === 'live' ? undefined : featuredDrop),
 )
 
-const assurances = [
-  { icon: Truck, text: 'Free standard delivery over $75' },
+const assurances = computed(() => [
+  { icon: Truck, text: `Free standard delivery to ${freeDelivery.value.name} over ${freeDelivery.value.label}` },
   { icon: RotateCcw, text: '30-day returns' },
   { icon: ShieldCheck, text: '2-year warranty' },
-]
+])
 </script>
 
 <template>
