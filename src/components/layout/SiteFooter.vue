@@ -3,8 +3,10 @@ import { computed, ref } from 'vue'
 import { ShieldCheck, Truck, BadgeCheck, ChevronDown } from 'lucide-vue-next'
 import credits from '@/data/credits.json'
 import type { Credit } from '@/types'
+import { useCurrency } from '@/composables/useCurrency'
 
 const YEAR = new Date().getFullYear()
+const { freeDelivery } = useCurrency()
 
 /* -------------------------------------------------- newsletter ----------- */
 const email = ref('')
@@ -34,11 +36,15 @@ const photographers = computed(() => {
   return [...seen.values()].sort((a, b) => a.photographer.localeCompare(b.photographer))
 })
 
-const guarantees = [
+const guarantees = computed(() => [
   { icon: ShieldCheck, label: 'Secure payments', detail: 'Encrypted checkout, PCI-DSS compliant' },
   { icon: BadgeCheck, label: '2-year warranty', detail: 'Parts and labour on every product' },
-  { icon: Truck, label: 'Free standard delivery', detail: 'On orders over $75, 3-5 business days' },
-]
+  {
+    icon: Truck,
+    label: 'Free standard delivery',
+    detail: `To ${freeDelivery.value.name} over ${freeDelivery.value.label}, ${freeDelivery.value.transit}`,
+  },
+])
 </script>
 
 <template>
@@ -155,7 +161,7 @@ const guarantees = [
       >
         <p>© {{ YEAR }} NEXUSOHM — demo storefront, not a real retailer.</p>
         <p class="flex flex-wrap gap-x-5 gap-y-1">
-          <span>Free delivery over $75</span>
+          <span>Free delivery over {{ freeDelivery.label }}</span>
           <span>30-day returns</span>
           <span>Secure checkout</span>
         </p>

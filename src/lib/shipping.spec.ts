@@ -9,6 +9,7 @@ import {
   isInternational,
   SHIP_METHODS,
   ZONES,
+  freeDeliveryFor,
 } from './shipping'
 import { COUNTRIES } from './regions'
 
@@ -138,5 +139,23 @@ describe('zones', () => {
     expect(isInternational('US')).toBe(false)
     expect(isInternational('MY')).toBe(true)
     expect(isInternational('ZZ'), 'not a destination at all').toBe(false)
+  })
+})
+
+describe('freeDeliveryFor', () => {
+  it('names the destination a currency most likely ships to, and its bar', () => {
+    // The product page said "over $75" to a shopper pricing in ringgit, whose
+    // parcel only ships free over $250 (RM1,025). Copy shown before there is
+    // an address names the country it is quoting for.
+    expect(freeDeliveryFor('USD')).toMatchObject({ country: 'US', name: 'United States', freeAbove: 7500 })
+    expect(freeDeliveryFor('MYR')).toMatchObject({ country: 'MY', name: 'Malaysia', freeAbove: 25000 })
+  })
+
+  it('quotes the same bar checkout charges against for that country', () => {
+    for (const code of ['USD', 'EUR', 'GBP', 'SGD', 'MYR'] as const) {
+      const f = freeDeliveryFor(code)
+      expect(shippingCents('standard', f.freeAbove, f.country)).toBe(0)
+      expect(shippingCents('standard', f.freeAbove - 1, f.country)).toBeGreaterThan(0)
+    }
   })
 })

@@ -4,15 +4,14 @@ import { RouterLink, useRouter } from 'vue-router'
 import { Minus, Plus, X, ShoppingBag } from 'lucide-vue-next'
 import { useCartStore, lineKey } from '@/stores/cart'
 import { useCurrency } from '@/composables/useCurrency'
-import { DOMESTIC_FREE_ABOVE } from '@/lib/shipping'
 
 const cart = useCartStore()
 const router = useRouter()
-const { format } = useCurrency()
+const { format, freeDelivery } = useCurrency()
 
 /** How much more earns free standard delivery, or null once it is earned. */
 const toFreeShipping = computed(() => {
-  const threshold = DOMESTIC_FREE_ABOVE
+  const threshold = freeDelivery.value.freeAbove
   const gap = threshold - cart.subtotalCents
   return gap > 0 ? gap : null
 })
@@ -44,7 +43,7 @@ const toFreeShipping = computed(() => {
             class="mb-4 rounded-card border border-border-hairline bg-surface-1 px-4 py-3 text-sm"
           >
             Add <span class="nums font-medium text-accent">{{ format(toFreeShipping) }}</span> more
-            for free standard delivery in the US.
+            for free standard delivery to {{ freeDelivery.name }}.
           </p>
 
           <ul class="divide-y divide-border-hairline rounded-card border border-border-hairline bg-surface-1">
