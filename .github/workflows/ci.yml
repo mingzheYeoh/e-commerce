@@ -1,0 +1,34 @@
+# Every pull request and every push to staging or main runs the same gates the
+# release runbook asks for: the typecheck across storefront, console and
+# worker, and the full test suite (storefront, console and worker specs all run
+# from the root). Nothing here deploys; deploys stay manual and ordered
+# (migration -> API -> console -> storefront).
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main, staging]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            worker/package-lock.json
+      - run: npm ci
+      # The worker's own types (workers-types) are what its typecheck needs.
+      - run: npm ci --prefix worker
+      - run: npm run typecheck
+      - run: npm test
