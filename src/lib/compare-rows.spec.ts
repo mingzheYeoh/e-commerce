@@ -4,7 +4,11 @@ import { products } from '@/data/products'
 import type { Product } from '@/types'
 
 const byId = (id: string) => products.find((p) => p.id === id)!
-const phones = products.filter((p) => p.category === 'phones')
+// Catalogue ratings come from real reviews and start at zero, so tests that
+// need a score give each product one.
+const phones = products
+  .filter((p) => p.category === 'phones')
+  .map((p, i) => ({ ...p, rating: [4.1, 4.7, 4.3, 3.9][i % 4]!, reviewCount: 120 + i * 37 }))
 const row = (rows: ReturnType<typeof buildRows>, label: string) =>
   rows.find((r) => r.label === label)
 const winners = (rows: ReturnType<typeof buildRows>, label: string) =>
@@ -185,7 +189,7 @@ describe('the published-spec union', () => {
 })
 
 describe('the rest of the catalogue record', () => {
-  const items = products.filter((p) => p.category === 'phones').slice(0, 3)
+  const items = phones.slice(0, 3)
   const measured = (label: string) => buildRows(items).find((r) => r.label === label)!
 
   it('puts the review count directly under the rating, with no verdict', () => {

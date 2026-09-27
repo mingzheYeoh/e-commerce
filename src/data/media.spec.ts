@@ -47,13 +47,21 @@ describe('catalogue media', () => {
     expect(missing).toEqual([])
   })
 
-  it('tolerates a short gallery, because the pipeline writes what it found', () => {
-    // Deliberately NOT asserted as complete. Commons rarely holds four
-    // photographs of one model, and ProductPage probes each candidate and shows
-    // the ones that load. This asserts the first is always there, since that is
-    // the one the card and the cart use.
+  it('leads every gallery with the hero image', () => {
+    // The card and the cart use the first picture, so it is the hero.
     for (const p of products) {
       expect(p.media.gallery[0], `${p.id} has no first gallery image`).toBe(p.media.heroImage)
     }
+  })
+
+  it('has every gallery picture it names', () => {
+    // It used to tolerate gaps, because ProductPage probes each candidate and
+    // hides the ones that fail. Five did fail, silently, for weeks: the
+    // gallery promised four views and showed three. Every slot is filled now,
+    // so a missing one is a regression again.
+    const missing = products.flatMap((p) =>
+      p.media.gallery.filter((url) => !url.includes('/media/u/') && !served(url)).map((url) => `${p.id}: ${url}`),
+    )
+    expect(missing).toEqual([])
   })
 })
