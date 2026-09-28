@@ -9,6 +9,7 @@ import {
   popular,
   readRecent,
   pushRecent,
+  clearRecent,
   RECENT_KEY,
 } from './palette'
 import type { Brand, Category, Product } from '@/types'
@@ -149,6 +150,12 @@ describe('recent searches', () => {
     expect(readRecent()).toEqual(['ok'])
   })
 
+  it('clears the history', () => {
+    pushRecent('sony')
+    clearRecent()
+    expect(readRecent()).toEqual([])
+  })
+
   it('survives storage that throws', () => {
     const broken = {
       getItem: () => {
@@ -157,8 +164,12 @@ describe('recent searches', () => {
       setItem: () => {
         throw new Error('blocked')
       },
+      removeItem: () => {
+        throw new Error('blocked')
+      },
     } as unknown as Storage
     expect(readRecent(broken)).toEqual([])
     expect(pushRecent('sony', broken)).toEqual(['sony'])
+    expect(() => clearRecent(broken)).not.toThrow()
   })
 })

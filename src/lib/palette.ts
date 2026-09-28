@@ -120,3 +120,11 @@ export function pushRecent(query: string, storage: Storage = localStorage): stri
   }
   return next
 }
+
+export function clearRecent(storage: Storage = localStorage) {
+  try {
+    storage.removeItem(RECENT_KEY)
+  } catch {
+    /* blocked storage: nothing was saved there to clear */
+  }
+}
