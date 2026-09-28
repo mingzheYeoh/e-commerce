@@ -27,6 +27,7 @@ import {
   popular,
   pushRecent,
   readRecent,
+  rowKey,
   rowTarget,
   step,
   type PaletteGroup,
@@ -153,6 +154,13 @@ const flat = computed(() => flatten(groups.value))
 const nothingFound = computed(() => !!query.value.trim() && flat.value.every((r) => r.kind === 'ask'))
 
 watch(query, () => (cursor.value = 0))
+// Semantic results land a moment after the keyword ones and re-rank them
+// without the query changing. The highlight must not stay on an index that
+// now holds a product the shopper never looked at, so a new order resets it.
+watch(
+  () => flat.value.map(rowKey).join('|'),
+  () => (cursor.value = 0),
+)
 watch(
   () => ui.searchOpen,
   (open) => {

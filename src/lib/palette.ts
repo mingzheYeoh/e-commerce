@@ -128,3 +128,17 @@ export function clearRecent(storage: Storage = localStorage) {
     /* blocked storage: nothing was saved there to clear */
   }
 }
+
+/** A stable identity for a row, so a re-ranked list can be told from the same one. */
+export function rowKey(row: PaletteRow): string {
+  switch (row.kind) {
+    case 'product':
+      return `p:${row.product.id}`
+    case 'category':
+      return `c:${row.category.id}`
+    case 'brand':
+      return `b:${row.brand.id}`
+    default:
+      return `${row.kind}:${row.query}`
+  }
+}

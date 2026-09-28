@@ -5,6 +5,7 @@ import {
   matchCategories,
   matchBrands,
   rowTarget,
+  rowKey,
   step,
   popular,
   readRecent,
@@ -171,5 +172,16 @@ describe('recent searches', () => {
     expect(readRecent(broken)).toEqual([])
     expect(pushRecent('sony', broken)).toEqual(['sony'])
     expect(() => clearRecent(broken)).not.toThrow()
+  })
+})
+
+describe('row identity', () => {
+  it('tells a re-ranked list from the same one, so the highlight can reset', () => {
+    // Semantic results re-order the keyword ones without the query changing;
+    // an unchanged index would then point at a product nobody looked at.
+    const keys = (ids: string[]) => ids.map((id) => rowKey({ kind: 'product', product: product(id), reasons: [] })).join('|')
+    expect(keys(['a', 'b'])).toBe(keys(['a', 'b']))
+    expect(keys(['a', 'b'])).not.toBe(keys(['b', 'a']))
+    expect(rowKey({ kind: 'ask', query: 'x' })).not.toBe(rowKey({ kind: 'recent', query: 'x' }))
   })
 })

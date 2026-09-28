@@ -22,7 +22,12 @@ async function start() {
   try {
     const { mountParticleNetwork } = await import('./particle-network')
     if (gone || !host.value || !canvas.value) return
-    dispose = mountParticleNetwork(host.value, canvas.value, () => (shown.value = true))
+    dispose = mountParticleNetwork(
+      host.value,
+      canvas.value,
+      () => (shown.value = true),
+      () => !gone && emit('fail'),
+    )
   } catch {
     if (!gone) emit('fail')
   }

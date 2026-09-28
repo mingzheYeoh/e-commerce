@@ -47,11 +47,19 @@ function dotTexture(): CanvasTexture {
   return new CanvasTexture(canvas)
 }
 
-/** Mounts the scene into `canvas`, sized to `host`. Returns the teardown. */
+/**
+ * Mounts the scene into `canvas`, sized to `host`. Returns the teardown.
+ *
+ * `onLost` fires if the GL context is taken away (a driver reset, or a phone
+ * over its live-context limit). Rendering stops at once, since drawing into a
+ * dead context is wasted frames and console noise, and the caller falls back
+ * to the video rather than rebuilding the scene.
+ */
 export function mountParticleNetwork(
   host: HTMLElement,
   canvas: HTMLCanvasElement,
   onFirstFrame: () => void,
+  onLost: () => void = () => {},
 ): () => void {
   const renderer = new WebGLRenderer({ canvas, alpha: true, antialias: true, powerPreference: 'low-power' })
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5))
@@ -186,7 +194,18 @@ export function mountParticleNetwork(
   document.addEventListener('visibilitychange', update)
   update()
 
+  const lost = (event: Event) => {
+    event.preventDefault()
+    renderer.setAnimationLoop(null)
+    document.removeEventListener('visibilitychange', update)
+    onLost()
+  }
+  canvas.addEventListener('webglcontextlost', lost)
+
   return () => {
+    // First: forceContextLoss below fires webglcontextlost, and a teardown
+    // must not report itself as a failure.
+    canvas.removeEventListener('webglcontextlost', lost)
     renderer.setAnimationLoop(null)
     observer?.disconnect()
     resizer?.disconnect()
