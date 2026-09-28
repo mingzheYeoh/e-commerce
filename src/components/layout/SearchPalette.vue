@@ -285,7 +285,7 @@ const resultCount = computed(() => flat.value.filter((r) => r.kind !== 'ask').le
               type="text"
               placeholder="Search products, brands, or describe what you need…"
               aria-label="Search products, or describe what you need"
-              class="w-full bg-transparent text-base text-text-primary caret-accent placeholder:text-text-muted focus:outline-none focus-visible:ring-0 md:text-[17px]"
+              class="w-full bg-transparent text-base text-text-primary caret-accent placeholder:text-text-muted focus:outline-none md:text-[17px]"
             />
             <kbd class="keycap shrink-0">Esc</kbd>
           </div>

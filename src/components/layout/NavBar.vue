@@ -82,7 +82,7 @@ watch(
         <select
           id="currency"
           :value="ui.currency"
-          class="hidden h-10 rounded border border-border-hairline bg-surface-1 px-2 text-sm text-text-secondary transition-colors hover:border-border-strong md:block"
+          class="hidden h-10 rounded border border-border-hairline bg-surface-1 px-2 text-sm text-text-secondary transition-colors hover:border-border-strong focus-visible:border-accent focus-visible:ring-[3px] focus-visible:ring-accent/30 md:block"
           @change="ui.setCurrency(($event.target as HTMLSelectElement).value as CurrencyCode)"
         >
           <option v-for="code in currencies" :key="code" :value="code" class="bg-surface-1">
