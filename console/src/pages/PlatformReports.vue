@@ -206,7 +206,7 @@ function exportProducts() {
     <section v-for="s in sections" :key="s.currency" class="mb-10 flex flex-col gap-6" :aria-label="`${s.currency} sales`">
       <h2 v-if="sections.length > 1" class="font-display text-lg font-bold text-text-primary">{{ s.currency }}</h2>
 
-      <div class="grid grid-cols-1 gap-3 xs:grid-cols-2 lg:grid-cols-3">
+      <div class="rise-in grid grid-cols-1 gap-3 xs:grid-cols-2 lg:grid-cols-3">
         <StatCard v-for="k in kpis(s)" :key="k.label" :label="k.label" :value="k.value" :sub="k.sub" />
       </div>
 

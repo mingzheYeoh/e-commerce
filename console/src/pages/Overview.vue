@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import StatCard from '../components/StatCard.vue'
+import RollingText from '../components/RollingText.vue'
 import SalesChart from '../components/SalesChart.vue'
 import { merchantOverview, merchantBalance, merchantQueue, isError, type Balance, type Overview, type Queue } from '../api'
 import { formatAmounts, formatMinor, groupByCurrency, seriesByCurrency } from '../money'
@@ -12,16 +13,27 @@ const error = ref<string | null>(null)
 /** Settlement per currency; empty until anything has sold. A failed read hides the section, not the page. */
 const balances = ref<Balance[]>([])
 
-onMounted(async () => {
+/** `quiet`: a background refresh that fails keeps what is on screen rather than blanking a page that was fine. */
+async function load(quiet = false) {
   const [{ body }, money, q] = await Promise.all([merchantOverview(), merchantBalance(), merchantQueue()])
-  if (isError(body)) error.value = body.error
-  else if ('revenue' in body) data.value = body
-  else error.value = 'Something went wrong. Reload and try again.'
+  if (!isError(body) && 'revenue' in body) {
+    error.value = null
+    data.value = body
+  } else if (!quiet) error.value = isError(body) ? body.error : 'Something went wrong. Reload and try again.'
   if ('balances' in money.body) balances.value = money.body.balances
   if ('toShip' in q.body) queue.value = q.body
-})
+}
 
-const TILE = 'block rounded-card transition-colors hover:[&>div]:border-border-strong focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent'
+/** Re-read every 30 seconds while the tab is in front; changed figures roll to their new value. */
+const REFRESH_MS = 30_000
+let timer: ReturnType<typeof setInterval> | undefined
+onMounted(() => {
+  void load()
+  timer = setInterval(() => document.visibilityState === 'visible' && data.value && void load(true), REFRESH_MS)
+})
+onUnmounted(() => clearInterval(timer))
+
+const TILE = 'block h-full rounded-card transition-colors hover:[&>div]:border-border-strong focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent'
 
 const series = computed(() => (data.value ? seriesByCurrency(data.value.trend) : []))
 const top = computed(() => (data.value ? groupByCurrency(data.value.top) : []))
@@ -47,26 +59,26 @@ const sub = (window: 'today' | 'week' | 'month') => {
       Gross is before refunds. Days are UTC.
     </p>
 
-    <section v-if="queue && (queue.toShip || queue.lowStock || queue.outOfStock)" class="grid grid-cols-1 gap-3 xs:grid-cols-2" aria-label="Needs doing">
+    <section v-if="queue && (queue.toShip || queue.lowStock || queue.outOfStock)" class="rise-in grid grid-cols-1 gap-3 xs:grid-cols-2" aria-label="Needs doing">
       <router-link v-if="queue.toShip" to="/orders?status=pending" :class="TILE">
-        <div class="card border-accent-amber/40 p-4">
+        <div class="card h-full border-accent-amber/40 p-4">
           <p class="label">Orders to ship</p>
-          <p class="nums mt-1 font-display text-xl font-bold text-accent-amber">{{ queue.toShip }}</p>
+          <p class="nums mt-1 font-display text-xl font-bold text-accent-amber"><RollingText :text="String(queue.toShip)" /></p>
           <p class="mt-1 text-xs text-text-secondary">Paid and waiting on you → ship them</p>
         </div>
       </router-link>
       <router-link v-if="queue.lowStock || queue.outOfStock" :to="`/inventory?filter=${queue.outOfStock ? 'out' : 'low'}`" :class="TILE">
-        <div class="card border-accent-amber/40 p-4">
+        <div class="card h-full border-accent-amber/40 p-4">
           <p class="label">Stock running out</p>
           <p class="nums mt-1 font-display text-xl font-bold text-accent-amber">
-            {{ queue.outOfStock }} out · {{ queue.lowStock }} low
+            <RollingText :text="`${queue.outOfStock} out · ${queue.lowStock} low`" />
           </p>
           <p class="mt-1 text-xs text-text-secondary">Live products at {{ queue.lowStockAt }} or fewer → restock</p>
         </div>
       </router-link>
     </section>
 
-    <section class="grid grid-cols-1 gap-3 xs:grid-cols-2 lg:grid-cols-4">
+    <section class="rise-in grid grid-cols-1 gap-3 xs:grid-cols-2 lg:grid-cols-4">
       <router-link to="/orders" :class="TILE">
         <StatCard label="Net today" :value="formatAmounts(data.revenue.today, 'No sales')" :sub="sub('today')" />
       </router-link>
