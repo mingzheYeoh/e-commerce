@@ -17,7 +17,10 @@ const cart = useCartStore()
 const compare = useCompareStore()
 const added = ref(false)
 
-const { transform, glare, onMove, onLeave } = useTilt()
+// Writes CSS custom properties on the card; `.tilt` and `.spotlight` in
+// main.css turn them into the lean and the light. No reactive state, so a
+// pointer crossing the /shop grid re-renders nothing.
+const { onMove, onLeave } = useTilt()
 
 /**
  * A drag inside the photo strip must not also tilt the card. Two transforms
@@ -62,25 +65,17 @@ function addToCart() {
 <template>
   <RouterLink
     :to="`/product/${product.id}`"
-    class="card tilt group flex flex-col overflow-hidden transition-colors hover:border-border-strong"
-    :style="transform ? { transform } : undefined"
+    class="card tilt spotlight group flex flex-col overflow-hidden transition-colors hover:border-border-strong"
     @pointermove="tiltMove"
     @pointerleave="onLeave"
   >
     <!--
-      A specular highlight that tracks the pointer. The rotation alone reads as
-      a flat card being turned; a moving light is what makes it read as a
-      surface catching one. Non-interactive and hidden from assistive tech: it
+      The specular highlight that tracks the pointer is the card's ::after (see
+      .spotlight in main.css). The rotation alone reads as a flat card being
+      turned; a moving light is what makes it read as a surface catching one.
+      As a pseudo-element it is invisible to assistive tech, which is right: it
       carries no information a screen reader could use.
     -->
-    <span
-      v-if="glare"
-      aria-hidden="true"
-      class="pointer-events-none absolute inset-0 z-10 rounded-card opacity-60"
-      :style="{
-        background: `radial-gradient(420px circle at ${glare.x}% ${glare.y}%, rgb(255 255 255 / 7%), transparent 60%)`,
-      }"
-    />
     <div class="relative aspect-[4/3] overflow-hidden bg-surface-2">
       <CardGallery
         :images="product.media.gallery"
@@ -146,9 +141,14 @@ function addToCart() {
       <div class="flex items-center justify-between gap-3 border-t border-border-hairline pt-3">
         <PriceTag :cents="product.priceMinor" />
 
+        <!--
+          .card-action slides up on hover, for a mouse only. It is always in
+          the layout and the tab order: focus anywhere in the card shows it, and
+          a touchscreen (no hover) never hides it at all.
+        -->
         <button
           type="button"
-          class="rounded px-3.5 py-2 text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:bg-surface-2 disabled:text-text-muted"
+          class="card-action rounded px-3.5 py-2 text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:bg-surface-2 disabled:text-text-muted"
           :class="
             added ? 'bg-accent-green/15 text-accent-green' : 'bg-accent text-white hover:bg-accent-hover'
           "
