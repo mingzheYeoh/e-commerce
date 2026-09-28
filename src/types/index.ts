@@ -75,8 +75,6 @@ export interface Category {
   unitsInStock: number
   fromPrice: number
   image: string
-  /** Bento placement. `large` anchors the grid; the rest fill around it. */
-  span: 'large' | 'square' | 'wide'
 }
 
 export interface FlagshipPart {

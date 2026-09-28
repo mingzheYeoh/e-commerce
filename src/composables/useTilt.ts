@@ -1,11 +1,17 @@
-import { ref, onUnmounted } from 'vue'
+import { onUnmounted } from 'vue'
 
 /**
- * Pointer-tracked 3D tilt for a card.
+ * Pointer-tracked 3D tilt and spotlight for a card.
  *
  * CSS `perspective` and two rotations, not a WebGL scene. A catalogue grid is
  * forty-five of these on screen at once; the version of this effect that ships
  * a renderer and a model costs megabytes to make a card lean six degrees.
+ *
+ * It writes CSS custom properties straight onto the element — `--rx`/`--ry`
+ * for the rotation, `--gx`/`--gy` for where the light sits — and the
+ * stylesheet (`.tilt`, `.spotlight` in main.css) turns them into a transform
+ * and a gradient. Nothing reactive changes, so a pointer crossing a grid of
+ * forty-five cards re-renders none of them.
  *
  * Three things it refuses to run for, all of them silent failures otherwise:
  *
@@ -23,22 +29,13 @@ import { ref, onUnmounted } from 'vue'
 /** Six degrees. Enough to read as depth, not enough to look like a gimmick. */
 const MAX_DEG = 6
 
-/** Far enough back that the rotation reads as perspective, not as skew. */
-const DEPTH_PX = 900
-
-export interface Tilt {
-  /** Bind to `:style`. Empty string when the card is at rest. */
-  transform: ReturnType<typeof ref<string>>
-  /** Percentage position of the pointer, for a sheen that follows it. */
-  glare: ReturnType<typeof ref<{ x: number; y: number } | null>>
-  onMove: (event: PointerEvent) => void
-  onLeave: () => void
-}
+const PROPS = ['--rx', '--ry', '--gx', '--gy'] as const
 
 export function useTilt(maxDeg = MAX_DEG) {
-  const transform = ref('')
-  const glare = ref<{ x: number; y: number } | null>(null)
+  // A ceiling, not a default: a caller asking for twenty still gets six.
+  const deg = Math.min(Math.max(maxDeg, 0), MAX_DEG)
   let frame = 0
+  let current: HTMLElement | null = null
 
   const enabled = () =>
     typeof window !== 'undefined' &&
@@ -60,9 +57,10 @@ export function useTilt(maxDeg = MAX_DEG) {
     const y = clamp((event.clientY - rect.top) / rect.height - 0.5)
 
     // One update per frame. pointermove fires far faster than the screen
-    // refreshes, and every extra write is a layout read nobody sees.
+    // refreshes, and every extra write is a style recalc nobody sees.
     cancelAnimationFrame(frame)
     frame = requestAnimationFrame(() => {
+      current = el
       /*
        * Signs chosen so the corner under the pointer comes TOWARD the viewer,
        * which is what makes the sheen coherent: a highlight belongs on the
@@ -73,25 +71,29 @@ export function useTilt(maxDeg = MAX_DEG) {
        * opposite way round from the intuition. Written the obvious way, the
        * card leans away from the cursor while the highlight follows it.
        */
-      const rx = (y * maxDeg).toFixed(2)
-      const ry = (-x * maxDeg).toFixed(2)
-      transform.value = `perspective(${DEPTH_PX}px) rotateX(${rx}deg) rotateY(${ry}deg) scale(1.015)`
+      el.style.setProperty('--rx', `${(y * deg).toFixed(2)}deg`)
+      el.style.setProperty('--ry', `${(-x * deg).toFixed(2)}deg`)
       // Rounded: this goes straight into a CSS gradient, and floating point
       // otherwise writes `9.999999999999998%` into the DOM.
-      const pct = (n: number) => Math.round((n + 0.5) * 1000) / 10
-      glare.value = { x: pct(x), y: pct(y) }
+      const pct = (n: number) => `${Math.round((n + 0.5) * 1000) / 10}%`
+      el.style.setProperty('--gx', pct(x))
+      el.style.setProperty('--gy', pct(y))
     })
   }
 
-  function onLeave() {
+  /**
+   * Cleared rather than set to zero, so the CSS transition returns the card to
+   * whatever the stylesheet says at rest. Takes the event when it has one; the
+   * card also calls it bare, to stand the tilt down while a photo is dragged.
+   */
+  function onLeave(event?: Event) {
     cancelAnimationFrame(frame)
-    // Cleared rather than set to zero degrees, so the CSS transition returns
-    // the card to whatever the stylesheet says at rest.
-    transform.value = ''
-    glare.value = null
+    const el = (event?.currentTarget as HTMLElement | null) ?? current
+    if (el) for (const name of PROPS) el.style.removeProperty(name)
+    current = null
   }
 
   onUnmounted(() => cancelAnimationFrame(frame))
 
-  return { transform, glare, onMove, onLeave }
+  return { onMove, onLeave }
 }
