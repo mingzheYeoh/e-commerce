@@ -51,10 +51,12 @@ const rows = splitRows(brands).map((row) => marqueeTrack(row, 14))
       />
 
       <!-- The reveal animates these wrappers, never the tracks: both use `animation`. -->
-      <div v-reveal class="flex flex-col gap-3">
+      <div v-reveal class="marquee-rows flex flex-col gap-3">
         <div v-for="(track, r) in rows" :key="r">
+          <!-- role="list" survives the display: contents the still grid uses. -->
           <ul
-            class="marquee-track flex w-max animate-marquee items-center gap-y-3"
+            role="list"
+            class="marquee-track flex w-max animate-marquee items-center"
             :data-reverse="r === 1 || undefined"
           >
             <li
