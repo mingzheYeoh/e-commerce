@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import { memoryD1 } from '../test/d1-memory'
-import { converse } from './agent'
+import { converse, chooseModel, DEFAULT_MODEL, EVAL_MODELS } from './agent'
 import { categoryIn } from './tools'
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..')
@@ -126,5 +126,15 @@ describe('the cards under an answer', () => {
       AI: scripted([filterCall({ property: 'price', max: 5000 }), { response: 'Several fit.' }]),
     } as unknown as Parameters<typeof converse>[0]
     expect((await converse(env, 'anything?')).citations.length).toBeGreaterThan(2)
+  })
+})
+
+describe('choosing the model', () => {
+  it('uses the default unless the deployment allows an override from the list', () => {
+    expect(chooseModel({}, EVAL_MODELS[1])).toBe(DEFAULT_MODEL)
+    expect(chooseModel({ ALLOW_MODEL_OVERRIDE: '1' }, EVAL_MODELS[1])).toBe(EVAL_MODELS[1])
+    // Never an arbitrary model name, even where overrides are allowed.
+    expect(chooseModel({ ALLOW_MODEL_OVERRIDE: '1' }, '@cf/some/expensive-model')).toBe(DEFAULT_MODEL)
+    expect(chooseModel({ ALLOW_MODEL_OVERRIDE: '1' }, undefined)).toBe(DEFAULT_MODEL)
   })
 })

@@ -8,7 +8,7 @@
  */
 import { ask, search, type Env as RagEnv } from './rag'
 import { facts, queryOrError } from './graph'
-import { converse } from './agent'
+import { converse, chooseModel } from './agent'
 import { placeOrder, getOrder, type OrdersEnv } from './orders'
 import { publishedProducts } from './catalogue'
 import { isPhotoKey, privatePhoto } from './photos'
@@ -65,6 +65,8 @@ import {
  */
 export interface Env extends RagEnv, OrdersEnv, AuthEnv, UploadsEnv {
   ALLOWED_ORIGIN?: string
+  /** "1" on staging only: /api/chat may pick a model from EVAL_MODELS (see agent.ts). */
+  ALLOW_MODEL_OVERRIDE?: string
 }
 
 /* Customer uploads (uploads.ts). Ids are checked for shape before any statement runs. */
@@ -228,14 +230,18 @@ export default {
        * than a black box.
        */
       if (url.pathname === '/api/chat' && request.method === 'POST') {
-        const { question, history } = (await request.json()) as {
+        const { question, history, model } = (await request.json()) as {
           question?: string
           history?: { role: 'user' | 'assistant'; content: string }[]
+          model?: unknown
         }
         if (typeof question !== 'string' || !question.trim()) {
           return json({ error: 'question is required' }, { status: 400, headers })
         }
-        return json(await converse(env, question, Array.isArray(history) ? history : []), { headers })
+        return json(
+          await converse(env, question, Array.isArray(history) ? history : [], chooseModel(env, model)),
+          { headers },
+        )
       }
 
       /*

@@ -14,7 +14,28 @@
  */
 import { runTool, TOOL_DEFS, type ToolEnv } from './tools'
 
-const MODEL = '@cf/mistralai/mistral-small-3.1-24b-instruct'
+export const DEFAULT_MODEL = '@cf/mistralai/mistral-small-3.1-24b-instruct'
+
+/**
+ * Tool-calling models on Workers AI that scripts/eval-assistant.mjs compares.
+ * A deployment with ALLOW_MODEL_OVERRIDE="1" (staging only) lets /api/chat
+ * pick one of these per request; production always answers with the default,
+ * so nobody outside can spend the quota on a larger model.
+ */
+export const EVAL_MODELS = [
+  DEFAULT_MODEL,
+  '@cf/meta/llama-3.3-70b-instruct-fp8-fast',
+  '@cf/meta/llama-4-scout-17b-16e-instruct',
+  '@cf/zai-org/glm-5.3-flash',
+  '@cf/moonshotai/kimi-k2.6',
+] as const
+
+export function chooseModel(env: { ALLOW_MODEL_OVERRIDE?: string }, requested: unknown): string {
+  return env.ALLOW_MODEL_OVERRIDE === '1' && (EVAL_MODELS as readonly unknown[]).includes(requested)
+    ? (requested as string)
+    : DEFAULT_MODEL
+}
+
 const MAX_STEPS = 4
 const MAX_CHARS = 1200
 
@@ -75,6 +96,7 @@ export async function converse(
   env: ToolEnv & { AI: Ai },
   question: string,
   history: { role: 'user' | 'assistant'; content: string }[] = [],
+  model: string = DEFAULT_MODEL,
 ): Promise<AgentReply> {
   const messages: { role: string; content: string }[] = [
     { role: 'system', content: SYSTEM },
@@ -87,7 +109,7 @@ export async function converse(
   const titles = new Map<string, string>()
 
   for (let step = 0; step < MAX_STEPS; step++) {
-    const out = (await env.AI.run(MODEL, {
+    const out = (await env.AI.run(model as keyof AiModels, {
       messages,
       tools: TOOL_DEFS,
       temperature: 0.2,
@@ -126,7 +148,7 @@ export async function converse(
 
   // Out of steps. Rather than return nothing, ask once more with the tools
   // withheld so the model has to answer from what it already gathered.
-  const final = (await env.AI.run(MODEL, {
+  const final = (await env.AI.run(model as keyof AiModels, {
     messages: [...messages, { role: 'user', content: 'Answer now using only the results above.' }],
     temperature: 0.2,
     max_tokens: 400,
