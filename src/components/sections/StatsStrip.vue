@@ -7,6 +7,7 @@
  */
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { catalogue } from '@/stores/catalog'
+import { vReveal } from '@/lib/reveal'
 import RollingText from '../../../console/src/components/RollingText.vue'
 
 const stats = computed(() => {
@@ -41,7 +42,7 @@ onUnmounted(() => observer?.disconnect())
 
 <template>
   <section ref="strip" class="border-t border-border-hairline bg-void py-12 md:py-16" aria-label="The catalogue in numbers">
-    <dl class="mx-auto grid max-w-[1600px] grid-cols-2 gap-6 px-4 md:grid-cols-4 md:px-8">
+    <dl v-reveal class="mx-auto grid max-w-[1600px] grid-cols-2 gap-6 px-4 md:grid-cols-4 md:px-8">
       <div v-for="s in stats" :key="s.label" class="rounded-card border border-border-hairline bg-surface-1 p-5 md:p-6">
         <dt class="text-xs uppercase tracking-wider text-text-secondary">{{ s.label }}</dt>
         <dd class="nums mt-2 font-display text-3xl font-bold md:text-5xl">

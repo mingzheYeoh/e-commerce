@@ -4,6 +4,7 @@ import { RouterLink } from 'vue-router'
 import { ArrowRight } from 'lucide-vue-next'
 import ProductCard from '@/components/commerce/ProductCard.vue'
 import { catalogue } from '@/stores/catalog'
+import { vReveal } from '@/lib/reveal'
 
 /**
  * A curated eight, not the catalogue. Badged products lead — that is what "new
@@ -21,7 +22,7 @@ const featured = computed(() => {
 <template>
   <section class="border-t border-border-hairline bg-void py-16 md:py-20">
     <div class="mx-auto max-w-[1600px] px-4 md:px-8">
-      <div class="mb-8 flex items-end justify-between gap-6">
+      <div v-reveal class="mb-8 flex items-end justify-between gap-6">
         <div>
           <h2 class="text-2xl font-bold md:text-4xl">New arrivals</h2>
           <p class="mt-2 text-sm text-text-secondary md:text-base">
@@ -37,7 +38,7 @@ const featured = computed(() => {
         </RouterLink>
       </div>
 
-      <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div v-reveal class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <ProductCard v-for="product in featured" :key="product.id" :product="product" />
       </div>
 

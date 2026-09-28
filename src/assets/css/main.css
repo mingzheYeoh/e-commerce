@@ -171,3 +171,170 @@
   transition-duration: 0.01ms !important;
   scroll-behavior: auto !important;
 }
+
+/* ==========================================================================
+   Homepage grids: card light, tilt, moving border, marquee, scroll reveal.
+   One block so it merges cleanly; everything here is either pointer-only
+   (hover: hover, pointer: fine) or switched off under [data-motion='reduced'].
+   The pointer position arrives as custom properties written by useTilt
+   (--rx/--ry degrees, --gx/--gy percentages), never as re-rendered styles.
+   ========================================================================== */
+
+/* Tilt: the stylesheet owns the transform, useTilt only moves the angles.
+   Unset angles are 0deg, so a card at rest is flat without a special case. */
+@media (hover: hover) and (pointer: fine) {
+  .tilt {
+    transform: perspective(900px) rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
+  }
+  .tilt:hover {
+    transform: perspective(900px) rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg)) scale(1.015);
+  }
+}
+
+/* Spotlight: a soft light under the pointer (::after) and the stretch of edge
+   nearest it catching that light (::before). Both are pseudo-elements over the
+   content, so they cost no DOM and cannot take a click. */
+.spotlight::before,
+.spotlight::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 300ms ease;
+}
+.spotlight::after {
+  background:
+    radial-gradient(420px circle at var(--gx, 50%) var(--gy, 50%), rgb(10 132 255 / 0.1), transparent 60%),
+    radial-gradient(240px circle at var(--gx, 50%) var(--gy, 50%), rgb(255 255 255 / 0.06), transparent 60%);
+}
+.spotlight::before {
+  z-index: 11;
+  padding: 1px;
+  background: radial-gradient(260px circle at var(--gx, 50%) var(--gy, 50%), rgb(64 156 255 / 0.85), transparent 70%);
+  /* Keep only the 1px ring between the padding box and the content box. */
+  mask-image: linear-gradient(#000 0 0), linear-gradient(#000 0 0);
+  mask-clip: content-box, border-box;
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+}
+@media (hover: hover) and (pointer: fine) {
+  .spotlight:hover::before,
+  .spotlight:hover::after {
+    opacity: 1;
+  }
+}
+
+/* Moving border: a short beam of accent light running round the edge. Reuses
+   the spotlight's ::before ring and swaps the radial light for a turning
+   conic one. @property is what lets the angle itself animate. */
+@property --beam-angle {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 0deg;
+}
+.beam::before {
+  background: conic-gradient(
+    from var(--beam-angle),
+    transparent 0deg 240deg,
+    rgb(10 132 255 / 0.9) 310deg,
+    #f5f5f7 340deg,
+    transparent 360deg
+  );
+}
+@media (hover: hover) and (pointer: fine) {
+  .beam:hover::before {
+    animation: beam-spin 3.2s linear infinite;
+  }
+}
+@keyframes beam-spin {
+  to {
+    --beam-angle: 360deg;
+  }
+}
+
+/* Add to cart slides up on hover, for a mouse only. The button never leaves
+   the layout or the tab order: focus anywhere in the card brings it up, a
+   touchscreen never hides it, and a sold-out label is always shown. */
+@media (hover: hover) and (pointer: fine) {
+  .card-action:enabled {
+    opacity: 0;
+    translate: 0 6px;
+    transition:
+      opacity 200ms ease,
+      translate 300ms cubic-bezier(0.22, 1, 0.36, 1),
+      background-color 150ms ease,
+      color 150ms ease;
+  }
+  .card:hover .card-action,
+  .card:focus-within .card-action {
+    opacity: 1;
+    translate: 0 0;
+  }
+}
+
+/* Brand marquee. Two tracks, each two identical halves sliding exactly -50%;
+   the second runs the other way. Pausing on focus-within as well as hover is
+   what lets a keyboard user land on a link that is not moving. The animation
+   itself is Tailwind's animate-marquee, set on the track. */
+.marquee-track[data-reverse] {
+  animation-direction: reverse;
+  animation-duration: 75s;
+}
+.marquee:hover .marquee-track,
+.marquee:focus-within .marquee-track {
+  animation-play-state: paused;
+}
+
+/* Scroll reveal (v-reveal). Held back only once the directive has decided it
+   can play it in; see src/lib/reveal.ts. `translate`, not `transform`, so it
+   composes with the card tilt instead of replacing it. */
+.reveal-wait > * {
+  opacity: 0;
+}
+.reveal-play > * {
+  animation: reveal-rise 700ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation-delay: calc(var(--reveal-i, 0) * 70ms);
+}
+@keyframes reveal-rise {
+  from {
+    opacity: 0;
+    translate: 0 18px;
+  }
+}
+
+/* Reduced motion: a complete static page. No light, no beam, no slide-in, no
+   reveal, and the marquee becomes a wrapped grid of each brand once. */
+[data-motion='reduced'] .spotlight::before,
+[data-motion='reduced'] .spotlight::after {
+  display: none;
+}
+[data-motion='reduced'] .card-action {
+  opacity: 1 !important;
+  translate: none !important;
+}
+[data-motion='reduced'] .reveal-wait > *,
+[data-motion='reduced'] .reveal-play > * {
+  opacity: 1 !important;
+  animation: none !important;
+}
+/* Both rows pour into one wrapped, centred flow, so there is no orphan at the
+   end of each row. */
+[data-motion='reduced'] .marquee-rows {
+  flex-direction: row;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.75rem 0;
+  padding-inline: 1rem;
+}
+[data-motion='reduced'] .marquee-rows > div,
+[data-motion='reduced'] .marquee-track {
+  display: contents;
+  animation: none !important;
+}
+[data-motion='reduced'] .marquee [data-copy],
+[data-motion='reduced'] .marquee-fade {
+  display: none;
+}

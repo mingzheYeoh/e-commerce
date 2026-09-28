@@ -6,6 +6,7 @@ import { flagship } from '@/data/flagship'
 import { catalogue } from '@/stores/catalog'
 import { brandName } from '@/data/brands'
 import { useCurrency } from '@/composables/useCurrency'
+import { vReveal } from '@/lib/reveal'
 
 const { format } = useCurrency()
 const target = computed(() => catalogue.value.find((p) => p.sku === flagship.sku))
@@ -29,7 +30,7 @@ const target = computed(() => catalogue.value.find((p) => p.sku === flagship.sku
           />
         </div>
 
-        <div class="flex flex-col justify-center gap-4 p-6 md:p-12">
+        <div v-reveal class="flex flex-col justify-center gap-4 p-6 md:p-12">
           <p class="text-sm font-medium text-accent">Featured product</p>
           <h2 class="text-2xl font-bold md:text-4xl">
             {{ brandName(flagship.brand) }} {{ flagship.title }}
