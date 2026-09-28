@@ -55,6 +55,7 @@ const progress = computed(() =>
         role="dialog"
         aria-modal="true"
         aria-label="Shopping cart"
+        data-lenis-prevent
         class="fixed inset-y-0 right-0 z-[70] flex w-full max-w-[440px] flex-col border-l border-border-hairline bg-surface-1"
       >
         <header class="flex items-center justify-between border-b border-border-hairline px-5 py-4">
@@ -87,7 +88,8 @@ const progress = computed(() =>
           </div>
         </div>
 
-        <div class="flex-1 overflow-y-auto">
+        <!-- An overlay: reaching the end of the list must not start scrolling the page behind it. -->
+        <div class="flex-1 overflow-y-auto overscroll-contain">
           <div v-if="!cart.items.length" class="px-5 py-16 text-center">
             <p class="font-medium text-text-primary">Your cart is empty</p>
             <p class="mt-1 text-sm text-text-secondary">
