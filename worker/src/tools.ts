@@ -187,6 +187,38 @@ export const TOOL_DEFS: ToolDef[] = [
   },
 ]
 
+/* ---------------------------------------------------------- category words */
+
+/**
+ * The kind of product a piece of text names, or undefined when it names none
+ * or more than one.
+ *
+ * filter_products takes an optional category, and the model left it out: "$500
+ * budget, I want the phone" became price <= 500, and headphones, keyboards and
+ * a webcam came back as phone recommendations. The shopper's own words are the
+ * better source, so a missing category is read from the question, and a
+ * category the model spelled its own way ("phone", "headphones") is read the
+ * same way. Word boundaries keep "phones" out of "headphones".
+ */
+const CATEGORY_WORDS: [string, RegExp][] = [
+  ['phones', /\b(phones?|smartphones?|iphones?|android)\b/i],
+  ['audio', /\b(headphones?|headsets?|earbuds?|earphones?|speakers?|audio)\b/i],
+  ['computing', /\b(laptops?|notebooks?|macbooks?|computers?|computing|pcs?)\b/i],
+  ['peripherals', /\b(keyboards?|mouse|mice|webcams?|peripherals?)\b/i],
+  ['imaging', /\b(cameras?|drones?|gimbals?|imaging)\b/i],
+]
+
+export function categoryIn(text: string): string | undefined {
+  const named = CATEGORY_WORDS.filter(([, words]) => words.test(text)).map(([id]) => id)
+  return named.length === 1 ? named[0] : undefined
+}
+
+/** What the tools know about the conversation beyond the model's arguments. */
+export interface ToolContext {
+  /** The shopper's latest message, in their own words. */
+  question?: string
+}
+
 /* ----------------------------------------------------------------- handlers */
 
 async function searchProducts(env: ToolEnv, args: Record<string, unknown>): Promise<ToolResult> {
@@ -215,7 +247,11 @@ async function searchProducts(env: ToolEnv, args: Record<string, unknown>): Prom
   }
 }
 
-async function filterProducts(env: ToolEnv, args: Record<string, unknown>): Promise<ToolResult> {
+async function filterProducts(
+  env: ToolEnv,
+  args: Record<string, unknown>,
+  context: ToolContext = {},
+): Promise<ToolResult> {
   const property = asString(args.property) as (typeof NUMERIC)[number]
   if (!NUMERIC.includes(property)) {
     // Told, not silently ignored: the model can retry with a valid property.
@@ -226,7 +262,8 @@ async function filterProducts(env: ToolEnv, args: Record<string, unknown>): Prom
   const max = asNumber(args.max)
   if (min === null && max === null) return { summary: 'filter_products needs min or max', ids: [] }
 
-  const category = asString(args.category)
+  const given = asString(args.category)
+  const category = (given && categoryIn(given)) || categoryIn(context.question ?? '') || ''
   // The graph query this replaces: property present, within the bounds,
   // highest first, twelve at most. A figure the specs do not state is absent,
   // not zero, so it never passes a bound.
@@ -240,9 +277,13 @@ async function filterProducts(env: ToolEnv, args: Record<string, unknown>): Prom
     .slice(0, 12)
 
   return {
-    summary: rows.length
-      ? rows.map((r) => `${r.p.id} — ${r.p.title}, ${property} ${r.value}, $${dollars(r.p)}`).join('\n')
-      : `nothing matched that limit on ${property}`,
+    // The category is said out loud, so the model (and the steps the shopper
+    // can open) know the list was narrowed and to what.
+    summary:
+      (category ? `category: ${category}\n` : '') +
+      (rows.length
+        ? rows.map((r) => `${r.p.id} — ${r.p.title}, ${property} ${r.value}, $${dollars(r.p)}`).join('\n')
+        : `nothing matched that limit on ${property}`),
     ids: rows.map((r) => r.p.id),
   }
 }
@@ -315,7 +356,10 @@ async function findAccessories(env: ToolEnv, args: Record<string, unknown>): Pro
 
 /* ------------------------------------------------------------------ dispatch */
 
-const HANDLERS: Record<string, (env: ToolEnv, args: Record<string, unknown>) => Promise<ToolResult>> = {
+const HANDLERS: Record<
+  string,
+  (env: ToolEnv, args: Record<string, unknown>, context: ToolContext) => Promise<ToolResult>
+> = {
   search_products: searchProducts,
   filter_products: filterProducts,
   compare_products: compareProducts,
@@ -333,6 +377,7 @@ export async function runTool(
   env: ToolEnv,
   name: string,
   rawArgs: unknown,
+  context: ToolContext = {},
 ): Promise<ToolResult> {
   const handler = HANDLERS[name]
   if (!handler) return { summary: `no such tool: ${name}`, ids: [] }
@@ -345,7 +390,7 @@ export async function runTool(
   }
 
   try {
-    return await handler(env, args)
+    return await handler(env, args, context)
   } catch (err) {
     return { summary: `${name} failed: ${err instanceof Error ? err.message : 'unknown'}`, ids: [] }
   }

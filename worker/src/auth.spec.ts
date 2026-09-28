@@ -497,7 +497,10 @@ describe('per-account backoff', () => {
     // Capped: an unbounded doubling is a permanent lockout with extra steps.
     expect(Math.max(...waits)).toBeLessThanOrEqual(900)
     expect(waits.at(-1)).toBe(900)
-  })
+    // Twelve full-strength password hashes. Alone it takes a couple of
+    // seconds; under the whole suite it crossed the 5s default and failed at
+    // random, which trains everyone to ignore a red run.
+  }, 20_000)
 
   it('does not let guesses during a backoff extend it', async () => {
     // Otherwise the backoff becomes the attack: keep guessing at someone
