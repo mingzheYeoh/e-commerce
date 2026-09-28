@@ -30,6 +30,12 @@ export function useLenis() {
       easing: (t: number) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
       smoothWheel: true,
       touchMultiplier: 1.6,
+      // Lenis owns the wheel for the whole page, so a scrollable box inside it
+      // (the assistant's transcript, the cart drawer) moved the page instead
+      // of itself. With this, a wheel over any element that can still scroll
+      // that way is left to the element: one setting, rather than remembering
+      // data-lenis-prevent on every scroll area anyone adds later.
+      allowNestedScroll: true,
     })
 
     lenis.on('scroll', ScrollTrigger.update)
