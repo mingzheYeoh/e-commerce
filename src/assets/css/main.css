@@ -277,13 +277,11 @@
 
 /* Brand marquee. Two tracks, each two identical halves sliding exactly -50%;
    the second runs the other way. Pausing on focus-within as well as hover is
-   what lets a keyboard user land on a link that is not moving. */
-.marquee-track {
-  animation: marquee 70s linear infinite;
-}
+   what lets a keyboard user land on a link that is not moving. The animation
+   itself is Tailwind's animate-marquee, set on the track. */
 .marquee-track[data-reverse] {
   animation-direction: reverse;
-  animation-duration: 80s;
+  animation-duration: 75s;
 }
 .marquee:hover .marquee-track,
 .marquee:focus-within .marquee-track {
