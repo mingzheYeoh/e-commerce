@@ -138,3 +138,31 @@ describe('choosing the model', () => {
     expect(chooseModel({ ALLOW_MODEL_OVERRIDE: '1' }, undefined)).toBe(DEFAULT_MODEL)
   })
 })
+
+describe('superlatives', () => {
+  it('sorts on a figure with no bound: cheapest first, or biggest first', async () => {
+    // "cheapest mechanical keyboard" and "which phone has the biggest screen?"
+    // got no cards: the filter demanded a min or a max, and a superlative has
+    // neither.
+    const { db, category } = catalogue()
+    const cheapest = await converse(
+      {
+        ORDERS: db,
+        AI: scripted([filterCall({ property: 'price', order: 'asc' }), { response: 'ok' }]),
+      } as unknown as Parameters<typeof converse>[0],
+      'cheapest mechanical keyboard',
+    )
+    expect(cheapest.citations.length).toBeGreaterThan(1)
+    expect(new Set(cheapest.citations.map(category))).toEqual(new Set(['peripherals']))
+    expect(cheapest.steps[0]!.result.split('\n')[1]).toMatch(/price \d+/)
+    const prices = cheapest.steps[0]!.result.split('\n').slice(1).map((l) => Number(/price (\d+)/.exec(l)![1]))
+    expect(prices).toEqual([...prices].sort((a, b) => a - b))
+
+    const biggest = await converse(
+      { ORDERS: db, AI: scripted([filterCall({ property: 'screenInches' }), { response: 'ok' }]) } as unknown as Parameters<typeof converse>[0],
+      'which phone has the biggest screen?',
+    )
+    expect(biggest.citations.length).toBeGreaterThan(1)
+    expect(new Set(biggest.citations.map(category))).toEqual(new Set(['phones']))
+  })
+})
