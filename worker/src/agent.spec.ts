@@ -119,6 +119,23 @@ describe('the cards under an answer', () => {
     expect((await converse(env, 'best laptop under $2000')).citations).toEqual(['thinkpad-x1-carbon', 'zenbook-s14'])
   })
 
+  it('do not count a title that only appears inside a longer one', async () => {
+    // Live: "iPhone 18 Pro Max ... Galaxy S26 Ultra" also carded the iPhone 18
+    // Pro and the Galaxy S26, whose titles are prefixes of those.
+    const { db } = catalogue()
+    const env = {
+      ORDERS: db,
+      AI: scripted([
+        filterCall({ property: 'screenInches' }),
+        { response: 'The iPhone 18 Pro Max and the Galaxy S26 Ultra have the biggest screens.' },
+      ]),
+    } as unknown as Parameters<typeof converse>[0]
+    expect((await converse(env, 'which phone has the biggest screen?')).citations).toEqual([
+      'iphone-18-pro-max',
+      'galaxy-s26-ultra',
+    ])
+  })
+
   it('fall back to everything the tools found when the answer names nothing', async () => {
     const { db } = catalogue()
     const env = {
