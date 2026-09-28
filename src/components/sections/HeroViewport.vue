@@ -1,7 +1,10 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { ArrowDown, Truck, RotateCcw, ShieldCheck } from 'lucide-vue-next'
 import VideoBackdrop from '@/components/fx/VideoBackdrop.vue'
+import ParticleNetwork from '@/components/fx/ParticleNetwork.vue'
+import { hasWebGL, saveDataRequested, shouldRunParticles } from '@/lib/hero-fallback'
+import { prefersReducedMotion } from '@/composables/useReducedMotion'
 // The curated pick is named by the build-time file; what it costs and how many
 // are left come from the live catalogue, like everywhere else.
 import { featuredDrop } from '@/data/products'
@@ -18,6 +21,23 @@ const drop = computed(
   () => findProduct(featuredDrop.id) ?? (catalogueStatus.value === 'live' ? undefined : featuredDrop),
 )
 
+/**
+ * Particles where they can run, the video/poster everywhere else. Decided after
+ * mount, so neither backdrop renders until we know which one — the video must
+ * not start downloading only to be swapped out.
+ */
+const backdrop = ref<'pending' | 'particles' | 'video'>('pending')
+onMounted(() => {
+  backdrop.value = shouldRunParticles({
+    reducedMotion: prefersReducedMotion(),
+    width: window.innerWidth,
+    saveData: saveDataRequested(),
+    webgl: hasWebGL,
+  })
+    ? 'particles'
+    : 'video'
+})
+
 const assurances = computed(() => [
   { icon: Truck, text: `Free standard delivery to ${freeDelivery.value.name} over ${freeDelivery.value.label}` },
   { icon: RotateCcw, text: '30-day returns' },
@@ -30,7 +50,12 @@ const assurances = computed(() => [
     id="top"
     class="relative flex min-h-[640px] w-full flex-col justify-between overflow-hidden bg-void px-4 pb-8 pt-24 md:h-screen md:px-8 md:pb-12"
   >
-    <VideoBackdrop src="https://media.nexusohm.com/video/hero-grid.mp4" poster="https://media.nexusohm.com/video/hero-grid-poster.webp" />
+    <ParticleNetwork v-if="backdrop === 'particles'" @fail="backdrop = 'video'" />
+    <VideoBackdrop
+      v-else-if="backdrop === 'video'"
+      src="https://media.nexusohm.com/video/hero-grid.mp4"
+      poster="https://media.nexusohm.com/video/hero-grid-poster.webp"
+    />
 
     <!-- Assurance strip: the three things a shopper checks before anything else -->
     <ul

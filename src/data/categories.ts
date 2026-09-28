@@ -22,7 +22,6 @@ export const categories: Category[] = [
     get unitsInStock() { return stockIn('phones') },
     get fromPrice() { return cheapest('phones') },
     image: 'https://media.nexusohm.com/categories/phones.webp',
-    span: 'large',
   },
   {
     id: 'audio',
@@ -31,7 +30,6 @@ export const categories: Category[] = [
     get unitsInStock() { return stockIn('audio') },
     get fromPrice() { return cheapest('audio') },
     image: 'https://media.nexusohm.com/categories/audio.webp',
-    span: 'large',
   },
   {
     id: 'peripherals',
@@ -40,7 +38,6 @@ export const categories: Category[] = [
     get unitsInStock() { return stockIn('peripherals') },
     get fromPrice() { return cheapest('peripherals') },
     image: 'https://media.nexusohm.com/categories/peripherals.webp',
-    span: 'square',
   },
   {
     id: 'imaging',
@@ -49,7 +46,6 @@ export const categories: Category[] = [
     get unitsInStock() { return stockIn('imaging') },
     get fromPrice() { return cheapest('imaging') },
     image: 'https://media.nexusohm.com/categories/imaging.webp',
-    span: 'square',
   },
   {
     id: 'computing',
@@ -58,6 +54,5 @@ export const categories: Category[] = [
     get unitsInStock() { return stockIn('computing') },
     get fromPrice() { return cheapest('computing') },
     image: 'https://media.nexusohm.com/categories/computing.webp',
-    span: 'wide',
   },
 ]

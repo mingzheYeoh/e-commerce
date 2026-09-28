@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ref } from 'vue'
-import { RouterLink } from 'vue-router'
+import { computed, ref } from 'vue'
+import { RouterLink, useRoute } from 'vue-router'
 import AskPanel from '@/components/commerce/AskPanel.vue'
 import ChatAssistant from '@/components/commerce/ChatAssistant.vue'
 import { catalogue } from '@/stores/catalog'
@@ -13,6 +13,10 @@ import { catalogue } from '@/stores/catalog'
  * is an agent that chooses tools and can take several steps, which is more
  * capable and correspondingly harder to keep honest — so it shows its lookups.
  */
+// The search palette's "Ask AI" row lands here with the shopper's query.
+const route = useRoute()
+const initial = computed(() => (typeof route.query.q === 'string' ? route.query.q : ''))
+
 const mode = ref<'ask' | 'assistant'>('assistant')
 
 const MODES = [
@@ -65,8 +69,8 @@ const MODES = [
         </div>
       </div>
 
-      <ChatAssistant v-if="mode === 'assistant'" />
-      <AskPanel v-else />
+      <ChatAssistant v-if="mode === 'assistant'" :initial="initial" />
+      <AskPanel v-else :initial="initial" />
     </div>
   </div>
 </template>
