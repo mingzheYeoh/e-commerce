@@ -137,7 +137,7 @@ export const TOOL_DEFS: ToolDef[] = [
     function: {
       name: 'filter_products',
       description:
-        'Find every product meeting a numeric limit, e.g. charging above 60 watts or costing under 500. Use this instead of search whenever the shopper states a number, because search only returns the closest few and would miss the rest.',
+        'Find products by a numeric figure, e.g. charging above 60 watts or costing under 500, and rank them. Use this instead of search whenever the shopper states a number, because search only returns the closest few and would miss the rest. Also use it for superlatives with no number: "cheapest" is property price with order asc, "biggest screen" is property screenInches (order desc is the default).',
       parameters: {
         type: 'object',
         properties: {
@@ -147,6 +147,10 @@ export const TOOL_DEFS: ToolDef[] = [
           },
           min: { type: 'number', description: 'Lowest acceptable value, optional' },
           max: { type: 'number', description: 'Highest acceptable value, optional' },
+          order: {
+            type: 'string',
+            description: 'asc (smallest first, e.g. cheapest) or desc (largest first, the default)',
+          },
           category: {
             type: 'string',
             description: 'Optional: phones, audio, computing, peripherals, imaging',
@@ -260,7 +264,10 @@ async function filterProducts(
 
   const min = asNumber(args.min)
   const max = asNumber(args.max)
-  if (min === null && max === null) return { summary: 'filter_products needs min or max', ids: [] }
+  // No bound at all is a superlative ("cheapest", "biggest screen"): every
+  // product with the figure, ranked. It used to be refused, and those
+  // questions came back with nothing.
+  const ascending = asString(args.order).toLowerCase() === 'asc'
 
   const given = asString(args.category)
   const category = (given && categoryIn(given)) || categoryIn(context.question ?? '') || ''
@@ -273,7 +280,7 @@ async function filterProducts(
     .filter((r): r is { p: LiveProduct; value: number } =>
       r.value !== undefined && (min === null || r.value >= min) && (max === null || r.value <= max),
     )
-    .sort((a, b) => b.value - a.value)
+    .sort((a, b) => (ascending ? a.value - b.value : b.value - a.value))
     .slice(0, 12)
 
   return {

@@ -33,7 +33,7 @@ const draft = ref(props.initial ?? '')
 // Asked again from the palette while already on /ask: same page, new query.
 watch(() => props.initial, (q) => (draft.value = q ?? ''))
 const pending = ref(false)
-const failure = ref<'timeout' | 'offline' | 'error' | null>(null)
+const failure = ref<'timeout' | 'offline' | 'busy' | 'error' | null>(null)
 const openSteps = ref<Set<number>>(new Set())
 const thread = ref<HTMLElement | null>(null)
 
@@ -241,7 +241,9 @@ async function scrollDown() {
               ? 'The assistant took too long.'
               : failure === 'offline'
                 ? 'Could not reach the assistant.'
-                : 'Something went wrong.'
+                : failure === 'busy'
+                  ? 'The assistant is resting — it has answered its share for today. Try again later.'
+                  : 'Something went wrong.'
           }}
         </p>
         <p class="mt-1 text-text-secondary">

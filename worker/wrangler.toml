@@ -154,6 +154,9 @@ binding = "PRIVATE"
 bucket_name = "nexus-private-staging"
 
 [env.staging.vars]
+# Lets scripts/eval-assistant.mjs compare models through /api/chat. Never set
+# in production: there every request uses agent.ts DEFAULT_MODEL.
+ALLOW_MODEL_OVERRIDE = "1"
 ALLOWED_ORIGIN = "https://nexus-tech-collective-staging.mingzhe030228.workers.dev,http://localhost:5173"
 MAIL_FROM = "NEXUSOHM <no-reply@nexusohm.com>"
 MEDIA_BASE = "https://nexus-api-staging.mingzhe030228.workers.dev/media/u/"

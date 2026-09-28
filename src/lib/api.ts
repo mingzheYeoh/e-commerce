@@ -74,7 +74,7 @@ export interface ChatResponse {
 
 export type ChatResult =
   | { ok: true; data: ChatResponse }
-  | { ok: false; reason: 'timeout' | 'offline' | 'error' }
+  | { ok: false; reason: 'timeout' | 'offline' | 'busy' | 'error' }
 
 /**
  * The assistant may make several tool calls before answering, each a round trip
@@ -98,6 +98,7 @@ export async function chat(
       body: JSON.stringify({ question, history }),
       signal: combined,
     })
+    if (res.status === 503) return { ok: false, reason: 'busy' }
     if (!res.ok) return { ok: false, reason: 'error' }
     return { ok: true, data: (await res.json()) as ChatResponse }
   } catch (err) {

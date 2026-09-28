@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import { memoryD1 } from '../test/d1-memory'
-import { converse } from './agent'
+import { converse, chooseModel, DEFAULT_MODEL, EVAL_MODELS } from './agent'
 import { categoryIn } from './tools'
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..')
@@ -126,5 +126,43 @@ describe('the cards under an answer', () => {
       AI: scripted([filterCall({ property: 'price', max: 5000 }), { response: 'Several fit.' }]),
     } as unknown as Parameters<typeof converse>[0]
     expect((await converse(env, 'anything?')).citations.length).toBeGreaterThan(2)
+  })
+})
+
+describe('choosing the model', () => {
+  it('uses the default unless the deployment allows an override from the list', () => {
+    expect(chooseModel({}, EVAL_MODELS[1])).toBe(DEFAULT_MODEL)
+    expect(chooseModel({ ALLOW_MODEL_OVERRIDE: '1' }, EVAL_MODELS[1])).toBe(EVAL_MODELS[1])
+    // Never an arbitrary model name, even where overrides are allowed.
+    expect(chooseModel({ ALLOW_MODEL_OVERRIDE: '1' }, '@cf/some/expensive-model')).toBe(DEFAULT_MODEL)
+    expect(chooseModel({ ALLOW_MODEL_OVERRIDE: '1' }, undefined)).toBe(DEFAULT_MODEL)
+  })
+})
+
+describe('superlatives', () => {
+  it('sorts on a figure with no bound: cheapest first, or biggest first', async () => {
+    // "cheapest mechanical keyboard" and "which phone has the biggest screen?"
+    // got no cards: the filter demanded a min or a max, and a superlative has
+    // neither.
+    const { db, category } = catalogue()
+    const cheapest = await converse(
+      {
+        ORDERS: db,
+        AI: scripted([filterCall({ property: 'price', order: 'asc' }), { response: 'ok' }]),
+      } as unknown as Parameters<typeof converse>[0],
+      'cheapest mechanical keyboard',
+    )
+    expect(cheapest.citations.length).toBeGreaterThan(1)
+    expect(new Set(cheapest.citations.map(category))).toEqual(new Set(['peripherals']))
+    expect(cheapest.steps[0]!.result.split('\n')[1]).toMatch(/price \d+/)
+    const prices = cheapest.steps[0]!.result.split('\n').slice(1).map((l) => Number(/price (\d+)/.exec(l)![1]))
+    expect(prices).toEqual([...prices].sort((a, b) => a - b))
+
+    const biggest = await converse(
+      { ORDERS: db, AI: scripted([filterCall({ property: 'screenInches' }), { response: 'ok' }]) } as unknown as Parameters<typeof converse>[0],
+      'which phone has the biggest screen?',
+    )
+    expect(biggest.citations.length).toBeGreaterThan(1)
+    expect(new Set(biggest.citations.map(category))).toEqual(new Set(['phones']))
   })
 })
