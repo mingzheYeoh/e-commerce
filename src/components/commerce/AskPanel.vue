@@ -7,7 +7,7 @@
  * beneath, and an answer that could not be traced to a retrieved passage is
  * labelled rather than presented with the same confidence as one that could.
  */
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import { Sparkles, CornerDownLeft, AlertCircle, Quote } from 'lucide-vue-next'
 import { ask, health, type AskResponse } from '@/lib/api'
@@ -17,7 +17,9 @@ import { useCurrency } from '@/composables/useCurrency'
 
 const { format } = useCurrency()
 
-const question = ref('')
+const props = defineProps<{ initial?: string }>()
+const question = ref(props.initial ?? '')
+watch(() => props.initial, (q) => (question.value = q ?? ''))
 const answer = ref<AskResponse | null>(null)
 const pending = ref(false)
 const failure = ref<'timeout' | 'offline' | 'error' | null>(null)

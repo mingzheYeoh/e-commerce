@@ -8,7 +8,7 @@
  * trusted, and "here is the query I ran and the rows it returned" is a better
  * argument than a confident tone.
  */
-import { computed, nextTick, ref } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import { Sparkles, ChevronDown, Wrench, AlertCircle, Send } from 'lucide-vue-next'
 import { chat, type AgentStep } from '@/lib/api'
@@ -27,7 +27,11 @@ interface Turn {
 }
 
 const turns = ref<Turn[]>([])
-const draft = ref('')
+/** Prefilled from the search palette's Ask AI row (/ask?q=). */
+const props = defineProps<{ initial?: string }>()
+const draft = ref(props.initial ?? '')
+// Asked again from the palette while already on /ask: same page, new query.
+watch(() => props.initial, (q) => (draft.value = q ?? ''))
 const pending = ref(false)
 const failure = ref<'timeout' | 'offline' | 'error' | null>(null)
 const openSteps = ref<Set<number>>(new Set())
