@@ -23,8 +23,16 @@
     letter-spacing: -0.02em;
   }
 
-  :where(a, button, input, select, [tabindex]):focus-visible {
+  :where(a, button, input[type='checkbox'], input[type='radio'], [tabindex]):focus-visible {
     @apply outline-none ring-2 ring-accent ring-offset-2 ring-offset-void;
+  }
+
+  /* Text fields turn their own border blue on focus. The offset ring above,
+     drawn around that border, read as blue line, black gap, blue line: a
+     second frame inside the first. A soft halo flush with the border makes
+     one edge instead. */
+  :where(input:not([type='checkbox']):not([type='radio']), select, textarea):focus-visible {
+    @apply outline-none ring-[3px] ring-accent/30 ring-offset-0;
   }
 
   ::selection {
