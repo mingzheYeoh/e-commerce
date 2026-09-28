@@ -92,7 +92,11 @@ describe('the assistant tools, on a product only D1 knows', () => {
   it('filters on a figure, highest first, and only among live products', async () => {
     const res = await runTool(env, 'filter_products', { property: 'batteryHours', min: 20, category: 'audio' })
     expect(res.ids).toEqual(['prd_studio', 'prd_arc'])
-    expect(res.summary.split('\n')[0]).toBe('prd_studio — Studio One Monitor Headphones, batteryHours 40, $199')
+    // The narrowing is stated first, so the model knows the list is audio only.
+    expect(res.summary.split('\n').slice(0, 2)).toEqual([
+      'category: audio',
+      'prd_studio — Studio One Monitor Headphones, batteryHours 40, $199',
+    ])
 
     const cheap = await runTool(env, 'filter_products', { property: 'price', max: 100 })
     expect(cheap.ids).toEqual([])

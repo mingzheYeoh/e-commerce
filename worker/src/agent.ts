@@ -84,6 +84,7 @@ export async function converse(
 
   const steps: AgentStep[] = []
   const citations: string[] = []
+  const titles = new Map<string, string>()
 
   for (let step = 0; step < MAX_STEPS; step++) {
     const out = (await env.AI.run(MODEL, {
@@ -99,7 +100,7 @@ export async function converse(
       const answer = (out.response ?? '').trim()
       return {
         answer: answer || 'The catalogue does not cover that.',
-        citations: [...new Set(citations)],
+        citations: recommended(answer, citations, titles),
         steps,
         truncated: false,
       }
@@ -110,9 +111,10 @@ export async function converse(
     messages.push({ role: 'assistant', content: `Calling: ${calls.map((c) => c.name).join(', ')}` })
 
     for (const call of calls) {
-      const result = await runTool(env, call.name, call.args)
+      const result = await runTool(env, call.name, call.args, { question })
       const trimmed = result.summary.slice(0, MAX_CHARS)
       citations.push(...result.ids)
+      titlesIn(result.summary, titles)
       steps.push({
         tool: call.name,
         args: (typeof call.args === 'string' ? safeParse(call.args) : call.args) as Record<string, unknown>,
@@ -130,12 +132,46 @@ export async function converse(
     max_tokens: 400,
   })) as { response?: string }
 
+  const answer = (final.response ?? '').trim()
   return {
-    answer: (final.response ?? '').trim() || 'The catalogue does not cover that.',
-    citations: [...new Set(citations)],
+    answer: answer || 'The catalogue does not cover that.',
+    citations: recommended(answer, citations, titles),
     steps,
     truncated: true,
   }
+}
+
+/**
+ * The products shown as cards under the answer.
+ *
+ * Every id a tool touched used to become a card, so a filter that matched
+ * twelve things showed twelve cards under an answer recommending two. The
+ * answer names its picks as [id]; those, in the answer's order, are the cards.
+ * Only ids a tool actually returned count, so the model cannot conjure a card.
+ * An answer that names none falls back to everything the tools found.
+ */
+function recommended(answer: string, touched: string[], titles: Map<string, string>): string[] {
+  // A pick counts whether the model wrote it as [id] or by its full title; it
+  // does the latter often enough that ids alone left most answers unmatched.
+  const text = answer.toLowerCase()
+  const at = (id: string) => {
+    const positions = [text.indexOf(`[${id.toLowerCase()}]`)]
+    const title = titles.get(id)?.toLowerCase()
+    if (title) positions.push(text.indexOf(title))
+    const hits = positions.filter((p) => p >= 0)
+    return hits.length ? Math.min(...hits) : -1
+  }
+  const named = [...new Set(touched)]
+    .map((id) => ({ id, pos: at(id) }))
+    .filter((n) => n.pos >= 0)
+    .sort((a, b) => a.pos - b.pos)
+    .map((n) => n.id)
+  return named.length ? named : [...new Set(touched)]
+}
+
+/** "id — Title, ..." lines in a tool result, as id -> title. */
+function titlesIn(summary: string, into: Map<string, string>) {
+  for (const m of summary.matchAll(/^(\S+) — ([^,\n]+)/gm)) into.set(m[1]!, m[2]!.trim())
 }
 
 function safeParse(s: string): unknown {
