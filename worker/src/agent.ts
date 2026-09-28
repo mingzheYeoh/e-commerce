@@ -99,7 +99,7 @@ export async function converse(
       const answer = (out.response ?? '').trim()
       return {
         answer: answer || 'The catalogue does not cover that.',
-        citations: [...new Set(citations)],
+        citations: recommended(answer, citations),
         steps,
         truncated: false,
       }
@@ -110,7 +110,7 @@ export async function converse(
     messages.push({ role: 'assistant', content: `Calling: ${calls.map((c) => c.name).join(', ')}` })
 
     for (const call of calls) {
-      const result = await runTool(env, call.name, call.args)
+      const result = await runTool(env, call.name, call.args, { question })
       const trimmed = result.summary.slice(0, MAX_CHARS)
       citations.push(...result.ids)
       steps.push({
@@ -130,12 +130,28 @@ export async function converse(
     max_tokens: 400,
   })) as { response?: string }
 
+  const answer = (final.response ?? '').trim()
   return {
-    answer: (final.response ?? '').trim() || 'The catalogue does not cover that.',
-    citations: [...new Set(citations)],
+    answer: answer || 'The catalogue does not cover that.',
+    citations: recommended(answer, citations),
     steps,
     truncated: true,
   }
+}
+
+/**
+ * The products shown as cards under the answer.
+ *
+ * Every id a tool touched used to become a card, so a filter that matched
+ * twelve things showed twelve cards under an answer recommending two. The
+ * answer names its picks as [id]; those, in the answer's order, are the cards.
+ * Only ids a tool actually returned count, so the model cannot conjure a card.
+ * An answer that names none falls back to everything the tools found.
+ */
+function recommended(answer: string, touched: string[]): string[] {
+  const found = new Set(touched)
+  const named = [...answer.matchAll(/\[([^\]\s]+)\]/g)].map((m) => m[1]!).filter((id) => found.has(id))
+  return [...new Set(named.length ? named : touched)]
 }
 
 function safeParse(s: string): unknown {
