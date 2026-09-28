@@ -176,20 +176,24 @@ export async function converse(
 function recommended(answer: string, touched: string[], titles: Map<string, string>): string[] {
   // A pick counts whether the model wrote it as [id] or by its full title; it
   // does the latter often enough that ids alone left most answers unmatched.
-  const text = answer.toLowerCase()
-  const at = (id: string) => {
-    const positions = [text.indexOf(`[${id.toLowerCase()}]`)]
-    const title = titles.get(id)?.toLowerCase()
-    if (title) positions.push(text.indexOf(title))
-    const hits = positions.filter((p) => p >= 0)
-    return hits.length ? Math.min(...hits) : -1
+  const ids = [...new Set(touched)]
+  let text = answer.toLowerCase()
+  const found = new Map<string, number>()
+  const claim = (id: string, needle: string) => {
+    const pos = text.indexOf(needle)
+    if (pos < 0) return
+    found.set(id, Math.min(found.get(id) ?? pos, pos))
+    // Blank what was matched, keeping positions, so "iPhone 18 Pro" cannot
+    // match again inside "iPhone 18 Pro Max".
+    text = text.replaceAll(needle, ' '.repeat(needle.length))
   }
-  const named = [...new Set(touched)]
-    .map((id) => ({ id, pos: at(id) }))
-    .filter((n) => n.pos >= 0)
-    .sort((a, b) => a.pos - b.pos)
-    .map((n) => n.id)
-  return named.length ? named : [...new Set(touched)]
+  for (const id of ids) claim(id, `[${id.toLowerCase()}]`)
+  // Longest titles first, for the same reason.
+  const byLength = ids.filter((id) => titles.has(id)).sort((a, b) => titles.get(b)!.length - titles.get(a)!.length)
+  for (const id of byLength) claim(id, titles.get(id)!.toLowerCase())
+
+  const named = [...found].sort((a, b) => a[1] - b[1]).map(([id]) => id)
+  return named.length ? named : ids
 }
 
 /** "id — Title, ..." lines in a tool result, as id -> title. */
