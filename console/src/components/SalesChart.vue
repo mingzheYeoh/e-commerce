@@ -68,6 +68,8 @@ const latest = computed(() =>
             :width="b.w"
             :height="b.h"
             rx="0.6"
+            class="bar-grow"
+            :style="{ animationDelay: `${i * 12}ms` }"
             :class="hover === i ? 'fill-accent-hover' : 'fill-accent'"
           />
           <!-- The hit target is the whole column, not the bar: a zero day is still hoverable. -->

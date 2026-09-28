@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import StatCard from '../components/StatCard.vue'
+import RollingText from '../components/RollingText.vue'
 import SalesChart from '../components/SalesChart.vue'
 import { platformOverview, isError, type Attention, type MerchantSummary, type PlatformOverview } from '../api'
 import { formatAmounts, formatMinor, groupByCurrency, seriesByCurrency } from '../money'
@@ -11,15 +12,28 @@ const merchants = ref<MerchantSummary[]>([])
 const attention = ref<Attention | null>(null)
 const error = ref<string | null>(null)
 
-onMounted(async () => {
+/** `quiet`: a background refresh that fails keeps what is on screen rather than blanking a page that was fine. */
+async function load(quiet = false) {
   const { body } = await platformOverview()
-  if (isError(body)) error.value = body.error
-  else if ('overview' in body) {
+  if (!isError(body) && 'overview' in body) {
+    error.value = null
     overview.value = body.overview
     merchants.value = body.merchants
     attention.value = body.attention
-  } else error.value = 'Something went wrong. Reload and try again.'
+  } else if (!quiet) error.value = isError(body) ? body.error : 'Something went wrong. Reload and try again.'
+}
+
+/**
+ * Re-read every 30 seconds while the tab is in front, so a new order moves the
+ * figures without a reload: they roll to the new value.
+ */
+const REFRESH_MS = 30_000
+let timer: ReturnType<typeof setInterval> | undefined
+onMounted(() => {
+  void load()
+  timer = setInterval(() => document.visibilityState === 'visible' && overview.value && void load(true), REFRESH_MS)
 })
+onUnmounted(() => clearInterval(timer))
 
 /**
  * The overdue count is parts placed before the UTC day `overdueDays` ago began;
@@ -49,32 +63,32 @@ const ranking = computed(() =>
   <div v-else class="flex flex-col gap-6">
     <p class="-mt-4 text-xs text-text-muted">Net sales: merchandise on paid orders less refunds, excluding shipping and tax. Gross is before refunds. Days are UTC.</p>
 
-    <section class="grid grid-cols-1 gap-3 xs:grid-cols-2 lg:grid-cols-4">
+    <section class="rise-in grid grid-cols-1 gap-3 xs:grid-cols-2 lg:grid-cols-4">
       <StatCard label="Net, last 7 days" :value="formatAmounts(overview.revenue.week, 'No sales')" :sub="`${overview.orders.week} orders · ${formatAmounts(overview.gross.week)} gross`" />
       <StatCard label="Net, last 30 days" :value="formatAmounts(overview.revenue.month, 'No sales')" :sub="`${overview.orders.month} orders · ${formatAmounts(overview.gross.month)} gross`" />
-      <router-link to="/platform/merchants" class="block rounded-card transition-colors hover:ring-1 hover:ring-border-strong">
+      <router-link to="/platform/merchants" class="block h-full rounded-card transition-colors hover:ring-1 hover:ring-border-strong">
         <StatCard label="Merchants" :value="`${count('active')} active`" :sub="`${count('suspended')} suspended`" />
       </router-link>
-      <router-link :to="{ path: '/platform/orders', query: { status: 'pending' } }" class="block rounded-card transition-colors hover:ring-1 hover:ring-border-strong">
+      <router-link :to="{ path: '/platform/orders', query: { status: 'pending' } }" class="block h-full rounded-card transition-colors hover:ring-1 hover:ring-border-strong">
         <StatCard label="Parts to ship" :value="String(attention?.toShip ?? 0)" sub="Every merchant's unshipped parts" />
       </router-link>
     </section>
 
     <section v-if="attention" aria-labelledby="attention-h">
       <h2 id="attention-h" class="mb-3 text-sm font-semibold text-text-primary">Needs attention</h2>
-      <div class="grid grid-cols-1 gap-3 xs:grid-cols-2 lg:grid-cols-4">
-        <router-link to="/platform/applications" class="block rounded-card transition-colors hover:ring-1 hover:ring-border-strong">
+      <div class="rise-in grid grid-cols-1 gap-3 xs:grid-cols-2 lg:grid-cols-4">
+        <router-link to="/platform/applications" class="block h-full rounded-card transition-colors hover:ring-1 hover:ring-border-strong">
           <StatCard label="Pending applications" :value="String(attention.pendingApplications)" sub="Review applications" />
         </router-link>
         <router-link
           :to="{ path: '/platform/orders', query: { status: 'pending', to: overdueTo } }"
-          class="block rounded-card transition-colors hover:ring-1 hover:ring-border-strong"
+          class="block h-full rounded-card transition-colors hover:ring-1 hover:ring-border-strong"
         >
           <StatCard label="Overdue parts" :value="String(attention.overdue)" :sub="`To ship, placed on or before ${overdueTo}`" />
         </router-link>
         <div class="card p-4">
           <p class="label">Merchants owing the platform</p>
-          <p class="nums mt-1 font-display text-xl font-bold text-text-primary">{{ attention.owingMerchants }}</p>
+          <p class="nums mt-1 font-display text-xl font-bold text-text-primary"><RollingText :text="String(attention.owingMerchants)" /></p>
           <ul class="mt-1 flex flex-col gap-0.5 text-xs">
             <li v-for="o in attention.owing.slice(0, 5)" :key="`${o.merchantId}-${o.currency}`">
               <router-link :to="`/platform/merchants/${o.merchantId}`" class="text-text-secondary hover:text-accent">
@@ -85,7 +99,7 @@ const ranking = computed(() =>
         </div>
         <div class="card p-4">
           <p class="label">Merchants low on stock</p>
-          <p class="nums mt-1 font-display text-xl font-bold text-text-primary">{{ attention.lowStock.length }}</p>
+          <p class="nums mt-1 font-display text-xl font-bold text-text-primary"><RollingText :text="String(attention.lowStock.length)" /></p>
           <ul class="mt-1 flex flex-col gap-0.5 text-xs">
             <li v-for="l in attention.lowStock.slice(0, 5)" :key="l.merchantId">
               <router-link :to="`/platform/merchants/${l.merchantId}`" class="text-text-secondary hover:text-accent">

@@ -190,7 +190,7 @@ const BADGE: Record<string, string> = {
       <p v-else-if="!sales" class="text-text-secondary">Loading…</p>
       <p v-else-if="trends.length === 0" class="card p-6 text-text-secondary">No sales in this range or the one before it.</p>
       <div v-for="t in trends" :key="t.currency" class="mb-4 flex flex-col gap-3">
-        <div class="grid grid-cols-1 gap-3 xs:grid-cols-2 lg:grid-cols-4">
+        <div class="rise-in grid grid-cols-1 gap-3 xs:grid-cols-2 lg:grid-cols-4">
           <StatCard v-for="k in t.cards" :key="k.label" :label="k.label" :value="k.value" :sub="k.sub" />
         </div>
         <div class="card p-4">
