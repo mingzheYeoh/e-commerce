@@ -249,7 +249,8 @@ function onKeydown(event: KeyboardEvent) {
 onMounted(() => document.addEventListener('keydown', onKeydown))
 onUnmounted(() => document.removeEventListener('keydown', onKeydown))
 
-const productCount = computed(() => flat.value.filter((r) => r.kind === 'product').length)
+// The Ask AI row is an action, not a result.
+const resultCount = computed(() => flat.value.filter((r) => r.kind !== 'ask').length)
 </script>
 
 <template>
@@ -316,7 +317,7 @@ const productCount = computed(() => flat.value.filter((r) => r.kind === 'product
 
           <div
             ref="list"
-            class="relative max-h-[min(58vh,540px)] overflow-y-auto overscroll-contain p-2"
+            class="palette-scroll relative max-h-[min(58vh,540px)] overflow-y-auto overscroll-contain p-2"
           >
             <!-- The sliding highlight -->
             <div
@@ -371,25 +372,25 @@ const productCount = computed(() => flat.value.filter((r) => r.kind === 'product
               </div>
 
               <!-- Popular: three small cards -->
-              <ul v-if="group.label === 'Popular'" class="grid grid-cols-3 gap-1">
+              <ul v-if="group.label === 'Popular'" class="grid grid-cols-1 gap-1 sm:grid-cols-3">
                 <li v-for="(row, i) in group.rows" :key="i">
                   <button
                     v-if="row.kind === 'product'"
                     type="button"
                     :data-index="group.start + i"
-                    class="relative flex w-full flex-col gap-2 rounded-lg p-2.5 text-left"
+                    class="relative flex w-full items-center gap-2.5 rounded-lg border border-white/[0.05] p-2 text-left"
                     @pointermove="point(group.start + i)"
                     @click="activate(row)"
                   >
                     <img
                       :src="row.product.media.thumb"
                       :alt="row.product.title"
-                      width="160"
-                      height="120"
+                      width="40"
+                      height="40"
                       loading="lazy"
-                      class="aspect-[4/3] w-full rounded-md border border-white/[0.06] bg-surface-2 object-cover"
+                      class="h-10 w-10 shrink-0 rounded-md border border-white/[0.06] bg-surface-2 object-cover"
                     />
-                    <span class="min-w-0">
+                    <span class="min-w-0 flex-1">
                       <span class="block truncate text-xs font-medium text-text-primary">
                         {{ row.product.title }}
                       </span>
@@ -536,7 +537,7 @@ const productCount = computed(() => flat.value.filter((r) => r.kind === 'product
             </span>
             <span class="flex items-center gap-1.5"><kbd class="keycap">↵</kbd> Open</span>
             <span class="hidden items-center gap-1.5 sm:flex"><kbd class="keycap">Esc</kbd> Close</span>
-            <span v-if="query.trim()" class="nums ml-auto">{{ productCount }} results</span>
+            <span v-if="query.trim()" class="nums ml-auto">{{ resultCount }} results</span>
           </footer>
         </div>
       </div>
@@ -548,6 +549,11 @@ const productCount = computed(() => flat.value.filter((r) => r.kind === 'product
 /* Scoped to the palette so the storefront's main.css stays untouched. */
 .keycap {
   @apply inline-flex h-5 min-w-5 items-center justify-center rounded border border-white/10 border-b-white/[0.18] bg-white/[0.04] px-1.5 font-sans text-[10px] font-medium leading-none text-text-secondary;
+}
+
+.palette-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.14) transparent;
 }
 
 .group-label {
