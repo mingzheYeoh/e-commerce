@@ -252,7 +252,7 @@ async function scrollDown() {
 
     <form class="mt-5" @submit.prevent="send()">
       <div
-        class="flex items-center gap-3 rounded-card border border-border-hairline bg-surface-1 px-4 py-3 focus-within:border-accent"
+        class="field flex items-center gap-3 rounded-card border border-border-hairline bg-surface-1 px-4 py-3 focus-within:border-accent"
       >
         <Sparkles class="h-4 w-4 shrink-0 text-accent" aria-hidden="true" />
         <label for="chat" class="sr-only">Ask the shopping assistant</label>
@@ -262,7 +262,7 @@ async function scrollDown() {
           type="text"
           :disabled="pending"
           placeholder="What are you looking for?"
-          class="w-full bg-transparent text-sm placeholder:text-text-muted focus:outline-none focus-visible:ring-0 disabled:opacity-50"
+          class="w-full bg-transparent text-sm placeholder:text-text-muted focus:outline-none disabled:opacity-50"
         />
         <button
           type="submit"

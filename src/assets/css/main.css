@@ -27,13 +27,13 @@
     @apply outline-none ring-2 ring-accent ring-offset-2 ring-offset-void;
   }
 
-  /* Text fields turn their own border blue on focus. The offset ring above,
-     drawn around that border, read as blue line, black gap, blue line: a
-     second frame inside the first. A soft halo flush with the border makes
-     one edge instead. A bare field inside a box that already lights up with
-     focus-within (search palette, Ask, chat) opts out with ring-0. */
+  /* Text fields never get the offset ring above: drawn around a field, or
+     around a bare input inside a bordered box, it read as a second frame
+     inside the first. The visible box shows focus instead - its own border
+     for .input, the wrapper for a bare field (.field) - so there is only
+     ever one edge. */
   :where(input:not([type='checkbox']):not([type='radio']), select, textarea):focus-visible {
-    @apply outline-none ring-[3px] ring-accent/30 ring-offset-0;
+    @apply outline-none;
   }
 
   ::selection {
@@ -99,7 +99,13 @@
      their height or focus ring reads as unfinished, which is not what you want
      from the page that asks for a card number. */
   .input {
-    @apply h-10 w-full rounded border border-border-hairline bg-surface-2 px-3 text-sm text-text-primary transition-colors placeholder:text-text-muted focus:border-accent focus:outline-none;
+    @apply h-10 w-full rounded border border-border-hairline bg-surface-2 px-3 text-sm text-text-primary transition-colors placeholder:text-text-muted focus:border-accent focus:outline-none focus-visible:ring-[3px] focus-visible:ring-accent/30;
+  }
+
+  /* The box around a bare input (search, newsletter, Ask, chat): it carries
+     the focus halo, flush with its own border, and the input draws nothing. */
+  .field {
+    @apply transition-[border-color,box-shadow] focus-within:ring-[3px] focus-within:ring-accent/30;
   }
 }
 

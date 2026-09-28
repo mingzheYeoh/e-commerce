@@ -128,7 +128,7 @@ const activeLabel = computed(() => {
             <select
               id="brand-filter"
               :value="catalog.activeBrand ?? 'all'"
-              class="h-9 rounded border border-border-hairline bg-surface-1 px-2.5 text-sm text-text-primary transition-colors hover:border-border-strong"
+              class="h-9 rounded border border-border-hairline bg-surface-1 px-2.5 text-sm text-text-primary transition-colors hover:border-border-strong focus-visible:border-accent focus-visible:ring-[3px] focus-visible:ring-accent/30"
               @change="setBrand(($event.target as HTMLSelectElement).value)"
             >
               <option value="all">All brands</option>
@@ -143,7 +143,7 @@ const activeLabel = computed(() => {
             <select
               id="sort-order"
               :value="catalog.sort === 'priceDesc' ? 'price-desc' : catalog.sort === 'priceAsc' ? 'price-asc' : 'default'"
-              class="h-9 rounded border border-border-hairline bg-surface-1 px-2.5 text-sm text-text-primary transition-colors hover:border-border-strong"
+              class="h-9 rounded border border-border-hairline bg-surface-1 px-2.5 text-sm text-text-primary transition-colors hover:border-border-strong focus-visible:border-accent focus-visible:ring-[3px] focus-visible:ring-accent/30"
               @change="setSort(($event.target as HTMLSelectElement).value)"
             >
               <option value="default">Featured</option>
