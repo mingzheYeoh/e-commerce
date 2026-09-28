@@ -75,7 +75,7 @@ onMounted(async () => {
     <form class="relative" @submit.prevent="submit">
       <label for="ask" class="sr-only">Ask a question about the catalogue</label>
       <div
-        class="flex items-center gap-3 rounded-card border border-border-hairline bg-surface-1 px-4 py-3 transition-colors focus-within:border-accent"
+        class="field flex items-center gap-3 rounded-card border border-border-hairline bg-surface-1 px-4 py-3 focus-within:border-accent"
       >
         <Sparkles class="h-4 w-4 shrink-0 text-accent" aria-hidden="true" />
         <input
@@ -83,7 +83,7 @@ onMounted(async () => {
           v-model="question"
           type="text"
           placeholder="Ask about specs, compatibility or comparisons…"
-          class="w-full bg-transparent text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus-visible:ring-0"
+          class="w-full bg-transparent text-sm text-text-primary placeholder:text-text-muted focus:outline-none"
         />
         <button
           type="submit"

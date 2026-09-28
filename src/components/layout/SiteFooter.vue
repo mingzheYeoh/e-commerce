@@ -63,8 +63,8 @@ const guarantees = computed(() => [
 
         <form class="w-full max-w-md" novalidate @submit.prevent="subscribe">
           <div
-            class="flex items-center gap-2 rounded border bg-surface-1 px-3 py-2 transition-colors"
-            :class="status === 'error' ? 'border-accent-amber' : 'border-border-hairline'"
+            class="field flex items-center gap-2 rounded border bg-surface-1 px-3 py-2"
+            :class="status === 'error' ? 'border-accent-amber' : 'border-border-hairline focus-within:border-accent'"
           >
             <label for="newsletter" class="sr-only">Email address</label>
             <input
