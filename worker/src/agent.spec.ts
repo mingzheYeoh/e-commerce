@@ -105,6 +105,20 @@ describe('the cards under an answer', () => {
     expect((await converse(env, 'anything?')).citations).toEqual([a, b])
   })
 
+  it('also count a product the answer names by its title rather than its [id]', async () => {
+    // Live: "best laptop under $2000" was answered with two laptops by name,
+    // and the cards showed all six computing items, a power bank among them.
+    const { db } = catalogue()
+    const env = {
+      ORDERS: db,
+      AI: scripted([
+        filterCall({ property: 'price', max: 2000, category: 'computing' }),
+        { response: 'The ThinkPad X1 Carbon Gen 14 is a great choice. The Zenbook S14 (2026) is another.' },
+      ]),
+    } as unknown as Parameters<typeof converse>[0]
+    expect((await converse(env, 'best laptop under $2000')).citations).toEqual(['thinkpad-x1-carbon', 'zenbook-s14'])
+  })
+
   it('fall back to everything the tools found when the answer names nothing', async () => {
     const { db } = catalogue()
     const env = {
