@@ -17,13 +17,13 @@ const API = arg('api', 'https://nexus-api-staging.mingzhe030228.workers.dev')
 const RUNS = Number(arg('runs', 1))
 const ORIGIN = 'https://nexus-tech-collective-staging.mingzhe030228.workers.dev'
 
-const MODELS = [
-  '@cf/mistralai/mistral-small-3.1-24b-instruct',
-  '@cf/meta/llama-3.3-70b-instruct-fp8-fast',
-  '@cf/meta/llama-4-scout-17b-16e-instruct',
-  '@cf/zai-org/glm-5.3-flash',
-  '@cf/moonshotai/kimi-k2.6',
-]
+// Workers Free allows these three; GLM and Kimi need Workers Paid (see agent.ts).
+// --models a,b narrows the run, since the free daily allocation of neurons is
+// shared with production and a full sweep can use most of it.
+const MODELS = arg(
+  'models',
+  '@cf/mistralai/mistral-small-3.1-24b-instruct,@cf/meta/llama-3.3-70b-instruct-fp8-fast,@cf/meta/llama-4-scout-17b-16e-instruct',
+).split(',')
 
 // category: every card is in it. maxPrice: every card at or under it (USD).
 // tool: that tool was called. includes: those ids are among the cards.
@@ -96,7 +96,7 @@ for (const model of MODELS) {
     for (let run = 0; run < RUNS; run++) {
       const r = await ask(model, spec.q)
       const g = grade(spec, r)
-      results.push({ model, q: spec.q, run, ms: r.ms, status: r.status, error: r.error, ...g })
+      results.push({ model, q: spec.q, run, ms: r.ms, status: r.status, error: r.error, truncated: r.truncated, ...g })
       process.stdout.write(g.pass ? '.' : 'x')
     }
   }
@@ -129,7 +129,8 @@ const failures = results
   .map((r) => {
     const failed = Object.entries(r.checks).filter(([, ok]) => !ok).map(([k]) => k).join(', ')
     const extra = r.invented.length ? ` invented: ${r.invented.join(', ')}` : ''
-    return `- **${short(r.model)}** · "${r.q}" · failed: ${failed}${extra} · cards: ${r.cards.join(', ') || 'none'}${r.error ? ` · error: ${r.error}` : ''}`
+    const why = r.error ? ` · error: ${r.error}` : r.status !== 200 ? ` · HTTP ${r.status}` : r.truncated ? ' · ran out of steps' : ''
+    return `- **${short(r.model)}** · "${r.q}" · failed: ${failed}${extra} · cards: ${r.cards.join(', ') || 'none'}${why}`
   })
   .join('\n')
 

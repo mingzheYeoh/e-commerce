@@ -26,8 +26,9 @@ export const EVAL_MODELS = [
   DEFAULT_MODEL,
   '@cf/meta/llama-3.3-70b-instruct-fp8-fast',
   '@cf/meta/llama-4-scout-17b-16e-instruct',
-  '@cf/zai-org/glm-5.3-flash',
-  '@cf/moonshotai/kimi-k2.6',
+  // @cf/zai-org/glm-5.3-flash and @cf/moonshotai/kimi-k2.6 also call tools,
+  // but Workers AI refuses them on the Free plan (AiError 5035); add them back
+  // after an upgrade to Workers Paid.
 ] as const
 
 export function chooseModel(env: { ALLOW_MODEL_OVERRIDE?: string }, requested: unknown): string {

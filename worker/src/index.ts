@@ -238,10 +238,19 @@ export default {
         if (typeof question !== 'string' || !question.trim()) {
           return json({ error: 'question is required' }, { status: 400, headers })
         }
-        return json(
-          await converse(env, question, Array.isArray(history) ? history : [], chooseModel(env, model)),
-          { headers },
-        )
+        try {
+          return json(
+            await converse(env, question, Array.isArray(history) ? history : [], chooseModel(env, model)),
+            { headers },
+          )
+        } catch (err) {
+          // Workers AI refuses once the account's daily allocation is spent
+          // (shared by staging and production), or when a model is not on the
+          // plan. That is "busy, try later", not a crash: 503, and the page
+          // says so while search keeps working in the browser.
+          console.error('assistant unavailable', err)
+          return json({ error: 'The assistant is unavailable right now.', code: 'busy' }, { status: 503, headers })
+        }
       }
 
       /*
