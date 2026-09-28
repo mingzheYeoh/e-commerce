@@ -150,6 +150,7 @@ onUnmounted(() => document.removeEventListener('keydown', onKeydown))
       <div
         v-if="ui.searchOpen"
         class="fixed inset-0 z-[80] flex items-start justify-center bg-black/70 px-4 pt-[10vh] backdrop-blur-sm"
+        data-lenis-prevent
         @click.self="ui.closeSearch()"
       >
         <div
@@ -166,7 +167,7 @@ onUnmounted(() => document.removeEventListener('keydown', onKeydown))
               type="text"
               placeholder="Search, or describe what you need…"
               aria-label="Search products, or describe what you need"
-              class="w-full bg-transparent text-sm text-text-primary placeholder:text-text-muted focus:outline-none"
+              class="w-full bg-transparent text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus-visible:ring-0"
             />
             <kbd
               class="shrink-0 rounded border border-border-hairline px-1.5 text-[10px] leading-4 text-text-muted"
@@ -210,7 +211,7 @@ onUnmounted(() => document.removeEventListener('keydown', onKeydown))
 
           <ul
             v-if="rows.length"
-            class="max-h-[46vh] divide-y divide-border-hairline overflow-y-auto"
+            class="max-h-[46vh] divide-y divide-border-hairline overflow-y-auto overscroll-contain"
           >
             <li v-for="(row, index) in rows" :key="row.product.id">
               <div

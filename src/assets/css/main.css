@@ -30,7 +30,8 @@
   /* Text fields turn their own border blue on focus. The offset ring above,
      drawn around that border, read as blue line, black gap, blue line: a
      second frame inside the first. A soft halo flush with the border makes
-     one edge instead. */
+     one edge instead. A bare field inside a box that already lights up with
+     focus-within (search palette, Ask, chat) opts out with ring-0. */
   :where(input:not([type='checkbox']):not([type='radio']), select, textarea):focus-visible {
     @apply outline-none ring-[3px] ring-accent/30 ring-offset-0;
   }

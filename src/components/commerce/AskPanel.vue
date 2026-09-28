@@ -81,7 +81,7 @@ onMounted(async () => {
           v-model="question"
           type="text"
           placeholder="Ask about specs, compatibility or comparisons…"
-          class="w-full bg-transparent text-sm text-text-primary placeholder:text-text-muted focus:outline-none"
+          class="w-full bg-transparent text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus-visible:ring-0"
         />
         <button
           type="submit"
