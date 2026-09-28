@@ -283,7 +283,13 @@
   animation-direction: reverse;
   animation-duration: 75s;
 }
-.marquee:hover .marquee-track,
+/* Hover pause for mice only: on touch a tap leaves :hover stuck and the
+   marquee would stay frozen until the next tap elsewhere. */
+@media (hover: hover) {
+  .marquee:hover .marquee-track {
+    animation-play-state: paused;
+  }
+}
 .marquee:focus-within .marquee-track {
   animation-play-state: paused;
 }
