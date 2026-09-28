@@ -1,4 +1,4 @@
-import { createRouter, createWebHistory } from 'vue-router'
+import { createRouter, createWebHistory, START_LOCATION } from 'vue-router'
 
 export const router = createRouter({
   history: createWebHistory(),
@@ -30,6 +30,9 @@ export const router = createRouter({
       component: () => import('@/pages/NotFoundPage.vue'),
     },
   ],
-  // Land at the top of a new page, but restore position on back/forward.
-  scrollBehavior: (_to, _from, saved) => saved ?? { top: 0 },
+  // Land at the top of a new page, but restore position on back/forward. A
+  // reload is the one navigation that carries a saved position yet should not
+  // use it: the router keeps it in history.state, so a refresh would reopen
+  // halfway down the page.
+  scrollBehavior: (_to, from, saved) => (from === START_LOCATION ? { top: 0 } : (saved ?? { top: 0 })),
 })
