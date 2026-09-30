@@ -1,0 +1,2054 @@
+{
+  "checked": "2026-09-30",
+  "note": "Manufacturers' published figures, from the pages listed per product. Where a figure differs by market, the value says so. Anything a source did not state was left out rather than guessed.",
+  "products": [
+    {
+      "id": "galaxy-s26-ultra",
+      "summary": [
+        "6.9\" QHD+ 120Hz display",
+        "200MP f/1.4 main camera",
+        "60W wired, 25W wireless"
+      ],
+      "specs": [
+        [
+          "Display",
+          "6.9in QHD+ Dynamic AMOLED 2X, 3120×1440, 1–120Hz adaptive, 2,600 nits"
+        ],
+        [
+          "Privacy",
+          "Built-in Privacy Display"
+        ],
+        [
+          "Chip",
+          "Snapdragon 8 Elite Gen 5 for Galaxy"
+        ],
+        [
+          "Memory",
+          "12GB RAM with 256GB or 512GB, 16GB RAM with 1TB"
+        ],
+        [
+          "Rear cameras",
+          "200MP wide f/1.4, 50MP ultrawide f/1.9, 50MP 5× telephoto f/2.9, 10MP 3× telephoto f/2.4"
+        ],
+        [
+          "Zoom",
+          "Up to 100× Space Zoom"
+        ],
+        [
+          "Front camera",
+          "12MP f/2.2"
+        ],
+        [
+          "Battery",
+          "5,000mAh, up to 31 hours video playback"
+        ],
+        [
+          "Charging",
+          "60W wired (up to 75% in about 30 min), 25W wireless"
+        ],
+        [
+          "Build",
+          "Armor Aluminum frame, Corning Gorilla Armor 2, IP68"
+        ],
+        [
+          "Size and weight",
+          "163.6 × 78.1 × 7.9 mm, 214 g"
+        ],
+        [
+          "S Pen",
+          "Built in"
+        ],
+        [
+          "Software",
+          "Android 16, One UI 8.5"
+        ]
+      ],
+      "sources": [
+        "https://news.samsung.com/my/samsung-unveils-galaxy-s26-series-the-most-intuitive-galaxy-ai-phone-yet",
+        "https://www.samsung.com/us/support/answer/ANS10010342/",
+        "https://www.samsung.com/us/smartphones/galaxy-s26-ultra/compare/"
+      ]
+    },
+    {
+      "id": "galaxy-s26",
+      "sku": "SAM-S26-104",
+      "summary": [
+        "6.3\" 120Hz AMOLED",
+        "50MP triple camera, 3× zoom",
+        "4,300mAh battery"
+      ],
+      "specs": [
+        [
+          "Display",
+          "6.3in FHD+ Dynamic AMOLED 2X, 1–120Hz adaptive"
+        ],
+        [
+          "Chip",
+          "Exynos 2600 in Malaysia; Snapdragon 8 Elite Gen 5 for Galaxy in some markets"
+        ],
+        [
+          "Memory",
+          "12GB RAM with 256GB or 512GB"
+        ],
+        [
+          "Rear cameras",
+          "50MP wide f/1.8, 12MP ultrawide f/2.2, 10MP 3× telephoto f/2.4"
+        ],
+        [
+          "Zoom",
+          "Up to 30× Space Zoom"
+        ],
+        [
+          "Front camera",
+          "12MP f/2.2"
+        ],
+        [
+          "Battery",
+          "4,300mAh"
+        ],
+        [
+          "Charging",
+          "25W wired (up to 55% in about 30 min), 15W wireless"
+        ],
+        [
+          "Durability",
+          "IP68"
+        ],
+        [
+          "Size and weight",
+          "149.6 × 71.5 × 7.2 mm, 167 g"
+        ],
+        [
+          "Software",
+          "Android 16, One UI 8.5"
+        ]
+      ],
+      "sources": [
+        "https://news.samsung.com/my/samsung-unveils-galaxy-s26-series-the-most-intuitive-galaxy-ai-phone-yet",
+        "https://www.samsung.com/us/support/answer/ANS10010342/"
+      ]
+    },
+    {
+      "id": "iphone-18-pro",
+      "summary": [
+        "48MP triple Fusion camera",
+        "A20 Pro chip",
+        "Up to 36h video playback"
+      ],
+      "specs": [
+        [
+          "Display",
+          "6.3in Super Retina XDR OLED, 2622×1206, ProMotion up to 120Hz, 3,000 nits outdoor"
+        ],
+        [
+          "Chip",
+          "A20 Pro, 6-core CPU (2 super + 4 efficiency), 7-core GPU"
+        ],
+        [
+          "Neural Engine",
+          "Dual 16-core"
+        ],
+        [
+          "Rear cameras",
+          "48MP Fusion main f/1.48–f/4.0, 48MP ultra wide f/2.2, 48MP 4× telephoto f/2.8"
+        ],
+        [
+          "Front camera",
+          "18MP Center Stage f/1.9"
+        ],
+        [
+          "Battery",
+          "Up to 36 hours video playback"
+        ],
+        [
+          "Charging",
+          "Up to 50% in about 15 min with a 60W adapter; MagSafe and Qi2 up to 25W"
+        ],
+        [
+          "Storage",
+          "256GB / 512GB / 1TB / 2TB"
+        ],
+        [
+          "SIM",
+          "Nano-SIM and eSIM (Malaysian model)"
+        ],
+        [
+          "Build",
+          "Aluminium unibody, IP68 (6 m for 30 min)"
+        ],
+        [
+          "Size and weight",
+          "150.0 × 71.9 × 8.75 mm, 211 g"
+        ]
+      ],
+      "sources": [
+        "https://www.apple.com/iphone-18-pro/specs/",
+        "https://www.apple.com/my/iphone-18-pro/specs/"
+      ]
+    },
+    {
+      "id": "iphone-18-pro-max",
+      "summary": [
+        "48MP triple Fusion camera",
+        "6.9\" ProMotion display",
+        "Up to 45h video playback"
+      ],
+      "specs": [
+        [
+          "Display",
+          "6.9in Super Retina XDR OLED, 2868×1320, ProMotion up to 120Hz, 3,000 nits outdoor"
+        ],
+        [
+          "Chip",
+          "A20 Pro, 6-core CPU (2 super + 4 efficiency), 7-core GPU"
+        ],
+        [
+          "Neural Engine",
+          "Dual 16-core"
+        ],
+        [
+          "Rear cameras",
+          "48MP Fusion main f/1.48–f/4.0, 48MP ultra wide f/2.2, 48MP 4× telephoto f/2.8"
+        ],
+        [
+          "Front camera",
+          "18MP Center Stage f/1.9"
+        ],
+        [
+          "Battery",
+          "Up to 45 hours video playback"
+        ],
+        [
+          "Charging",
+          "Up to 50% in about 15 min with a 60W adapter; MagSafe and Qi2 up to 25W"
+        ],
+        [
+          "Storage",
+          "256GB / 512GB / 1TB / 2TB"
+        ],
+        [
+          "SIM",
+          "Nano-SIM and eSIM (Malaysian model)"
+        ],
+        [
+          "Build",
+          "Aluminium unibody, IP68 (6 m for 30 min)"
+        ],
+        [
+          "Size and weight",
+          "163.4 × 78.0 × 8.75 mm, 249 g"
+        ]
+      ],
+      "sources": [
+        "https://www.apple.com/iphone-18-pro/specs/",
+        "https://www.apple.com/my/iphone-18-pro/specs/"
+      ]
+    },
+    {
+      "id": "oneplus-15",
+      "summary": [
+        "7,300mAh battery",
+        "165Hz 1.5K LTPO display",
+        "120W wired, 50W wireless"
+      ],
+      "specs": [
+        [
+          "Display",
+          "6.78in 1.5K LTPO AMOLED, 2772×1272, up to 165Hz in games (1–120Hz otherwise), 1,800 nits"
+        ],
+        [
+          "Glass",
+          "Corning Gorilla Glass Victus 2"
+        ],
+        [
+          "Chip",
+          "Snapdragon 8 Elite Gen 5"
+        ],
+        [
+          "Memory",
+          "12GB RAM with 256GB, 16GB RAM with 512GB"
+        ],
+        [
+          "Rear cameras",
+          "50MP main with OIS, 50MP ultrawide with autofocus, 50MP 3.5× periscope telephoto"
+        ],
+        [
+          "Front camera",
+          "32MP"
+        ],
+        [
+          "Battery",
+          "7,300mAh Silicon NanoStack"
+        ],
+        [
+          "Charging",
+          "120W wired (80W in the US and Canada), 50W wireless"
+        ],
+        [
+          "Durability",
+          "IP66, IP68, IP69 and IP69K"
+        ],
+        [
+          "Weight",
+          "211–215 g, by colour"
+        ],
+        [
+          "Software",
+          "OxygenOS 16, Android 16"
+        ]
+      ],
+      "sources": [
+        "https://www.oneplus.com/us/press/press-release/oneplus-launches-the-oneplus-15--the-ultimate-performance-flagship-smartphone-for-north-america",
+        "https://www.oneplus.com/us/15/specs"
+      ]
+    },
+    {
+      "id": "phone-3a",
+      "summary": [
+        "50MP 3× periscope camera",
+        "6.77\" 120Hz AMOLED",
+        "5,000mAh, 50W charging"
+      ],
+      "specs": [
+        [
+          "Display",
+          "6.77in AMOLED, 120Hz adaptive, 3,000 nits peak"
+        ],
+        [
+          "Chip",
+          "Snapdragon 7s Gen 3"
+        ],
+        [
+          "Memory",
+          "12GB RAM, 256GB storage"
+        ],
+        [
+          "Rear cameras",
+          "50MP main, 50MP periscope (Sony LYTIA 600, OIS), 8MP ultrawide"
+        ],
+        [
+          "Zoom",
+          "3× optical, 6× lossless, up to 60× ultra zoom"
+        ],
+        [
+          "Battery",
+          "5,000mAh"
+        ],
+        [
+          "Charging",
+          "50W wired"
+        ],
+        [
+          "Glyph",
+          "Glyph Interface light strips"
+        ],
+        [
+          "Durability",
+          "IP64"
+        ]
+      ],
+      "sources": [
+        "https://nothing.tech/products/phone-3a-pro",
+        "https://intl.nothing.tech/products/phone-3a-pro"
+      ]
+    },
+    {
+      "id": "pixel-11-pro",
+      "summary": [
+        "Google Tensor G6",
+        "50MP + 48MP 5× telephoto",
+        "7 years of updates"
+      ],
+      "specs": [
+        [
+          "Display",
+          "6.3in Super Actua LTPO OLED, 2856×1280, 1–120Hz, 3,600 nits peak"
+        ],
+        [
+          "Chip",
+          "Google Tensor G6, Titan M3 security"
+        ],
+        [
+          "Memory",
+          "12GB RAM with 256GB, 16GB RAM with 512GB or 1TB"
+        ],
+        [
+          "Rear cameras",
+          "50MP wide f/1.68, 48MP ultrawide f/1.7, 48MP 5× telephoto f/2.8"
+        ],
+        [
+          "Zoom",
+          "Pro Zoom up to 120×"
+        ],
+        [
+          "Front camera",
+          "42MP with autofocus, f/2.2"
+        ],
+        [
+          "Battery",
+          "4,850mAh typical"
+        ],
+        [
+          "Charging",
+          "30W wired (up to 55% in about 30 min), 25W wireless"
+        ],
+        [
+          "Durability",
+          "IP68"
+        ],
+        [
+          "Size and weight",
+          "152.7 × 71.9 × 8.4 mm, 204 g"
+        ],
+        [
+          "Software",
+          "Android 17, 7 years of OS and security updates"
+        ]
+      ],
+      "sources": [
+        "https://support.google.com/pixelphone/answer/7158570?hl=en",
+        "https://store.google.com/product/pixel_11_pro_specs?hl=en-US"
+      ]
+    },
+    {
+      "id": "xiaomi-17-ultra",
+      "summary": [
+        "1-inch Leica main camera",
+        "200MP 75–100mm telephoto",
+        "6,000mAh, 90W charging"
+      ],
+      "specs": [
+        [
+          "Display",
+          "6.9in HyperRGB OLED, 2608×1200, 1–120Hz, 3,500 nits peak"
+        ],
+        [
+          "Chip",
+          "Snapdragon 8 Elite Gen 5"
+        ],
+        [
+          "Main camera",
+          "Leica 23mm, 50MP Light Fusion 1050L 1in sensor, f/1.67"
+        ],
+        [
+          "Telephoto",
+          "Leica 200MP, 75–100mm continuous optical zoom, APO lens"
+        ],
+        [
+          "Ultrawide",
+          "Leica 14mm"
+        ],
+        [
+          "Battery",
+          "6,000mAh typical"
+        ],
+        [
+          "Charging",
+          "90W wired, 50W wireless"
+        ],
+        [
+          "Weight",
+          "From 218.4 g"
+        ]
+      ],
+      "sources": [
+        "https://www.mi.com/global/product/xiaomi-17-ultra/",
+        "https://www.mi.com/uk/product/xiaomi-17-ultra/specs/"
+      ]
+    },
+    {
+      "id": "airpods-max",
+      "title": "AirPods Max 2",
+      "summary": [
+        "H2 chip in each ear cup",
+        "Lossless audio over USB-C",
+        "20 hours with ANC"
+      ],
+      "specs": [
+        [
+          "Chip",
+          "Apple H2 headphone chip in each ear cup"
+        ],
+        [
+          "Driver",
+          "Apple-designed dynamic driver"
+        ],
+        [
+          "Noise control",
+          "Active Noise Cancellation, Transparency, Conversation Awareness, Voice Isolation, Loud Sound Reduction"
+        ],
+        [
+          "Audio",
+          "Personalized Spatial Audio with dynamic head tracking, Adaptive Audio, Adaptive EQ"
+        ],
+        [
+          "Wired audio",
+          "Lossless and ultra-low-latency audio over USB-C"
+        ],
+        [
+          "Battery",
+          "Up to 20 hours with ANC; 5 min charge for about 1.5 hours"
+        ],
+        [
+          "Weight",
+          "386.2 g"
+        ],
+        [
+          "In the box",
+          "Smart Case, USB-C charge cable"
+        ]
+      ],
+      "sources": [
+        "https://www.apple.com/airpods-max/specs/"
+      ]
+    },
+    {
+      "id": "cmf-buds",
+      "title": "CMF Buds Pro 2",
+      "summary": [
+        "50dB hybrid ANC",
+        "11mm + 6mm dual drivers",
+        "Up to 43h with case"
+      ],
+      "specs": [
+        [
+          "Noise control",
+          "Hybrid ANC up to 50dB"
+        ],
+        [
+          "Drivers",
+          "11mm + 6mm dual drivers"
+        ],
+        [
+          "Microphones",
+          "6 HD mics"
+        ],
+        [
+          "Codec",
+          "LDAC, AAC"
+        ],
+        [
+          "Battery",
+          "Up to 43 hours with case (ANC off), 26 hours with ANC on"
+        ],
+        [
+          "Case",
+          "Smart Dial controls"
+        ],
+        [
+          "Water resistance",
+          "IP55"
+        ]
+      ],
+      "sources": [
+        "https://us.nothing.tech/products/cmf-buds-pro-2",
+        "https://support.nothing.tech/hc/en-us/articles/26468705886993-How-long-is-the-battery-life-of-CMF-Buds-Pro-2"
+      ]
+    },
+    {
+      "id": "ear-open",
+      "summary": [
+        "Open-ear: hear what's around you",
+        "IP54 rated",
+        "30 hours with case"
+      ],
+      "specs": [
+        [
+          "Design",
+          "Open-ear, ear-hook fit"
+        ],
+        [
+          "Driver",
+          "14.2mm dynamic"
+        ],
+        [
+          "Battery",
+          "8 hours buds, 30 hours with case"
+        ],
+        [
+          "Battery capacity",
+          "64mAh per bud, 635mAh case"
+        ],
+        [
+          "Water resistance",
+          "IP54"
+        ],
+        [
+          "Codec",
+          "AAC, SBC"
+        ],
+        [
+          "Weight",
+          "8.1 g per bud"
+        ]
+      ],
+      "sources": [
+        "https://us.nothing.tech/products/ear-open",
+        "https://support.nothing.tech/hc/en-us/articles/28228798294033-What-s-the-battery-life-of-Ear-open",
+        "https://support.nothing.tech/hc/en-us/articles/28228812789137-What-audio-formats-does-Ear-open-support"
+      ]
+    },
+    {
+      "id": "galaxy-buds",
+      "summary": [
+        "Adaptive ANC 2.0",
+        "24-bit/96kHz Hi-Fi audio",
+        "IP57 rated"
+      ],
+      "specs": [
+        [
+          "Drivers",
+          "2-way woofer and tweeter, each with its own amplifier"
+        ],
+        [
+          "Noise control",
+          "Adaptive ANC 2.0"
+        ],
+        [
+          "Hi-Fi audio",
+          "24-bit/96kHz with SSC UHQ on eligible Galaxy devices; LC3 over LE Audio"
+        ],
+        [
+          "Battery",
+          "About 6 hours with ANC, 30 hours with case"
+        ],
+        [
+          "Water resistance",
+          "IP57"
+        ]
+      ],
+      "sources": [
+        "https://www.samsung.com/us/audio-sound/galaxy-buds4-pro/",
+        "https://news.samsung.com/global/samsung-unveils-all-new-galaxy-buds4-series-with-ultimate-sound"
+      ]
+    },
+    {
+      "id": "hd900s",
+      "title": "HD 800 S",
+      "sku": "SEN-HD800S-113",
+      "price": 1999.95,
+      "summary": [
+        "56mm ring radiator drivers",
+        "4Hz – 51kHz response",
+        "Open-back, 300 Ω"
+      ],
+      "specs": [
+        [
+          "Transducer",
+          "56mm ring radiator dynamic"
+        ],
+        [
+          "Design",
+          "Open-back, circumaural"
+        ],
+        [
+          "Frequency response",
+          "4Hz – 51,000Hz"
+        ],
+        [
+          "Impedance",
+          "300 Ω"
+        ],
+        [
+          "Sound pressure level",
+          "102 dB (1 V)"
+        ],
+        [
+          "THD",
+          "Under 0.02% (1 kHz, 1 Vrms)"
+        ],
+        [
+          "Cables",
+          "3m with 6.35mm plug, 3m with 4.4mm balanced plug"
+        ],
+        [
+          "Weight",
+          "330 g"
+        ]
+      ],
+      "sources": [
+        "https://us.sennheiser-hearing.com/products/hd-800-s"
+      ]
+    },
+    {
+      "id": "momentum-4",
+      "price": 299.95,
+      "summary": [
+        "60-hour battery",
+        "Hybrid adaptive ANC",
+        "aptX Adaptive"
+      ],
+      "specs": [
+        [
+          "Driver",
+          "42mm dynamic"
+        ],
+        [
+          "Battery",
+          "Up to 60 hours with ANC; 5 min charge for up to 4 hours"
+        ],
+        [
+          "Noise control",
+          "Hybrid adaptive ANC"
+        ],
+        [
+          "Codec",
+          "aptX Adaptive, aptX, AAC, SBC"
+        ],
+        [
+          "Frequency",
+          "6Hz – 22kHz"
+        ],
+        [
+          "Microphones",
+          "4, beamforming (2 per side)"
+        ],
+        [
+          "Bluetooth",
+          "5.2"
+        ],
+        [
+          "In the box",
+          "Carry case, USB-C cable, audio cable"
+        ]
+      ],
+      "sources": [
+        "https://us.sennheiser-hearing.com/products/momentum-4-wireless"
+      ]
+    },
+    {
+      "id": "ob4-speaker",
+      "summary": [
+        "Two 38-watt class-D amps",
+        "2-hour rolling recording",
+        "Up to 72h on FM radio"
+      ],
+      "specs": [
+        [
+          "Drivers",
+          "Long-throw neodymium woofers, ferrofluid-cooled neodymium tweeters"
+        ],
+        [
+          "Amplifier",
+          "2 × 38 watts, class D"
+        ],
+        [
+          "Recording",
+          "Always-on 2-hour rolling buffer"
+        ],
+        [
+          "Sources",
+          "FM radio, Bluetooth (AAC), 3.5mm line in, disk modes"
+        ],
+        [
+          "Battery",
+          "Up to 72 hours (FM, normal volume), 8 hours (Bluetooth, high volume)"
+        ],
+        [
+          "Controls",
+          "Motorised tape reel and volume knob"
+        ],
+        [
+          "Build",
+          "Glass-fibre reinforced PC and milled aluminium"
+        ],
+        [
+          "Size and weight",
+          "232.5 × 284 × 57.5 mm, 1.7 kg"
+        ]
+      ],
+      "sources": [
+        "https://teenage.engineering/products/ob-4"
+      ]
+    },
+    {
+      "id": "op1-field",
+      "summary": [
+        "32-bit audio engine",
+        "24-hour battery",
+        "Bluetooth MIDI, FM radio"
+      ],
+      "specs": [
+        [
+          "Engine",
+          "32-bit audio throughout"
+        ],
+        [
+          "Battery",
+          "24 hours"
+        ],
+        [
+          "Synthesis",
+          "8 stereo engines: Cluster, Digital, FM, Phase, Pulse, String, Voltage, Dimension"
+        ],
+        [
+          "Tape",
+          "Up to 8 swappable stereo tapes"
+        ],
+        [
+          "Sampling",
+          "Up to 20 seconds per sample"
+        ],
+        [
+          "Connectivity",
+          "Bluetooth MIDI, USB-C audio interface, FM radio (receive and transmit)"
+        ],
+        [
+          "Display",
+          "High-resolution, under hardened glass"
+        ],
+        [
+          "Size and weight",
+          "300 × 120 × 20 mm, 590 g"
+        ]
+      ],
+      "sources": [
+        "https://teenage.engineering/products/op-1"
+      ]
+    },
+    {
+      "id": "open-earbuds",
+      "summary": [
+        "Open-ear: hear what's around you",
+        "Up to 7h, 19.5h more in case",
+        "IPX4 sweat resistant"
+      ],
+      "specs": [
+        [
+          "Design",
+          "Open-ear cuff, nothing in the ear canal"
+        ],
+        [
+          "Battery",
+          "Up to 7 hours, 4 hours with Immersive Audio"
+        ],
+        [
+          "Case",
+          "Up to 19.5 extra hours"
+        ],
+        [
+          "Water resistance",
+          "IPX4"
+        ],
+        [
+          "Codec",
+          "AAC, SBC"
+        ],
+        [
+          "Controls",
+          "Buttons, customisable in the Bose app"
+        ],
+        [
+          "Weight",
+          "About 6.4 g (0.014 lb) per earbud"
+        ]
+      ],
+      "sources": [
+        "https://www.bose.com/p/earbuds/bose-ultra-open-earbuds/ULT-HEADPHONEOPN.html"
+      ]
+    },
+    {
+      "id": "qc-ultra",
+      "title": "QuietComfort Ultra Headphones (2nd Gen)",
+      "price": 449,
+      "summary": [
+        "30-hour battery with ANC",
+        "Lossless USB-C audio",
+        "CustomTune, Cinema Mode"
+      ],
+      "specs": [
+        [
+          "Noise control",
+          "CustomTune noise cancelling"
+        ],
+        [
+          "Audio",
+          "Immersive Audio with Cinema Mode"
+        ],
+        [
+          "Battery",
+          "Up to 30 hours with ANC, 23 with Immersive Audio, 45 with ANC off"
+        ],
+        [
+          "Wired audio",
+          "Lossless over USB-C (16-bit, 44.1/48kHz)"
+        ],
+        [
+          "Codec",
+          "aptX Adaptive, AAC, SBC"
+        ]
+      ],
+      "sources": [
+        "https://www.bose.com/pressroom/bose-unveils-the-next-generation-of-the-quietcomfort-ultra-headphones"
+      ]
+    },
+    {
+      "id": "soundcore-liberty",
+      "summary": [
+        "Adaptive ANC 3.0",
+        "48 hours with case",
+        "LDAC Hi-Res audio"
+      ],
+      "specs": [
+        [
+          "Drivers",
+          "9.2mm wool-paper diaphragm"
+        ],
+        [
+          "Noise control",
+          "Adaptive ANC 3.0, adjusts every 0.3 s"
+        ],
+        [
+          "Battery",
+          "12 hours buds, 48 with case; 8 and 32 with ANC"
+        ],
+        [
+          "Quick charge",
+          "10 min for 5 hours"
+        ],
+        [
+          "Codec",
+          "LDAC Hi-Res"
+        ],
+        [
+          "Microphones",
+          "6, with AI wind reduction"
+        ],
+        [
+          "Water resistance",
+          "IP55"
+        ],
+        [
+          "Bluetooth",
+          "5.4"
+        ],
+        [
+          "Charging",
+          "USB-C and wireless"
+        ]
+      ],
+      "sources": [
+        "https://www.soundcore.com/products/a3957-liberty-5-tws-earbuds"
+      ]
+    },
+    {
+      "id": "soundlink-max",
+      "summary": [
+        "20-hour battery",
+        "IP67 rated",
+        "aptX Adaptive"
+      ],
+      "specs": [
+        [
+          "Drivers",
+          "3 transducers, 2 passive radiators"
+        ],
+        [
+          "Battery",
+          "Up to 20 hours"
+        ],
+        [
+          "Durability",
+          "IP67 water and dust resistant"
+        ],
+        [
+          "Codec",
+          "aptX Adaptive (Snapdragon Sound), AAC, SBC"
+        ],
+        [
+          "Connectivity",
+          "Bluetooth 5.3, 3.5mm aux in"
+        ],
+        [
+          "Power out",
+          "USB-C charges a phone"
+        ],
+        [
+          "Handle",
+          "Removable rope handle"
+        ],
+        [
+          "Size and weight",
+          "265 × 120 × 105 mm, just under 5 lb"
+        ]
+      ],
+      "sources": [
+        "https://www.bose.com/pressroom/bose-soundlink-max"
+      ]
+    },
+    {
+      "id": "tp7-recorder",
+      "summary": [
+        "128GB internal storage",
+        "Motorised tape reel",
+        "7-hour battery"
+      ],
+      "specs": [
+        [
+          "Storage",
+          "128GB internal"
+        ],
+        [
+          "Battery",
+          "7 hours, rechargeable"
+        ],
+        [
+          "Reel",
+          "Motorised tape reel with a brushless motor"
+        ],
+        [
+          "Jacks",
+          "3 × 3.5mm stereo in/out (TRRS), 3.5mm headphone out"
+        ],
+        [
+          "USB-C",
+          "Multichannel audio interface, MIDI, data and charging"
+        ],
+        [
+          "Microphone",
+          "Built in"
+        ],
+        [
+          "Transcription",
+          "In the TP–7 app"
+        ],
+        [
+          "Size and weight",
+          "96 × 68 × 16 mm, 170 g"
+        ]
+      ],
+      "sources": [
+        "https://teenage.engineering/products/tp-7"
+      ]
+    },
+    {
+      "id": "wh1000xm6",
+      "summary": [
+        "QN3 processor, 12 mics",
+        "30-hour battery with NC",
+        "LDAC Hi-Res audio"
+      ],
+      "specs": [
+        [
+          "Processor",
+          "HD Noise Cancelling Processor QN3"
+        ],
+        [
+          "Microphones",
+          "12"
+        ],
+        [
+          "Driver",
+          "Carbon fibre composite dome"
+        ],
+        [
+          "Battery",
+          "Up to 30 hours with NC, 40 with NC off"
+        ],
+        [
+          "Charging time",
+          "About 3.5 hours"
+        ],
+        [
+          "Codec",
+          "LDAC, AAC, SBC, LC3"
+        ],
+        [
+          "Frequency",
+          "4Hz – 40,000Hz (wired)"
+        ],
+        [
+          "Bluetooth",
+          "5.3, multipoint with 2 devices"
+        ],
+        [
+          "Weight",
+          "254 g"
+        ]
+      ],
+      "sources": [
+        "https://helpguide.sony.net/mdr/2984/v1/en/contents/TP1001863304.html",
+        "https://www.sony.co.uk/presscentre/sony-introduces-the-next-evolution-of-noise-cancelling-with-the-wh-1000xm6"
+      ]
+    },
+    {
+      "id": "blade-16",
+      "title": "Blade 16 (2026)",
+      "summary": [
+        "Up to RTX 5090 Laptop GPU",
+        "16\" QHD+ 240Hz OLED",
+        "Intel Core Ultra 9 386H"
+      ],
+      "specs": [
+        [
+          "CPU",
+          "Intel Core Ultra 9 386H, 16 cores, up to 4.9GHz"
+        ],
+        [
+          "GPU",
+          "Up to NVIDIA GeForce RTX 5090 Laptop, up to 165 watts TGP"
+        ],
+        [
+          "Display",
+          "16in QHD+ OLED, up to 240Hz, DisplayHDR True Black 1000, up to 1,100 nits"
+        ],
+        [
+          "Memory",
+          "Up to 64GB LPDDR5-9600"
+        ],
+        [
+          "Thickness and weight",
+          "14.9 mm, about 2.14 kg"
+        ]
+      ],
+      "sources": [
+        "https://www.razer.com/newsroom/product-news/2026-blade-16",
+        "https://www.razer.com/gaming-laptops/razer-blade-16"
+      ]
+    },
+    {
+      "id": "gan-charger",
+      "title": "Prime Charger (250W, 6 Ports)",
+      "summary": [
+        "250W across six ports",
+        "140W from a single USB-C",
+        "LCD with control dial"
+      ],
+      "specs": [
+        [
+          "Output",
+          "250W total"
+        ],
+        [
+          "Ports",
+          "4× USB-C, 2× USB-A"
+        ],
+        [
+          "Fast charge",
+          "Up to 140W from USB-C 1"
+        ],
+        [
+          "Display",
+          "2.26in LCD with smart control dial"
+        ],
+        [
+          "Safety",
+          "ActiveShield 3.0"
+        ],
+        [
+          "Technology",
+          "GaNPrime, PowerIQ 4.0"
+        ]
+      ],
+      "sources": [
+        "https://www.anker.com/products/a2345-anker-prime-charger-250w-6-ports-ganprime"
+      ]
+    },
+    {
+      "id": "prime-powerbank",
+      "title": "Prime Power Bank (26K, 300W)",
+      "sku": "ANK-P26-124",
+      "price": 229.99,
+      "summary": [
+        "300W total output",
+        "26,250mAh, 99.75Wh",
+        "250W fast recharge"
+      ],
+      "specs": [
+        [
+          "Capacity",
+          "26,250mAh (99.75Wh)"
+        ],
+        [
+          "Output",
+          "300W total"
+        ],
+        [
+          "Ports",
+          "2× USB-C up to 140W each, 1× USB-A up to 22.5W"
+        ],
+        [
+          "Recharge",
+          "250W over both USB-C ports; 50% in 13 min, 80% in 40 min"
+        ],
+        [
+          "Display",
+          "Smart display, app control over Bluetooth"
+        ],
+        [
+          "Safety",
+          "ActiveShield 4.0"
+        ],
+        [
+          "Airline",
+          "Under the 100Wh carry-on limit"
+        ],
+        [
+          "Size and weight",
+          "159.9 × 38 × 62.7 mm, 600 g"
+        ]
+      ],
+      "sources": [
+        "https://www.anker.com/products/a110a-anker-prime-26k-300w-power-bank"
+      ]
+    },
+    {
+      "id": "macbook-pro",
+      "summary": [
+        "M5 Pro, 18-core CPU",
+        "16.2\" Liquid Retina XDR",
+        "Up to 24h battery"
+      ],
+      "specs": [
+        [
+          "Chip",
+          "Apple M5 Pro, 18-core CPU (6 super + 12 performance), 20-core GPU"
+        ],
+        [
+          "Memory",
+          "24GB unified, up to 128GB with M5 Max"
+        ],
+        [
+          "Storage",
+          "1TB SSD, configurable to 2TB or 4TB"
+        ],
+        [
+          "Display",
+          "16.2in Liquid Retina XDR, 3456×2234, up to 120Hz"
+        ],
+        [
+          "Brightness",
+          "1,000 nits sustained full screen"
+        ],
+        [
+          "Battery",
+          "Up to 24 hours video streaming"
+        ],
+        [
+          "Ports",
+          "3× Thunderbolt 5, HDMI, SDXC, MagSafe 3"
+        ],
+        [
+          "Weight",
+          "2.14 kg"
+        ]
+      ],
+      "sources": [
+        "https://www.apple.com/macbook-pro/specs/"
+      ]
+    },
+    {
+      "id": "thinkpad-x1-carbon",
+      "summary": [
+        "Business ultralight, from 0.977 kg",
+        "2.8K 120Hz OLED option",
+        "Intel Core Ultra Series 3"
+      ],
+      "specs": [
+        [
+          "Processor",
+          "Intel Core Ultra Series 3, up to Core Ultra X7 368H"
+        ],
+        [
+          "Graphics",
+          "Intel Graphics or Intel Arc B390"
+        ],
+        [
+          "Display",
+          "14in WUXGA IPS, 500 nits; or 2.8K (2880×1800) OLED, 120Hz, DisplayHDR True Black 500"
+        ],
+        [
+          "Memory",
+          "16GB to 64GB LPDDR5X, soldered"
+        ],
+        [
+          "Storage",
+          "Up to 2TB PCIe SSD"
+        ],
+        [
+          "Ports",
+          "3× Thunderbolt 4, USB-A 5Gbps, HDMI, 3.5mm combo jack"
+        ],
+        [
+          "Battery",
+          "58Wh, up to 19.2 hours (MobileMark 30)"
+        ],
+        [
+          "Wireless",
+          "Wi-Fi 7, Bluetooth 5.4"
+        ],
+        [
+          "Weight",
+          "From 0.977 kg (2.15 lb)"
+        ]
+      ],
+      "sources": [
+        "https://psref.lenovo.com/syspool/Sys/PDF/ThinkPad/ThinkPad_X1_Carbon_Gen_14_Aura_Edition/ThinkPad_X1_Carbon_Gen_14_Aura_Edition_Spec.PDF",
+        "https://psref.lenovo.com/Product/ThinkPad_X1_Carbon_Gen_14_Aura_Edition"
+      ]
+    },
+    {
+      "id": "watch-ultra",
+      "title": "Apple Watch Ultra 4",
+      "sku": "APL-AWU4-103",
+      "summary": [
+        "49mm Grade 5 titanium",
+        "Up to 50h battery",
+        "100m water, 40m dive"
+      ],
+      "specs": [
+        [
+          "Case",
+          "49mm Grade 5 titanium"
+        ],
+        [
+          "Display",
+          "Always-On Retina, wide-angle OLED, LTPO3, 3,000 nits"
+        ],
+        [
+          "Chip",
+          "S11 SiP, 4-core Neural Engine, 64GB"
+        ],
+        [
+          "Battery",
+          "Up to 50 hours, 84 hours in Low Power Mode"
+        ],
+        [
+          "Water",
+          "100m; recreational scuba diving to 40m"
+        ],
+        [
+          "GPS",
+          "Precision dual-frequency (GPS, Galileo, QZSS, BeiDou)"
+        ],
+        [
+          "Sensors",
+          "Electrical and optical heart, blood oxygen, temperature, depth gauge, water temperature"
+        ],
+        [
+          "Connectivity",
+          "5G and LTE (cellular model), Wi-Fi 4, Bluetooth 5.3, second-generation Ultra Wideband"
+        ],
+        [
+          "Durability",
+          "MIL-STD 810H, IP6X dust"
+        ],
+        [
+          "Weight",
+          "63.0 g (Natural)"
+        ]
+      ],
+      "sources": [
+        "https://www.apple.com/apple-watch-ultra-4/specs/"
+      ]
+    },
+    {
+      "id": "xps-16",
+      "summary": [
+        "3.2K 120Hz OLED option",
+        "Intel Core Ultra Series 3",
+        "From 1.65 kg"
+      ],
+      "specs": [
+        [
+          "Processor",
+          "Intel Core Ultra 7 355, Core Ultra X7 358H or Core Ultra X9 388H"
+        ],
+        [
+          "Graphics",
+          "Intel integrated"
+        ],
+        [
+          "Display",
+          "16in 3.2K OLED touch, 20–120Hz, 400 nits; or 2K LCD, 1–120Hz, 500 nits"
+        ],
+        [
+          "Memory",
+          "16GB LPDDR5x, 7467 MT/s"
+        ],
+        [
+          "Storage",
+          "512GB to 4TB SSD"
+        ],
+        [
+          "Ports",
+          "3× Thunderbolt 4 (USB-C) with DisplayPort 2.1 and power delivery, 3.5mm jack"
+        ],
+        [
+          "Battery",
+          "70Wh"
+        ],
+        [
+          "Weight",
+          "From 1.65 kg (OLED)"
+        ]
+      ],
+      "sources": [
+        "https://www.dell.com/en-my/shop/laptop-notebook-computers/new-xps-16-laptop-2026/spd/xps-da16260-laptop"
+      ]
+    },
+    {
+      "id": "zenbook-duo",
+      "summary": [
+        "Two 14\" 3K 144Hz OLEDs",
+        "Up to Core Ultra X9 388H",
+        "99Wh battery"
+      ],
+      "specs": [
+        [
+          "Processor",
+          "Up to Intel Core Ultra X9 388H, 16 cores, up to 5.1GHz"
+        ],
+        [
+          "NPU",
+          "Up to 50 TOPS"
+        ],
+        [
+          "Displays",
+          "Two 14in 3K (2880×1800) Lumina Pro OLED touchscreens, 144Hz, 500 nits (1,000 HDR)"
+        ],
+        [
+          "Keyboard",
+          "Detachable, magnetic"
+        ],
+        [
+          "Stand",
+          "Built-in kickstand"
+        ],
+        [
+          "Battery",
+          "99Wh"
+        ],
+        [
+          "Ports",
+          "2× Thunderbolt 4, USB-A 10Gbps, HDMI 2.1"
+        ],
+        [
+          "Wireless",
+          "Wi-Fi 7, Bluetooth 5.4"
+        ],
+        [
+          "Chassis",
+          "Ceraluminum"
+        ]
+      ],
+      "sources": [
+        "https://press.asus.com/news/press-releases/asus-zenbook-duo-2026/",
+        "https://www.asus.com/us/laptops/for-home/zenbook/asus-zenbook-duo-ux8407/techspec/"
+      ]
+    },
+    {
+      "id": "zenbook-s14",
+      "summary": [
+        "50 TOPS NPU",
+        "14\" 3K 120Hz OLED",
+        "77Wh, up to 27h"
+      ],
+      "specs": [
+        [
+          "Processor",
+          "Intel Core Ultra 9 386H, 16 cores"
+        ],
+        [
+          "NPU",
+          "Up to 50 TOPS, Copilot+ PC"
+        ],
+        [
+          "Display",
+          "14in 3K Lumina OLED, 120Hz, 1,100 nits"
+        ],
+        [
+          "Memory",
+          "32GB RAM"
+        ],
+        [
+          "Storage",
+          "1TB SSD"
+        ],
+        [
+          "Battery",
+          "77Wh, up to 27 hours"
+        ],
+        [
+          "Thickness and weight",
+          "1.1 cm, 1.2 kg"
+        ]
+      ],
+      "sources": [
+        "https://press.asus.com/news/press-releases/zenbook-s14-2026/",
+        "https://www.asus.com/us/laptops/for-home/zenbook/asus-zenbook-s-14-ux5406/techspec/"
+      ]
+    },
+    {
+      "id": "alpha-7cr",
+      "summary": [
+        "61MP full-frame camera",
+        "7-stop in-body stabilisation",
+        "AI subject-tracking autofocus"
+      ],
+      "specs": [
+        [
+          "Sensor",
+          "61MP full-frame back-illuminated CMOS"
+        ],
+        [
+          "Stabilisation",
+          "5-axis in-body, 7.0 stops (CIPA)"
+        ],
+        [
+          "Autofocus",
+          "693 phase-detect points, AI subject recognition"
+        ],
+        [
+          "ISO",
+          "100–32,000, expandable 50–102,400"
+        ],
+        [
+          "Video",
+          "4K, oversampled from 6K"
+        ],
+        [
+          "Viewfinder",
+          "2.36M-dot OLED, 0.70×"
+        ],
+        [
+          "Weight",
+          "515 g with battery and card, 430 g body only"
+        ]
+      ],
+      "sources": [
+        "https://www.sony-asia.com/electronics/interchangeable-lens-cameras/ilce-7cr/specifications",
+        "https://helpguide.sony.net/ilc/2370/v1/en/contents/231h_specifications_ilc2370.html"
+      ]
+    },
+    {
+      "id": "brio-webcam",
+      "title": "Brio 4K Webcam",
+      "summary": [
+        "4K at 30fps with HDR",
+        "Windows Hello IR sign-in",
+        "65°, 78° or 90° view"
+      ],
+      "specs": [
+        [
+          "Resolution",
+          "4K at 30fps, 1080p at 60fps, 720p at 90fps"
+        ],
+        [
+          "Field of view",
+          "65°, 78° or 90°"
+        ],
+        [
+          "HDR",
+          "RightLight 3 with HDR"
+        ],
+        [
+          "Zoom",
+          "5× digital"
+        ],
+        [
+          "Security",
+          "Windows Hello IR face recognition"
+        ],
+        [
+          "Privacy",
+          "Flip-down privacy shutter"
+        ]
+      ],
+      "sources": [
+        "https://www.logitech.com/en-us/products/webcams/brio-4k-hdr-webcam.html",
+        "https://www.logitech.com/content/dam/logitech/en_us/video-collaboration/pdf/brio-datasheet.pdf"
+      ]
+    },
+    {
+      "id": "fx3-cinema",
+      "summary": [
+        "Full-frame cinema camera",
+        "4K 120p video",
+        "15+ stops dynamic range"
+      ],
+      "specs": [
+        [
+          "Sensor",
+          "Full-frame back-illuminated CMOS, 12.1MP stills"
+        ],
+        [
+          "Video",
+          "4K up to 120p"
+        ],
+        [
+          "Dynamic range",
+          "15+ stops, S-Cinetone and S-Log3"
+        ],
+        [
+          "ISO",
+          "80–102,400 for movies, expandable to 409,600"
+        ],
+        [
+          "Audio",
+          "XLR handle: 2 × XLR/TRS inputs plus 3.5mm"
+        ],
+        [
+          "Mount",
+          "Sony E-mount"
+        ],
+        [
+          "Size and weight",
+          "129.7 × 77.8 × 84.5 mm, 715 g with battery and card"
+        ]
+      ],
+      "sources": [
+        "https://helpguide.sony.net/ilc/2210/v1/en/contents/TP1000886922.html",
+        "https://pro.sony/ue_US/products/handheld-camcorders/ilme-fx3"
+      ]
+    },
+    {
+      "id": "mavic-4-pro",
+      "title": "Mavic 4 Pro",
+      "summary": [
+        "100MP 4/3 Hasselblad camera",
+        "6K/60fps video",
+        "51-minute flight"
+      ],
+      "specs": [
+        [
+          "Cameras",
+          "100MP 4/3 Hasselblad, 48MP 1/1.3in medium tele, 50MP 1/1.5in tele"
+        ],
+        [
+          "Video",
+          "6K up to 60fps, 4K up to 120fps"
+        ],
+        [
+          "Flight time",
+          "Up to 51 minutes"
+        ],
+        [
+          "Transmission",
+          "O4+, up to 30 km (FCC), 15 km (CE)"
+        ],
+        [
+          "Obstacle sensing",
+          "Omnidirectional vision, forward LiDAR, downward infrared"
+        ],
+        [
+          "Storage",
+          "64GB internal (512GB in the Creator Combo)"
+        ],
+        [
+          "Weight",
+          "About 1,063 g"
+        ]
+      ],
+      "sources": [
+        "https://www.dji.com/mavic-4-pro/specs"
+      ]
+    },
+    {
+      "id": "osmo-pocket",
+      "title": "Osmo Pocket 4",
+      "sku": "DJI-OP4-116",
+      "summary": [
+        "1-inch CMOS sensor",
+        "4K/60fps, 4K/240fps slow-mo",
+        "107GB built-in storage"
+      ],
+      "specs": [
+        [
+          "Sensor",
+          "1in CMOS"
+        ],
+        [
+          "Lens",
+          "20mm equivalent, f/2.0"
+        ],
+        [
+          "Video",
+          "4K up to 60fps; slow motion up to 4K/240fps"
+        ],
+        [
+          "Gimbal",
+          "3-axis mechanical"
+        ],
+        [
+          "Screen",
+          "2.0in, 556×314, 1,000 nits"
+        ],
+        [
+          "Storage",
+          "107GB built in"
+        ],
+        [
+          "Battery",
+          "240 min at 1080p/24fps; 80% in 18 min"
+        ],
+        [
+          "Audio",
+          "3 microphones"
+        ],
+        [
+          "Size and weight",
+          "144.2 × 44.4 × 33.5 mm, 190.5 g"
+        ]
+      ],
+      "sources": [
+        "https://www.dji.com/osmo-pocket-4/specs",
+        "https://support.dji.com/help/content?customId=01700043653&spaceId=17&re=US&lang=en&documentType=&paperDocType=ARTICLE"
+      ]
+    },
+    {
+      "id": "rs4-gimbal",
+      "summary": [
+        "4.5kg payload",
+        "LiDAR autofocus with Focus Pro",
+        "Up to 29h with BG70 grip"
+      ],
+      "specs": [
+        [
+          "Payload",
+          "4.5 kg"
+        ],
+        [
+          "Battery",
+          "13 hours (BG30 grip), up to 29 hours with the BG70 grip"
+        ],
+        [
+          "Charging",
+          "About 1.5 hours"
+        ],
+        [
+          "Axes",
+          "3-axis with automatic locks"
+        ],
+        [
+          "Screen",
+          "OLED touchscreen"
+        ],
+        [
+          "Focus",
+          "Autofocus for manual lenses with DJI Focus Pro LiDAR"
+        ],
+        [
+          "Weight",
+          "Gimbal 1,242 g, grip 265 g"
+        ]
+      ],
+      "sources": [
+        "https://www.dji.com/rs-4-pro/specs"
+      ]
+    },
+    {
+      "id": "blackwidow",
+      "summary": [
+        "8000Hz polling",
+        "Command Dial, 8 macro keys",
+        "Magnetic wrist rest"
+      ],
+      "specs": [
+        [
+          "Switches",
+          "Razer Green (clicky) or Yellow (linear), up to 100 million keystrokes"
+        ],
+        [
+          "Polling",
+          "Up to 8,000Hz"
+        ],
+        [
+          "Controls",
+          "Razer Command Dial, media roller with 4 media keys"
+        ],
+        [
+          "Macros",
+          "8 dedicated macro keys (5 on the left, 3 on the side)"
+        ],
+        [
+          "Lighting",
+          "Per-key Chroma RGB, 38-zone underglow"
+        ],
+        [
+          "Wrist rest",
+          "Magnetic plush leatherette"
+        ],
+        [
+          "Build",
+          "5052 aluminium alloy top case"
+        ],
+        [
+          "Keycaps",
+          "Doubleshot ABS"
+        ],
+        [
+          "Connection",
+          "Wired, detachable USB-C, USB 2.0 passthrough"
+        ]
+      ],
+      "sources": [
+        "https://www.razer.com/newsroom/product-news/experience-ultimate-control-and-immersion-with-the-new-razer-blackwidow-v4-pro"
+      ]
+    },
+    {
+      "id": "k-pro-mouse",
+      "summary": [
+        "26K DPI PixArt PAW3395",
+        "Ergonomic right-hand shape",
+        "Up to 120h battery"
+      ],
+      "specs": [
+        [
+          "Sensor",
+          "PixArt PAW3395, up to 26,000 DPI"
+        ],
+        [
+          "Polling",
+          "1000Hz (4000Hz version available)"
+        ],
+        [
+          "Shape",
+          "Ergonomic, right-handed, with thumb scroll wheel"
+        ],
+        [
+          "Switches",
+          "Huano, 80 million clicks"
+        ],
+        [
+          "Connectivity",
+          "2.4GHz, Bluetooth 5.1, USB-C wired"
+        ],
+        [
+          "Battery",
+          "800mAh, up to 120 hours at 1000Hz"
+        ],
+        [
+          "Software",
+          "Keychron Launcher (web)"
+        ]
+      ],
+      "sources": [
+        "https://www.keychron.com/products/keychron-m6-wireless-mouse"
+      ]
+    },
+    {
+      "id": "mx-master",
+      "summary": [
+        "Haptic Sense Panel",
+        "8,000 DPI, tracks on glass",
+        "70-day battery"
+      ],
+      "specs": [
+        [
+          "Sensor",
+          "Darkfield, 200–8,000 DPI, tracks on glass"
+        ],
+        [
+          "Haptics",
+          "Haptic Sense Panel with Actions Ring"
+        ],
+        [
+          "Scrolling",
+          "MagSpeed, up to 1,000 lines per second"
+        ],
+        [
+          "Buttons",
+          "8"
+        ],
+        [
+          "Battery",
+          "70 days; 1 min charge for 3 hours"
+        ],
+        [
+          "Connectivity",
+          "Logi Bolt receiver, Bluetooth Low Energy"
+        ],
+        [
+          "Weight",
+          "150 g"
+        ]
+      ],
+      "sources": [
+        "https://support.logi.com/hc/en-in/articles/28321406604439-Specification-MX-Master-4",
+        "https://news.logitech.com/press-releases/news-details/2025/Remastering-an-Icon-Introducing-Logitech-MX-Master-4/default.aspx"
+      ]
+    },
+    {
+      "id": "mx-mechanical",
+      "summary": [
+        "Low-profile mechanical",
+        "Smart backlighting",
+        "15 days lit, 10 months unlit"
+      ],
+      "specs": [
+        [
+          "Switches",
+          "Low-profile tactile, clicky or linear"
+        ],
+        [
+          "Key travel",
+          "1.3 mm actuation, 3.2 mm total"
+        ],
+        [
+          "Layout",
+          "Full size with numeric keypad"
+        ],
+        [
+          "Backlight",
+          "Smart illumination"
+        ],
+        [
+          "Battery",
+          "15 days with backlight, 10 months without; 4 h full charge"
+        ],
+        [
+          "Connectivity",
+          "Logi Bolt, Bluetooth 5.2, up to 3 devices"
+        ],
+        [
+          "Compatibility",
+          "Windows, macOS, Linux, ChromeOS, iPadOS, Android"
+        ],
+        [
+          "Build",
+          "Low-carbon aluminium and plastic"
+        ],
+        [
+          "Weight",
+          "828 g"
+        ]
+      ],
+      "sources": [
+        "https://support.logi.com/hc/en-001/articles/5216332603799-Specification-MX-Mechanical"
+      ]
+    },
+    {
+      "id": "odyssey-oled",
+      "unchanged": true,
+      "sources": [
+        "https://www.samsung.com/us/monitors/gaming/49-inch-odyssey-oled-g9-g95sd-dual-qhd-240hz-03ms-g-sync-sku-ls49dg956snxgo/"
+      ]
+    },
+    {
+      "id": "q3-max",
+      "price": 229.99,
+      "summary": [
+        "Double-gasket mount",
+        "QMK / VIA",
+        "Up to 180h battery"
+      ],
+      "specs": [
+        [
+          "Layout",
+          "80% (tenkeyless)"
+        ],
+        [
+          "Mount",
+          "Double gasket"
+        ],
+        [
+          "Switches",
+          "Hot-swappable"
+        ],
+        [
+          "Firmware",
+          "QMK and VIA"
+        ],
+        [
+          "Connectivity",
+          "2.4GHz, Bluetooth 5.1 (3 devices), USB-C wired; 1000Hz"
+        ],
+        [
+          "Battery",
+          "4000mAh, up to 180 hours"
+        ],
+        [
+          "Case",
+          "CNC-machined 6063 aluminium"
+        ],
+        [
+          "Keycaps",
+          "Double-shot PBT, OSA profile"
+        ],
+        [
+          "Weight",
+          "2,045 g fully assembled"
+        ]
+      ],
+      "sources": [
+        "https://www.keychron.com/products/keychron-q3-max-qmk-via-wireless-custom-mechanical-keyboard"
+      ]
+    },
+    {
+      "id": "switch-set",
+      "title": "Nebula Magnetic Switch Set ×110",
+      "summary": [
+        "Gateron double-rail magnetic",
+        "0.2–3.8mm adjustable actuation",
+        "For Keychron HE keyboards"
+      ],
+      "specs": [
+        [
+          "Type",
+          "Gateron double-rail magnetic (Hall effect), linear"
+        ],
+        [
+          "Actuation",
+          "Adjustable from 0.2 to 3.8 mm in 0.1 mm steps"
+        ],
+        [
+          "Lubrication",
+          "Factory pre-lubed"
+        ],
+        [
+          "Compatibility",
+          "Keychron Q HE and K HE, Lemokey P HE keyboards"
+        ],
+        [
+          "Quantity",
+          "110 switches"
+        ]
+      ],
+      "sources": [
+        "https://www.keychron.com/products/gateron-double-rail-magnetic-switch"
+      ]
+    },
+    {
+      "id": "viper-v3",
+      "summary": [
+        "Focus Pro 35K Gen-2 sensor",
+        "54 g",
+        "8000Hz HyperPolling"
+      ],
+      "specs": [
+        [
+          "Sensor",
+          "Focus Pro 35K Optical Gen-2, 99.8% resolution accuracy"
+        ],
+        [
+          "DPI",
+          "Up to 35,000"
+        ],
+        [
+          "Polling",
+          "Up to 8,000Hz with the HyperPolling dongle"
+        ],
+        [
+          "Switches",
+          "Optical Gen-3"
+        ],
+        [
+          "Battery",
+          "Up to 95 hours at 1000Hz"
+        ],
+        [
+          "Shape",
+          "Symmetrical, buttons for the right hand"
+        ],
+        [
+          "Weight",
+          "54 g"
+        ]
+      ],
+      "sources": [
+        "https://www.razer.com/newsroom/product-news/reshaping-esports-dominance-introducing-the-razer-viper-v3-pro-the-mouse-of-champions"
+      ]
+    }
+  ]
+}

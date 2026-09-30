@@ -36,6 +36,10 @@ async function loadModule(entry) {
     platform: 'node',
     outfile: out,
     alias: { '@': path.join(ROOT, 'src') },
+    // brands.ts reaches the catalogue store, which reads import.meta.env - a
+    // Vite object that does not exist under plain Node. Empty, so every
+    // VITE_ variable falls back to its default.
+    define: { 'import.meta.env': '{}' },
     logLevel: 'silent',
   })
   try {

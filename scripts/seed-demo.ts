@@ -552,7 +552,8 @@ async function main() {
   for (let i = 0; i < 110; i++) {
     const product = anyProduct()
     const used = asked.get(product.id) ?? new Set<string>()
-    const qa = T.questionsFor(product.kind).find((x) => !used.has(x.q) && chance(0.5)) ?? T.questionsFor(product.kind).find((x) => !used.has(x.q))
+    const pool = T.questionsFor(product.kind, product.id)
+    const qa = pool.find((x) => !used.has(x.q) && chance(0.5)) ?? pool.find((x) => !used.has(x.q))
     if (!qa) continue
     const askedAt = NOW - between(0.05, 180) * DAY
     const eligible = customers.filter((c) => c.signup < askedAt)
