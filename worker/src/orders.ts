@@ -637,14 +637,15 @@ export async function getOrder(env: OrdersEnv, id: string, userId: string | null
   // delivery information, so like `parts` it goes only to the owner.
   const { results } = await env.ORDERS.prepare(
     `SELECT l.product_id, l.sku, l.title, l.qty, l.unit_price_cents, l.variant,
-            COALESCE(m.name, '') AS seller, f.status
+            COALESCE(m.name, '') AS seller, f.status,
+            EXISTS (SELECT 1 FROM reviews r WHERE r.product_id = l.product_id AND r.user_id = ?2) AS reviewed
        FROM order_lines l
        LEFT JOIN merchants m ON m.id = l.merchant_id
        LEFT JOIN order_fulfilments f ON f.order_id = l.order_id AND f.merchant_id = l.merchant_id
       WHERE l.order_id = ?1
       ORDER BY l.rowid`,
   )
-    .bind(id)
+    .bind(id, owner ? userId : null)
     .all<{
       product_id: string
       sku: string
@@ -654,6 +655,7 @@ export async function getOrder(env: OrdersEnv, id: string, userId: string | null
       variant: string
       seller: string
       status: string | null
+      reviewed: number
     }>()
 
   return {
@@ -693,6 +695,9 @@ export async function getOrder(env: OrdersEnv, id: string, userId: string | null
       finish: l.variant || undefined,
       seller: l.seller,
       status: owner ? l.status : null,
+      // Whether this account has reviewed the product, so the order can offer
+      // "Edit your review" rather than "Write a review". Owner only, like status.
+      ...(owner ? { reviewed: l.reviewed === 1 } : {}),
     })),
     ...(owner ? { parts: await partsOf(env, id) } : {}),
   }
