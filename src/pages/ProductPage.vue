@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import BuyBox from '@/components/commerce/BuyBox.vue'
 import ProductReviews from '@/components/commerce/ProductReviews.vue'
+import ProductQuestions from '@/components/commerce/ProductQuestions.vue'
 import ProductCard from '@/components/commerce/ProductCard.vue'
 import DeconstructedFlagship from '@/components/sections/DeconstructedFlagship.vue'
 import NotFoundPage from './NotFoundPage.vue'
@@ -182,6 +183,7 @@ const related = computed(() =>
       </section>
 
       <ProductReviews :product-id="product.id" />
+      <ProductQuestions :product-id="product.id" />
     </div>
 
     <!-- Teardown, for the one product that has it -->

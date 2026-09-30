@@ -315,3 +315,66 @@ describe('return requests', () => {
     expect(priv.objects.size).toBe(3)
   })
 })
+
+describe('product questions', () => {
+  const ask = (as: 'usr_ada' | 'usr_bob' | undefined, body: unknown, product = 'prd_1') =>
+    call('POST', `/api/products/${product}/questions`, { as, body })
+
+  it('needs a signed-in shopper', async () => {
+    expect((await ask(undefined, { body: 'Does it come with a case?' })).status).toBe(401)
+    expect(mem.rows('product_questions')).toEqual([])
+  })
+
+  it('takes 10 to 300 characters of text, about a published product only', async () => {
+    for (const bad of [{}, { body: 42 }, { body: 'too short' }, { body: '         ' }, { body: 'x'.repeat(301) }]) {
+      expect((await ask('usr_ada', bad)).status, JSON.stringify(bad)).toBe(400)
+    }
+    expect((await ask('usr_ada', { body: 'x'.repeat(300) })).status).toBe(201)
+    expect((await ask('usr_ada', { body: 'Is there a case?' }, 'prd_nobody')).status).toBe(404)
+    mem.raw.prepare(`UPDATE products SET status = 'draft' WHERE id = 'prd_2'`).run()
+    expect((await ask('usr_ada', { body: 'Is there a case?' }, 'prd_2')).status).toBe(404)
+    // Filed under the product's merchant, by the account, never by what the body says.
+    const [row] = mem.rows('product_questions')
+    expect(row).toMatchObject({ product_id: 'prd_1', merchant_id: 'mch_a', user_id: 'usr_ada', answer: null, hidden: 0 })
+  })
+
+  it('caps the questions one account has waiting on one product', async () => {
+    for (let i = 0; i < 3; i++) expect((await ask('usr_ada', { body: `Question number ${i} here` })).status).toBe(201)
+    expect((await ask('usr_ada', { body: 'One question too many' })).status).toBe(409)
+    // Another product and another account are not affected.
+    expect((await ask('usr_ada', { body: 'A question elsewhere' }, 'prd_2')).status).toBe(201)
+    expect((await ask('usr_bob', { body: 'Bob has his own cap' })).status).toBe(201)
+    // An answer frees a place.
+    mem.raw.prepare(`UPDATE product_questions SET answer = 'Yes', answered_at = datetime('now') WHERE body = 'Question number 0 here'`).run()
+    expect((await ask('usr_ada', { body: 'Room for one more' })).status).toBe(201)
+  })
+
+  it('lists answered, visible questions to anyone, and the viewer their own pending ones', async () => {
+    const insert = mem.raw.prepare(
+      `INSERT INTO product_questions (id, product_id, merchant_id, user_id, body, answer, answered_at, hidden)
+       VALUES (?, 'prd_1', 'mch_a', ?, ?, ?, ?, ?)`,
+    )
+    insert.run('qst_old', 'usr_bob', 'Older answered question', 'Old answer', '2026-01-01 00:00:00', 0)
+    insert.run('qst_new', 'usr_bob', 'Newer answered question', 'New answer', '2026-02-01 00:00:00', 0)
+    insert.run('qst_hidden', 'usr_bob', 'Hidden answered question', 'Spam answer', '2026-03-01 00:00:00', 1)
+    insert.run('qst_ada', 'usr_ada', 'Ada is still waiting here', null, null, 0)
+    insert.run('qst_bob', 'usr_bob', 'Bob is still waiting here', null, null, 0)
+
+    const anon = await read(await call('GET', '/api/products/prd_1/questions'))
+    expect(anon.status).toBe(200)
+    expect(anon.body.questions.map((q: { id: string }) => q.id)).toEqual(['qst_new', 'qst_old'])
+    expect(anon.body.questions[0]).toMatchObject({ body: 'Newer answered question', answer: 'New answer', seller: 'Acme' })
+    expect(anon.body.viewer).toBeNull()
+    // Nothing that names the asker, and nothing unanswered, reaches the public.
+    expect(JSON.stringify(anon.body)).not.toMatch(/usr_|Ada|Bob|waiting|Spam/)
+
+    const ada = await read(await call('GET', '/api/products/prd_1/questions', { as: 'usr_ada' }))
+    expect(ada.body.questions.map((q: { id: string }) => q.id)).toEqual(['qst_new', 'qst_old'])
+    expect(ada.body.viewer.pending.map((q: { id: string }) => q.id)).toEqual(['qst_ada'])
+    // A hidden question of the viewer's own is not offered back either.
+    mem.raw.prepare(`UPDATE product_questions SET hidden = 1 WHERE id = 'qst_ada'`).run()
+    const again = await read(await call('GET', '/api/products/prd_1/questions', { as: 'usr_ada' }))
+    expect(again.body.viewer.pending).toEqual([])
+    expect((await call('GET', '/api/products/prd_1/questions?page=-1')).status).toBe(400)
+  })
+})

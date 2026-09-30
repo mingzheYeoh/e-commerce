@@ -15,11 +15,13 @@ import { isPhotoKey, privatePhoto } from './photos'
 import {
   addReturnPhoto,
   addReviewPhoto,
+  askQuestion,
   avatarOf,
   deleteReview,
   openReturn,
   orderReturns,
   ownReturnPhoto,
+  productQuestions,
   productReviews,
   publicObjectsOf,
   removeAvatar,
@@ -71,6 +73,7 @@ export interface Env extends RagEnv, OrdersEnv, AuthEnv, UploadsEnv {
 
 /* Customer uploads (uploads.ts). Ids are checked for shape before any statement runs. */
 const REVIEWS = /^\/api\/products\/([A-Za-z0-9_-]{1,64})\/reviews$/
+const QUESTIONS = /^\/api\/products\/([A-Za-z0-9_-]{1,64})\/questions$/
 const REVIEW = /^\/api\/products\/([A-Za-z0-9_-]{1,64})\/review$/
 const REVIEW_PHOTOS = /^\/api\/products\/([A-Za-z0-9_-]{1,64})\/review\/photos$/
 const REVIEW_PHOTO = /^\/api\/products\/([A-Za-z0-9_-]{1,64})\/review\/photos\/([^/]+)$/
@@ -343,6 +346,22 @@ export default {
         const page = Number(url.searchParams.get('page') ?? 0)
         if (!Number.isInteger(page) || page < 0 || page > 1000) return answer({ status: 400, body: { error: 'page is a whole number from 0.' } })
         return answer(await productReviews(env, reviewsOf, page, await sessionUser(env, request)))
+      }
+      const questionsOf = url.pathname.match(QUESTIONS)?.[1]
+      if (questionsOf && request.method === 'GET') {
+        const page = Number(url.searchParams.get('page') ?? 0)
+        if (!Number.isInteger(page) || page < 0 || page > 1000) return answer({ status: 400, body: { error: 'page is a whole number from 0.' } })
+        return answer(await productQuestions(env, questionsOf, page, await sessionUser(env, request)))
+      }
+      if (questionsOf && request.method === 'POST') {
+        const user = await sessionUser(env, request)
+        if (!user) return answer({ status: 401, body: { error: 'not signed in' } })
+        // Per IP, before the body is read: an account is cheap to make, and every question lands in a merchant's inbox.
+        const limited = await guard(env, request, 'question')
+        if (limited) {
+          return json(limited.body, { status: 429, headers: { ...headers, 'retry-after': String(limited.retryAfter) } })
+        }
+        return answer(await askQuestion(env, user, questionsOf, await request.json().catch(() => null)))
       }
       const review = url.pathname.match(REVIEW)?.[1]
       const reviewPhotos = url.pathname.match(REVIEW_PHOTOS)?.[1]

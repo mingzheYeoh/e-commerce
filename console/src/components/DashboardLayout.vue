@@ -11,6 +11,7 @@ import {
   LayoutDashboard,
   Boxes,
   Menu,
+  MessageSquare,
   Package,
   Receipt,
   RotateCcw,
@@ -43,6 +44,7 @@ const NAV: Record<'merchant' | 'platform', NavItem[]> = {
     { to: '/finance', label: 'Finance', icon: Wallet },
     { to: '/returns', label: 'Returns', icon: RotateCcw, badge: 'returnsOpen' },
     { to: '/reviews', label: 'Reviews', icon: Star },
+    { to: '/questions', label: 'Questions', icon: MessageSquare },
   ],
   platform: [
     { to: '/platform', label: 'Overview', icon: LayoutDashboard, exact: true },
@@ -52,6 +54,7 @@ const NAV: Record<'merchant' | 'platform', NavItem[]> = {
     { to: '/platform/customers', label: 'Customers', icon: Users },
     { to: '/platform/returns', label: 'Returns', icon: RotateCcw },
     { to: '/platform/reviews', label: 'Reviews', icon: Star },
+    { to: '/platform/questions', label: 'Questions', icon: MessageSquare },
     { to: '/platform/merchants', label: 'Merchants', icon: Store },
     { to: '/platform/applications', label: 'Applications', icon: ClipboardCheck },
     { to: '/platform/audit', label: 'Audit log', icon: ScrollText },

@@ -62,6 +62,7 @@ import {
   type PlatformRepository,
   type ProductPatch,
   type ProductRow,
+  type QuestionRow,
   type Repository,
   type ReturnDetail,
   type ReturnStatus,
@@ -593,6 +594,19 @@ const reviewOut = (r: ReviewRow, base: string) => ({
   updatedAt: r.updated_at,
 })
 
+const questionOut = (q: QuestionRow) => ({
+  id: q.id,
+  productId: q.product_id,
+  productTitle: q.product_title,
+  merchantId: q.merchant_id,
+  body: q.body,
+  answer: q.answer,
+  answeredAt: q.answered_at,
+  hidden: q.hidden,
+  author: q.author,
+  createdAt: q.created_at,
+})
+
 const merchantOut = (m: MerchantSummary) => ({
   id: m.merchant_id,
   name: m.name,
@@ -831,6 +845,8 @@ const RETURN = /^\/api\/(merchant|platform)\/returns\/([^/]+)$/
 const RETURN_ACTION = /^\/api\/merchant\/returns\/([^/]+)\/(approve|reject)$/
 const RETURN_PHOTO = /^\/api\/(merchant|platform)\/return-photos\/(.+)$/
 const MODERATE = /^\/api\/platform\/reviews\/([^/]+)\/(hide|unhide)$/
+const ANSWER = /^\/api\/merchant\/questions\/([^/]+)\/answer$/
+const MODERATE_QUESTION = /^\/api\/platform\/questions\/([^/]+)\/(hide|unhide)$/
 
 async function route(request: Request, env: ConsoleEnv, url: URL, ctx: ExecutionContext): Promise<Response> {
   const path = url.pathname
@@ -1182,6 +1198,35 @@ async function route(request: Request, env: ConsoleEnv, url: URL, ctx: Execution
     return outcome(
       () => (verb === 'hide' ? repo.moderation.hide(reviewId) : repo.moderation.unhide(reviewId)),
       (r) => ({ id: r.id, hidden: r.hidden }),
+    )
+  }
+
+  /* Product questions: a merchant reads and answers those about its own
+     products, the platform reads every one and hides or unhides it. Answering
+     is the merchant's own act; there is no platform route for it. */
+  if (scoped && path === `/api/${scoped}/questions` && method === 'GET') {
+    const repo = await repoOf()
+    if (repo instanceof Response) return repo
+    return json({ questions: (await repo.questions.list({})).map(questionOut) }, 200, PRIVATE)
+  }
+
+  const answerOf = path.match(ANSWER)
+  if (answerOf && method === 'POST') {
+    const repo = await merchantRepo(env, request)
+    if (repo instanceof Response) return repo
+    const answer = text(fields(await readBody(request)).answer, 1000)
+    if (answer === null) return json({ error: 'An answer is 1 to 1000 characters.' }, 400)
+    return outcome(() => repo.questions.answer(answerOf[1], answer), questionOut)
+  }
+
+  const moderateQuestion = path.match(MODERATE_QUESTION)
+  if (moderateQuestion && method === 'POST') {
+    const repo = await platformRepo(env, request)
+    if (repo instanceof Response) return repo
+    const [, questionId, verb] = moderateQuestion
+    return outcome(
+      () => (verb === 'hide' ? repo.moderation.hideQuestion(questionId) : repo.moderation.unhideQuestion(questionId)),
+      (q) => ({ id: q.id, hidden: q.hidden }),
     )
   }
 

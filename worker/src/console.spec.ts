@@ -181,6 +181,8 @@ const MERCHANT_ROUTES = [
   ['POST', '/api/merchant/returns/ret_x/reject'],
   ['GET', '/api/merchant/return-photos/returns/ret_x/ph_x.webp'],
   ['GET', '/api/merchant/reviews'],
+  ['GET', '/api/merchant/questions'],
+  ['POST', '/api/merchant/questions/qst_x/answer'],
 ] as const
 
 const PLATFORM_ROUTES = [
@@ -211,6 +213,9 @@ const PLATFORM_ROUTES = [
   ['GET', '/api/platform/reviews'],
   ['POST', '/api/platform/reviews/rev_x/hide'],
   ['POST', '/api/platform/reviews/rev_x/unhide'],
+  ['GET', '/api/platform/questions'],
+  ['POST', '/api/platform/questions/qst_x/hide'],
+  ['POST', '/api/platform/questions/qst_x/unhide'],
 ] as const
 
 describe('the console worker: who may reach what', () => {
@@ -1781,5 +1786,47 @@ describe('the console worker: returns and reviews', () => {
     ).toEqual([{ merchant_id: 'mch_other', subject: 'rev_theirs' }])
     // Deciding is the merchant's: the platform has no approve route to call.
     expect((await call(mem.db, 'POST', '/api/platform/returns/ret_mine/approve', { cookie: admin, body: { amountMinor: 1 } })).status).toBe(404)
+  })
+
+  async function withQuestions() {
+    const s = await withReturns()
+    const q = s.raw.prepare(`INSERT INTO product_questions (id, product_id, merchant_id, user_id, body) VALUES (?, ?, ?, 'usr_ada', 'Does it ship worldwide?')`)
+    q.run('qst_mine', 'prd_mine', s.merchantId)
+    q.run('qst_theirs', 'prd_theirs', 'mch_other')
+    return s
+  }
+
+  it("lets a merchant answer and edit the answer to its own questions, never another merchant's", async () => {
+    const { db, raw, cookie } = await withQuestions()
+    const list = await get(db, '/api/merchant/questions', cookie)
+    expect(list.body.questions).toEqual([expect.objectContaining({ id: 'qst_mine', author: 'Ada L.', answer: null, hidden: false })])
+    expect((await call(db, 'POST', '/api/merchant/questions/qst_theirs/answer', { cookie, body: { answer: 'Yes' } })).status).toBe(404)
+    expect(raw.prepare(`SELECT answer FROM product_questions WHERE id = 'qst_theirs'`).get()).toEqual({ answer: null })
+    expect((await call(db, 'POST', '/api/merchant/questions/qst_mine/answer', { cookie, body: { answer: '   ' } })).status).toBe(400)
+    const first = await call(db, 'POST', '/api/merchant/questions/qst_mine/answer', { cookie, body: { answer: 'Yes, to most countries.' } })
+    expect(first.status).toBe(200)
+    const at = ((await first.json()) as { answeredAt: string }).answeredAt
+    const edited = await call(db, 'POST', '/api/merchant/questions/qst_mine/answer', { cookie, body: { answer: 'Yes, to 40 countries.' } })
+    expect(await edited.json()).toMatchObject({ answer: 'Yes, to 40 countries.', answeredAt: at })
+    // A merchant's write is an audit row against itself.
+    expect(raw.prepare(`SELECT merchant_id, subject FROM audit_log WHERE action = 'questions.answer' AND subject = 'qst_mine'`).all()).toEqual([
+      { merchant_id: expect.any(String), subject: 'qst_mine' },
+      { merchant_id: expect.any(String), subject: 'qst_mine' },
+    ])
+  })
+
+  it('lets the platform hide and unhide any question, audited, but never answer one', async () => {
+    const mem = await withQuestions()
+    const admin = await platformSession(mem)
+    expect((await get(mem.db, '/api/platform/questions', admin)).body.questions).toHaveLength(2)
+    const hidden = await call(mem.db, 'POST', '/api/platform/questions/qst_theirs/hide', { cookie: admin })
+    expect(await hidden.json()).toEqual({ id: 'qst_theirs', hidden: true })
+    expect(mem.raw.prepare(`SELECT hidden FROM product_questions WHERE id = 'qst_theirs'`).get()).toEqual({ hidden: 1 })
+    expect((await call(mem.db, 'POST', '/api/platform/questions/qst_nobody/hide', { cookie: admin })).status).toBe(404)
+    expect(
+      mem.raw.prepare(`SELECT merchant_id, subject FROM audit_log WHERE action = 'moderation.hideQuestion' AND merchant_id IS NOT NULL`).all(),
+    ).toEqual([{ merchant_id: 'mch_other', subject: 'qst_theirs' }])
+    expect((await call(mem.db, 'POST', '/api/platform/questions/qst_theirs/unhide', { cookie: admin })).status).toBe(200)
+    expect((await call(mem.db, 'POST', '/api/merchant/questions/qst_theirs/answer', { cookie: admin, body: { answer: 'x' } })).status).toBe(403)
   })
 })
