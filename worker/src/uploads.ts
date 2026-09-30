@@ -392,6 +392,34 @@ export async function askQuestion(env: UploadsEnv, user: User, productId: string
   return ok({ ok: true }, 201)
 }
 
+/*
+ * The asker's own question, while it still waits: rewritten, or withdrawn.
+ * Answered, it is the context of the seller's reply and stays as asked.
+ * Hidden, it stays put, so neither route can undo moderation or free a slot
+ * under the pending cap. One condition covers "not yours", "answered" and
+ * "hidden", so all three get the same answer and none reveals the others.
+ */
+const OWN_PENDING = `id = ?1 AND user_id = ?2 AND answer IS NULL AND hidden = 0`
+const SETTLED = 'Only a question still waiting for an answer can be changed.'
+
+export async function editQuestion(env: UploadsEnv, user: User, questionId: string, body: unknown): Promise<Reply> {
+  const asked = typed(fields(body).body, QUESTION_MAX)
+  if (asked === null || asked.length < QUESTION_MIN) {
+    return no(400, `A question is ${QUESTION_MIN} to ${QUESTION_MAX} characters.`)
+  }
+  const { meta } = await env.ORDERS.prepare(`UPDATE product_questions SET body = ?3 WHERE ${OWN_PENDING}`)
+    .bind(questionId, user.id, asked)
+    .run()
+  return meta.changes === 1 ? ok({ ok: true }) : no(404, SETTLED)
+}
+
+export async function deleteQuestion(env: UploadsEnv, user: User, questionId: string): Promise<Reply> {
+  const { meta } = await env.ORDERS.prepare(`DELETE FROM product_questions WHERE ${OWN_PENDING}`)
+    .bind(questionId, user.id)
+    .run()
+  return meta.changes === 1 ? ok({ ok: true }) : no(404, SETTLED)
+}
+
 /* ----------------------------------------------------------------- returns */
 
 /** How long after delivery a return may be asked for. */

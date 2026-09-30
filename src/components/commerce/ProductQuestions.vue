@@ -5,10 +5,13 @@
  * their own unanswered ones, marked as waiting. Who is signed in is the
  * server's answer (`viewer`), as with reviews. All text is interpolated, never
  * rendered as HTML.
+ *
+ * A waiting question can be rewritten or withdrawn by its asker; once answered
+ * it stays as asked, because the answer was written to it.
  */
 import { ref, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
-import { fetchQuestions, askQuestion, type Question, type QuestionPage } from '@/lib/uploads'
+import { fetchQuestions, askQuestion, editQuestion, deleteQuestion, type Question, type QuestionPage } from '@/lib/uploads'
 
 const props = defineProps<{ productId: string }>()
 const route = useRoute()
@@ -63,6 +66,49 @@ async function submit() {
   await load()
 }
 
+/** The pending question being rewritten, or about to be withdrawn: one at a time. */
+const editing = ref<string | null>(null)
+const withdrawing = ref<string | null>(null)
+const draft = ref('')
+const rowError = ref('')
+
+function startEdit(q: Question) {
+  withdrawing.value = null
+  rowError.value = ''
+  editing.value = q.id
+  draft.value = q.body
+}
+
+function stop() {
+  editing.value = null
+  withdrawing.value = null
+  rowError.value = ''
+}
+
+/** Either change reloads the list, so what is shown is what the server kept. */
+async function change(run: () => ReturnType<typeof deleteQuestion>) {
+  busy.value = true
+  rowError.value = ''
+  const res = await run()
+  busy.value = false
+  if (!res.ok) {
+    // Most often the seller answered in the meantime: reload to show it.
+    rowError.value = res.error
+    await load()
+    return
+  }
+  stop()
+  await load()
+}
+
+function saveEdit(id: string) {
+  if (draft.value.trim().length < MIN) {
+    rowError.value = `A question is at least ${MIN} characters.`
+    return
+  }
+  return change(() => editQuestion(id, draft.value))
+}
+
 const day = (at: string) =>
   new Date(at.replace(' ', 'T') + 'Z').toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
 </script>
@@ -102,8 +148,34 @@ const day = (at: string) =>
     <!-- The viewer's own, still waiting -->
     <ul v-if="data?.viewer?.pending.length" class="mt-6 flex flex-col gap-3">
       <li v-for="q in data.viewer.pending" :key="q.id" class="rounded-card border border-dashed border-border-strong p-4">
-        <p class="text-sm">{{ q.body }}</p>
-        <p class="mt-1 text-xs text-accent-amber">Awaiting the seller's answer</p>
+        <form v-if="editing === q.id" @submit.prevent="saveEdit(q.id)">
+          <textarea v-model="draft" :maxlength="MAX" rows="2" class="input w-full" aria-label="Edit your question"></textarea>
+          <p class="mt-1 text-right text-xs text-text-muted">{{ draft.length }}/{{ MAX }}</p>
+          <div class="mt-2 flex gap-2">
+            <button type="submit" class="btn-primary" :disabled="busy">Save</button>
+            <button type="button" class="btn-ghost" @click="stop">Cancel</button>
+          </div>
+        </form>
+        <template v-else>
+          <p class="text-sm">{{ q.body }}</p>
+          <div class="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+            <span class="text-accent-amber">Awaiting the seller's answer</span>
+            <template v-if="withdrawing === q.id">
+              <span class="text-text-secondary">Withdraw this question?</span>
+              <button type="button" class="font-medium text-accent-red hover:underline" :disabled="busy" @click="change(() => deleteQuestion(q.id))">
+                Withdraw
+              </button>
+              <button type="button" class="text-text-secondary hover:text-text-primary" @click="stop">Keep it</button>
+            </template>
+            <template v-else>
+              <button type="button" class="text-text-secondary hover:text-text-primary" @click="startEdit(q)">Edit</button>
+              <button type="button" class="text-text-secondary hover:text-text-primary" @click="stop(); withdrawing = q.id">Withdraw</button>
+            </template>
+          </div>
+        </template>
+        <p v-if="rowError && (editing === q.id || withdrawing === q.id)" class="mt-2 text-xs text-accent-red" role="alert">
+          {{ rowError }}
+        </p>
       </li>
     </ul>
 

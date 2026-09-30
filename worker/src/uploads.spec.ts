@@ -377,4 +377,31 @@ describe('product questions', () => {
     expect(again.body.viewer.pending).toEqual([])
     expect((await call('GET', '/api/products/prd_1/questions?page=-1')).status).toBe(400)
   })
+
+  it('lets the asker rewrite or withdraw a question only while it waits, visible, for an answer', async () => {
+    const insert = mem.raw.prepare(
+      `INSERT INTO product_questions (id, product_id, merchant_id, user_id, body, answer, answered_at, hidden)
+       VALUES (?, 'prd_1', 'mch_a', ?, 'The original question', ?, ?, ?)`,
+    )
+    insert.run('qst_mine', 'usr_ada', null, null, 0)
+    insert.run('qst_answered', 'usr_ada', 'Yes', '2026-01-01 00:00:00', 0)
+    insert.run('qst_hidden', 'usr_ada', null, null, 1)
+    insert.run('qst_bobs', 'usr_bob', null, null, 0)
+    const body = (id: string) => mem.rows('product_questions').find((r) => r.id === id)?.body
+    const rewrite = (as: 'usr_ada' | undefined, id: string, text: unknown) => call('POST', `/api/questions/${id}`, { as, body: { body: text } })
+
+    expect((await rewrite(undefined, 'qst_mine', 'A rewritten question')).status).toBe(401)
+    expect((await rewrite('usr_ada', 'qst_mine', 'too short')).status).toBe(400)
+    expect((await rewrite('usr_ada', 'qst_mine', 'A rewritten question')).status).toBe(200)
+    expect(body('qst_mine')).toBe('A rewritten question')
+    // Someone else's, answered, or hidden: refused alike, and left as they were.
+    for (const id of ['qst_bobs', 'qst_answered', 'qst_hidden']) {
+      expect((await rewrite('usr_ada', id, 'A rewritten question')).status, id).toBe(404)
+      expect((await call('DELETE', `/api/questions/${id}`, { as: 'usr_ada' })).status, id).toBe(404)
+      expect(body(id), id).toBe('The original question')
+    }
+
+    expect((await call('DELETE', '/api/questions/qst_mine', { as: 'usr_ada' })).status).toBe(200)
+    expect(body('qst_mine')).toBeUndefined()
+  })
 })

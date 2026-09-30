@@ -16,6 +16,8 @@ import {
   addReturnPhoto,
   addReviewPhoto,
   askQuestion,
+  editQuestion,
+  deleteQuestion,
   avatarOf,
   deleteReview,
   openReturn,
@@ -74,6 +76,8 @@ export interface Env extends RagEnv, OrdersEnv, AuthEnv, UploadsEnv {
 /* Customer uploads (uploads.ts). Ids are checked for shape before any statement runs. */
 const REVIEWS = /^\/api\/products\/([A-Za-z0-9_-]{1,64})\/reviews$/
 const QUESTIONS = /^\/api\/products\/([A-Za-z0-9_-]{1,64})\/questions$/
+/** One of the shopper's own questions: POST rewrites it, DELETE withdraws it. */
+const QUESTION = /^\/api\/questions\/([A-Za-z0-9_-]{1,64})$/
 const REVIEW = /^\/api\/products\/([A-Za-z0-9_-]{1,64})\/review$/
 const REVIEW_PHOTOS = /^\/api\/products\/([A-Za-z0-9_-]{1,64})\/review\/photos$/
 const REVIEW_PHOTO = /^\/api\/products\/([A-Za-z0-9_-]{1,64})\/review\/photos\/([^/]+)$/
@@ -362,6 +366,18 @@ export default {
           return json(limited.body, { status: 429, headers: { ...headers, 'retry-after': String(limited.retryAfter) } })
         }
         return answer(await askQuestion(env, user, questionsOf, await request.json().catch(() => null)))
+      }
+      const question = url.pathname.match(QUESTION)?.[1]
+      if (question && (request.method === 'POST' || request.method === 'DELETE')) {
+        const user = await sessionUser(env, request)
+        if (!user) return answer({ status: 401, body: { error: 'not signed in' } })
+        if (request.method === 'DELETE') return answer(await deleteQuestion(env, user, question))
+        // Rewrites share the asking limit, so an edit cannot be a way around it.
+        const limited = await guard(env, request, 'question')
+        if (limited) {
+          return json(limited.body, { status: 429, headers: { ...headers, 'retry-after': String(limited.retryAfter) } })
+        }
+        return answer(await editQuestion(env, user, question, await request.json().catch(() => null)))
       }
       const review = url.pathname.match(REVIEW)?.[1]
       const reviewPhotos = url.pathname.match(REVIEW_PHOTOS)?.[1]

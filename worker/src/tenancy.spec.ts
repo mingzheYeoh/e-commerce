@@ -2018,8 +2018,8 @@ describe('the inventory and the queue', () => {
     const { a, b } = await backOffice()
     // A: o3, o4, o7 pending (o1 shipped, o2 cancelled). pa1 at 3 is low; pa_sgd
     // at 0 is out; the draft at 0 is not on sale.
-    expect(await a.stats.queue()).toEqual({ to_ship: 3, low_stock: 1, out_of_stock: 1, returns_open: 0 })
-    expect(await b.stats.queue()).toEqual({ to_ship: 2, low_stock: 0, out_of_stock: 0, returns_open: 0 })
+    expect(await a.stats.queue()).toEqual({ to_ship: 3, low_stock: 1, out_of_stock: 1, returns_open: 0, questions_open: 0 })
+    expect(await b.stats.queue()).toEqual({ to_ship: 2, low_stock: 0, out_of_stock: 0, returns_open: 0, questions_open: 0 })
   })
 })
 
@@ -2665,6 +2665,30 @@ describe('return requests', () => {
     expect((await (await scopedTo(env, 'mch_b', 'stf_b')).stats.queue()).returns_open).toBe(1)
     await a.returns.reject('ret_a', { note: 'No' })
     expect((await a.stats.queue()).returns_open).toBe(0)
+  })
+
+  it('counts unanswered, visible questions in the queue, per merchant', async () => {
+    const { a, env, raw } = await returnable()
+    raw.prepare(`INSERT INTO users (id, email, name, password_hash, password_salt, iterations) VALUES ('usr_q','q@x.co','Q','h','s',1)`).run()
+    raw
+      .prepare(
+        `INSERT INTO products (id, merchant_id, sku, title, brand, category, price_minor, currency, status)
+         VALUES ('p_b_q','mch_b','SKU-BQ','Theirs','APPLE','phones',300,'MYR','published')`,
+      )
+      .run()
+    // B starts with the isolation sweep's own question, so count what this adds.
+    const b = await scopedTo(env, 'mch_b', 'stf_b')
+    const before = (await b.stats.queue()).questions_open
+    const ask = raw.prepare(`INSERT INTO product_questions (id, product_id, merchant_id, user_id, body) VALUES (?, ?, ?, 'usr_q', 'Is there a charger?')`)
+    ask.run('q_a1', 'p_a2', 'mch_a')
+    ask.run('q_a2', 'p_a2', 'mch_a')
+    ask.run('q_b1', 'p_b_q', 'mch_b')
+    expect((await a.stats.queue()).questions_open).toBe(2)
+    expect((await b.stats.queue()).questions_open).toBe(before + 1)
+
+    await a.questions.answer('q_a1', 'Yes, in the box.')
+    await (await platformWide(env, 'stf_p')).moderation.hideQuestion('q_a2')
+    expect((await a.stats.queue()).questions_open).toBe(0)
   })
 
   it('lets the platform read every request, and records that it did', async () => {
