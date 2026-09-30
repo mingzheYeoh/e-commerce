@@ -2,16 +2,31 @@
 import { describe, it, expect } from 'vitest'
 import worker, { type Env } from './index'
 import { memoryD1 } from '../test/d1-memory'
+import { sha256 } from './credentials'
 
-const post = (env: Partial<Env>, body: unknown) =>
+const post = (env: Partial<Env>, body: unknown, cookie?: string) =>
   worker.fetch(
     new Request('https://api.test/api/orders', {
       method: 'POST',
-      headers: { 'content-type': 'application/json', 'cf-connecting-ip': '203.0.113.9' },
+      headers: {
+        'content-type': 'application/json',
+        'cf-connecting-ip': '203.0.113.9',
+        ...(cookie ? { cookie } : {}),
+      },
       body: JSON.stringify(body),
     }),
     env as Env,
   )
+
+/** A database holding one account with a live session, and the cookie that carries it. */
+async function signedIn() {
+  const mem = memoryD1()
+  mem.raw.prepare(`INSERT INTO users (id, email, name, password_hash, password_salt, iterations) VALUES ('usr_ada', 'ada@example.com', 'Ada', 'h', 's', 1)`).run()
+  mem.raw
+    .prepare(`INSERT INTO sessions (token_hash, user_id, expires_at) VALUES (?, 'usr_ada', '2999-01-01T00:00:00Z')`)
+    .run(await sha256('tok-ada'))
+  return { ...mem, cookie: 'nexus_session=tok-ada' }
+}
 
 describe('POST /api/orders', () => {
   it('is rate limited per IP before anything is read, with a Retry-After', async () => {
@@ -28,10 +43,19 @@ describe('POST /api/orders', () => {
   })
 
   it('lets a request through while the limit allows it', async () => {
-    const { db } = memoryD1()
+    const { db, cookie } = await signedIn()
     const allow = { limit: async () => ({ success: true }) }
     // Through the limiter to placeOrder, which refuses this body on its merits.
-    expect((await post({ ORDERS: db, ORDER_LIMITER: allow }, { id: 'bad' })).status).toBe(400)
+    expect((await post({ ORDERS: db, ORDER_LIMITER: allow }, { id: 'bad' }, cookie)).status).toBe(400)
+  })
+
+  it('refuses a shopper who is not signed in, before reading the order', async () => {
+    const { db, rows } = memoryD1()
+    const allow = { limit: async () => ({ success: true }) }
+    const res = await post({ ORDERS: db, ORDER_LIMITER: allow }, { id: 'NX-4K2P9' })
+    expect(res.status).toBe(401)
+    expect(await res.json()).toMatchObject({ code: 'signin' })
+    expect(rows('orders')).toEqual([])
   })
 })
 

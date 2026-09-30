@@ -50,8 +50,13 @@ const canPlace = computed(
   () => checkout.stepValid(3) && cart.items.length > 0 && !cart.hasUnavailable,
 )
 
-onMounted(() => {
-  if (!cart.items.length) router.replace('/cart')
+onMounted(async () => {
+  if (!cart.items.length) return router.replace('/cart')
+
+  // Orders belong to accounts. A bag filled before that rule, or a session
+  // that has since ended, is sent to sign in and brought straight back.
+  if (auth.status === 'unknown') await auth.hydrate()
+  if (!auth.signedIn) return router.replace('/account?next=/checkout')
 
   /*
    * Fill what the account already knows, and only what is still blank. A
@@ -145,20 +150,6 @@ function finish(result: { ok: boolean; id?: string }) {
           <!-- 1. Delivery -->
           <form v-if="checkout.step === 1" class="space-y-4" @submit.prevent="checkout.next()">
             <h2 class="font-semibold">Where is it going?</h2>
-
-            <!--
-              Offered, never required. Guest checkout is the shorter path and
-              stays the default; the only thing signing in changes is whether
-              this order can be found again from another device.
-            -->
-            <p
-              v-if="!auth.signedIn"
-              class="rounded border border-border-hairline bg-surface-2/60 p-3 text-xs text-text-secondary"
-            >
-              <RouterLink to="/account?next=/checkout" class="text-accent underline">Sign in</RouterLink>
-              to keep this order with your account, or carry on as a guest — checkout works either
-              way.
-            </p>
 
             <div class="grid gap-4 sm:grid-cols-2">
               <!--

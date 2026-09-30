@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
 import { useCartStore, lineKey } from './cart'
+import { useAuthStore } from './auth'
+import { useUiStore } from './ui'
 import { products } from '@/data/products'
 
 const anyProduct = products[0]
@@ -18,6 +20,18 @@ describe('cart store', () => {
     cart.add(anyProduct)
     expect(cart.items).toHaveLength(1)
     expect(cart.count).toBe(1)
+  })
+
+  it('asks a signed-out shopper to sign in instead of adding, and remembers what for', () => {
+    useAuthStore().status = 'out'
+    const cart = useCartStore()
+    expect(cart.add(anyProduct, 2)).toBe(false)
+    expect(cart.items).toHaveLength(0)
+    expect(useUiStore().signInFor).toMatchObject({ product: { id: anyProduct.id }, qty: 2 })
+
+    useAuthStore().status = 'in'
+    expect(cart.add(anyProduct)).toBe(true)
+    expect(cart.items).toHaveLength(1)
   })
 
   it('merges a repeat add into the existing line', () => {
