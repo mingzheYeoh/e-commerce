@@ -94,6 +94,8 @@ export interface AuthEnv extends OrdersEnv, MailEnv {
 const LOGIN_PER_MINUTE = 10
 const SIGNUP_PER_MINUTE = 5
 const ORDER_PER_MINUTE = 10
+/** Product questions are typed by a person, so far fewer than orders. Shares ORDER_LIMITER under its own key prefix. */
+const QUESTION_PER_MINUTE = 5
 
 /* --------------------------------------------------------------- primitives */
 
@@ -174,16 +176,17 @@ export type IpDefences = Pick<AuthEnv, 'LOGIN_LIMITER' | 'SIGNUP_LIMITER' | 'ORD
 export async function guard(
   env: IpDefences,
   request: Request,
-  kind: 'login' | 'signup' | 'order',
+  kind: 'login' | 'signup' | 'order' | 'question',
 ): Promise<{ status: 429; body: { error: string }; retryAfter: number } | null> {
   const ip = clientIp(request)
-  const cheap = { login: env.LOGIN_LIMITER, signup: env.SIGNUP_LIMITER, order: env.ORDER_LIMITER }[kind]
-  const limit = { login: LOGIN_PER_MINUTE, signup: SIGNUP_PER_MINUTE, order: ORDER_PER_MINUTE }[kind]
+  const cheap = { login: env.LOGIN_LIMITER, signup: env.SIGNUP_LIMITER, order: env.ORDER_LIMITER, question: env.ORDER_LIMITER }[kind]
+  const limit = { login: LOGIN_PER_MINUTE, signup: SIGNUP_PER_MINUTE, order: ORDER_PER_MINUTE, question: QUESTION_PER_MINUTE }[kind]
 
   const message = {
     login: 'Too many sign-in attempts. Try again in a minute.',
     signup: 'Too many sign-up attempts. Try again in a minute.',
     order: 'Too many orders from this address. Try again in a minute.',
+    question: 'Too many questions from this address. Try again in a minute.',
   }[kind]
 
   if (!(await withinLimit(cheap, `${kind}:${ip}`))) {

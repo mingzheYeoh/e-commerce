@@ -28,7 +28,7 @@ import {
   reviewKey,
   reviewPhotoUrls,
 } from './photos'
-import { authorOf, clean } from './text'
+import { authorOf, clean, text as typed } from './text'
 import { id, RETURN_REASONS } from './tenancy'
 import type { OrdersEnv } from './orders'
 import type { User } from './auth'
@@ -299,6 +299,97 @@ export async function removeReviewPhoto(env: UploadsEnv, user: User, productId: 
   const keys = [reviewKey(own.id, name, 1600), reviewKey(own.id, name, 400)]
   await env.MEDIA?.delete(keys).catch(orphaned(keys))
   return ok(mine(env, (await ownReview(env, user.id, productId))!))
+}
+
+/* --------------------------------------------------------------- questions */
+
+/** One page of the product's answered questions. */
+export const QUESTION_PAGE = 10
+/** Unanswered questions one account may have open on one product. */
+export const MAX_PENDING_QUESTIONS = 3
+export const QUESTION_MIN = 10
+export const QUESTION_MAX = 300
+
+interface QuestionRecord {
+  id: string
+  body: string
+  answer: string | null
+  answered_at: string | null
+  created_at: string
+  seller: string
+}
+
+const QUESTION_COLUMNS = `q.id, q.body, q.answer, q.answered_at, q.created_at, COALESCE(m.name, '') AS seller`
+
+/** No asker on it: a question is shown without who asked it, and the seller answers under its own name. */
+const questionOut = (q: QuestionRecord) => ({
+  id: q.id,
+  body: q.body,
+  answer: q.answer,
+  seller: q.seller,
+  askedAt: q.created_at,
+  answeredAt: q.answered_at,
+})
+
+/**
+ * The product page's questions: a page of the answered ones, newest answered
+ * first, and — for a signed-in viewer — their own still awaiting an answer.
+ * An unanswered question is never public, which is what keeps this from being
+ * a place to post anything at all. Hidden ones are in neither list.
+ */
+export async function productQuestions(env: UploadsEnv, productId: string, page: number, viewer: User | null): Promise<Reply> {
+  const [rows, pending] = await Promise.all([
+    // Matches product_questions_public_idx, predicates and all.
+    env.ORDERS.prepare(
+      `SELECT ${QUESTION_COLUMNS} FROM product_questions q LEFT JOIN merchants m ON m.id = q.merchant_id
+        WHERE q.product_id = ?1 AND q.answer IS NOT NULL AND q.hidden = 0
+        ORDER BY q.answered_at DESC, q.id DESC LIMIT ?2 OFFSET ?3`,
+    )
+      .bind(productId, QUESTION_PAGE + 1, page * QUESTION_PAGE)
+      .all<QuestionRecord>(),
+    viewer
+      ? env.ORDERS.prepare(
+          `SELECT ${QUESTION_COLUMNS} FROM product_questions q LEFT JOIN merchants m ON m.id = q.merchant_id
+            WHERE q.user_id = ?1 AND q.product_id = ?2 AND q.answer IS NULL AND q.hidden = 0
+            ORDER BY q.created_at DESC, q.id DESC`,
+        )
+          .bind(viewer.id, productId)
+          .all<QuestionRecord>()
+      : null,
+  ])
+  const list = rows.results ?? []
+  return ok({
+    page,
+    // ponytail: offset paging, as reviews: fine for a product's questions, keyset if one gets thousands.
+    next: list.length > QUESTION_PAGE ? page + 1 : null,
+    questions: list.slice(0, QUESTION_PAGE).map(questionOut),
+    // Only on the first page: they are the viewer's, not part of the paging.
+    viewer: viewer ? { pending: page === 0 ? (pending?.results ?? []).map(questionOut) : [] } : null,
+  })
+}
+
+/** Asks a question about a published product, as the account. It is private until the seller answers. */
+export async function askQuestion(env: UploadsEnv, user: User, productId: string, body: unknown): Promise<Reply> {
+  const asked = typed(fields(body).body, QUESTION_MAX)
+  if (asked === null || asked.length < QUESTION_MIN) {
+    return no(400, `A question is ${QUESTION_MIN} to ${QUESTION_MAX} characters.`)
+  }
+  // Published only: a draft or archived product has no page to show the answer on.
+  const product = await env.ORDERS.prepare(`SELECT merchant_id FROM products WHERE id = ?1 AND status = 'published'`)
+    .bind(productId)
+    .first<{ merchant_id: string }>()
+  if (!product) return no(404, 'not found')
+  // The cap is checked by the statement that inserts, so two requests racing cannot pass it together.
+  // Hidden ones count: hiding a question must not hand its asker another.
+  const { meta } = await env.ORDERS.prepare(
+    `INSERT INTO product_questions (id, product_id, merchant_id, user_id, body)
+     SELECT ?1, ?2, ?3, ?4, ?5
+      WHERE (SELECT COUNT(*) FROM product_questions WHERE user_id = ?4 AND product_id = ?2 AND answer IS NULL) < ?6`,
+  )
+    .bind(id('qst'), productId, product.merchant_id, user.id, asked, MAX_PENDING_QUESTIONS)
+    .run()
+  if (meta.changes !== 1) return no(409, `You have ${MAX_PENDING_QUESTIONS} questions waiting for this seller. Wait for an answer before asking more.`)
+  return ok({ ok: true }, 201)
 }
 
 /* ----------------------------------------------------------------- returns */

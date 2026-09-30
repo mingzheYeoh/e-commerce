@@ -132,6 +132,22 @@ export interface Repository {
     list(filter: { limit?: number }): Promise<ReviewRow[]>
   }
   /**
+   * Shoppers' questions about the scope's products, unanswered first and then
+   * newest first, hidden ones included and marked. Answering is the
+   * merchant's own act, as deciding a return is: it throws in platform scope.
+   * Never given to the AI (see rag.ts, tools.ts).
+   */
+  questions: {
+    /** At most QUESTION_CAP. */
+    list(filter: { limit?: number }): Promise<QuestionRow[]>
+    /**
+     * Writes, or rewrites, the answer to a question of this merchant's, and
+     * records who wrote it. Null when the question is not in scope. Invalid
+     * for an empty answer.
+     */
+    answer(questionId: string, answer: string): Promise<QuestionRow | null>
+  }
+  /**
    * Return requests on the scope's parts. The platform reads them; deciding
    * is the merchant's own act, so approve and reject throw in platform scope,
    * as fulfilment does.
@@ -237,6 +253,9 @@ export interface PlatformRepository extends Repository {
   moderation: {
     hide(reviewId: string): Promise<{ id: string; merchant_id: string; hidden: boolean } | null>
     unhide(reviewId: string): Promise<{ id: string; merchant_id: string; hidden: boolean } | null>
+    /** The same for a product question, which is hidden whether or not it has been answered. */
+    hideQuestion(questionId: string): Promise<{ id: string; merchant_id: string; hidden: boolean } | null>
+    unhideQuestion(questionId: string): Promise<{ id: string; merchant_id: string; hidden: boolean } | null>
   }
 }
 
@@ -515,6 +534,20 @@ export interface ReviewRow {
   photos: string[]
   created_at: string
   updated_at: string
+}
+
+/** A product question as staff see it: the asker as a first name and initial, never an email. */
+export interface QuestionRow {
+  id: string
+  product_id: string
+  product_title: string
+  merchant_id: string
+  body: string
+  answer: string | null
+  answered_at: string | null
+  hidden: boolean
+  author: string
+  created_at: string
 }
 
 /**
@@ -808,6 +841,7 @@ export const CUSTOMER_ORDERS = 100
 /** The most return requests, and reviews, one console list returns. */
 export const RETURN_CAP = 200
 export const REVIEW_CAP = 200
+export const QUESTION_CAP = 200
 
 /** Exported so staff-auth mints `mch_`/`stf_` the one way this worker mints ids. */
 export const id = (prefix: string) =>
@@ -865,6 +899,7 @@ const READS = new Set([
   'finance.ledger',
   'finance.payouts',
   'reviews.list',
+  'questions.list',
   'returns.list',
   'returns.get',
 ])
@@ -1969,6 +2004,8 @@ function platformOnly(env: TenancyEnv, staffId: string): Omit<PlatformRepository
     moderation: {
       hide: (reviewId: string) => setHidden(env, reviewId, true),
       unhide: (reviewId: string) => setHidden(env, reviewId, false),
+      hideQuestion: (questionId: string) => setHidden(env, questionId, true, 'product_questions'),
+      unhideQuestion: (questionId: string) => setHidden(env, questionId, false, 'product_questions'),
     },
   }
 }
@@ -1977,10 +2014,11 @@ function platformOnly(env: TenancyEnv, staffId: string): Omit<PlatformRepository
  * A review in or out of the product page. updated_at is the author's last
  * edit, so moderation leaves it alone; the audit log is where this is dated.
  */
-async function setHidden(env: TenancyEnv, reviewId: string, hidden: boolean) {
-  const { meta } = await env.ORDERS.prepare(`UPDATE reviews SET hidden = ? WHERE id = ?`).bind(hidden ? 1 : 0, reviewId).run()
+async function setHidden(env: TenancyEnv, reviewId: string, hidden: boolean, table: 'reviews' | 'product_questions' = 'reviews') {
+  // `table` is one of the two literals above, never request data.
+  const { meta } = await env.ORDERS.prepare(`UPDATE ${table} SET hidden = ? WHERE id = ?`).bind(hidden ? 1 : 0, reviewId).run()
   if (meta.changes !== 1) return null
-  const row = await env.ORDERS.prepare(`SELECT id, merchant_id FROM reviews WHERE id = ?`)
+  const row = await env.ORDERS.prepare(`SELECT id, merchant_id FROM ${table} WHERE id = ?`)
     .bind(reviewId)
     .first<{ id: string; merchant_id: string }>()
   return row && { ...row, hidden }
@@ -2114,12 +2152,33 @@ function build(env: TenancyEnv, scope: Scope): Repository {
    */
   const own = () => {
     if (scope.kind !== 'merchant') {
-      throw new Error('only a merchant ships, delivers or cancels its own part of an order')
+      throw new Error('only a merchant acts on its own parts of orders, return requests and questions')
     }
     return scope.merchantId
   }
   const move = (orderId: string, action: keyof typeof MOVES, ...rest: MoveRest) =>
     movePart(env, scope, orderId, own(), action, `fulfilment.${action}`, ...rest)
+
+  /** Product questions in scope matching `clauses`: unanswered first, because those are waiting on the merchant. */
+  const questionRows = async (clauses: (readonly [string, ...unknown[]] | null)[], limit?: number) => {
+    const w = where([tenant(scope, 'q.merchant_id'), ...clauses])
+    const { results } = await env.ORDERS.prepare(
+      `SELECT q.id, q.product_id, COALESCE(p.title, '') AS product_title, q.merchant_id, q.body, q.answer,
+              q.answered_at, q.hidden, u.name AS author, q.created_at
+         FROM product_questions q JOIN users u ON u.id = q.user_id
+         LEFT JOIN products p ON p.id = q.product_id${w.sql}
+        ORDER BY (q.answer IS NULL) DESC, q.created_at DESC, q.id DESC
+        LIMIT ?`,
+    )
+      .bind(...w.args, Math.min(limit ?? QUESTION_CAP, QUESTION_CAP))
+      .all<Omit<QuestionRow, 'hidden'> & { hidden: number }>()
+    return (results ?? []).map((q) => ({
+      ...q,
+      hidden: q.hidden === 1,
+      // The full name stays in the users table: staff see what shoppers see.
+      author: authorOf(q.author),
+    }))
+  }
 
   /** Return requests in scope matching `clauses`, newest first, with their part's currency and delivery date. */
   const returnRows = async (clauses: (readonly [string, ...unknown[]] | null)[]) => {
@@ -2643,6 +2702,26 @@ function build(env: TenancyEnv, scope: Scope): Repository {
       },
     },
 
+    questions: {
+      list: ({ limit }: { limit?: number }) => questionRows([], limit),
+
+      async answer(questionId: string, answer: string) {
+        const merchantId = own()
+        if (!answer.trim()) throw new Invalid('An answer cannot be empty.')
+        // The merchant is in the WHERE, so another merchant's question matches nothing.
+        // answered_at keeps the first answer's date, so an edit does not reorder the product page.
+        const { meta } = await env.ORDERS.prepare(
+          `UPDATE product_questions
+              SET answer = ?, answered_by = ?, answered_at = COALESCE(answered_at, datetime('now'))
+            WHERE id = ? AND merchant_id = ?`,
+        )
+          .bind(answer, scope.staffId, questionId, merchantId)
+          .run()
+        if (meta.changes !== 1) return null
+        return (await questionRows([['q.id = ?', questionId]]))[0] ?? null
+      },
+    },
+
     returns: {
       list: ({ status }: { status?: ReturnStatus }) => returnRows([status ? ['rr.status = ?', status] : null]),
 
@@ -2856,6 +2935,7 @@ function build(env: TenancyEnv, scope: Scope): Repository {
     refunds: wrap('refunds', raw.refunds) as Repository['refunds'],
     finance: wrap('finance', raw.finance) as Repository['finance'],
     reviews: wrap('reviews', raw.reviews) as Repository['reviews'],
+    questions: wrap('questions', raw.questions) as Repository['questions'],
     returns: wrap('returns', raw.returns) as Repository['returns'],
   }
   return audited
