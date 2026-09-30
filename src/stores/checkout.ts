@@ -39,6 +39,8 @@ export type OrderLine = CartLine & {
   seller?: string
   /** That seller's part. Null or absent unless the signed-in account placed the order. */
   status?: OrderPart['status'] | null
+  /** Whether the signed-in account has already reviewed this product. */
+  reviewed?: boolean
 }
 
 export interface Order {
@@ -394,7 +396,7 @@ export const useCheckoutStore = defineStore('checkout', {
           ...local,
           lines: local.lines.map((l) => {
             const s = server.get(lineKey(l))
-            return s ? { ...l, seller: s.seller, status: s.status } : l
+            return s ? { ...l, seller: s.seller, status: s.status, reviewed: s.reviewed } : l
           }),
           payment: remote.payment?.ref ? remote.payment : (local.payment ?? remote.payment),
         }
@@ -440,6 +442,7 @@ export function fromRemote(remote: RemoteOrder): Order {
         stockCount: p?.stockCount ?? 0,
         seller: l.seller,
         status: l.status,
+        reviewed: l.reviewed,
       }
     }),
     totals: remote.totals,

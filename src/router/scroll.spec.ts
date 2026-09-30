@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { START_LOCATION, type RouteLocationNormalized } from 'vue-router'
-import { router } from './index'
+import { router, whenPresent } from './index'
 
 const behave = router.options.scrollBehavior!
 const at = (path: string) => ({ path }) as RouteLocationNormalized
@@ -19,5 +19,22 @@ describe('scrollBehavior', () => {
 
   it('lands at the top of a newly visited page', () => {
     expect(behave(at('/shop'), at('/'), null)).toEqual({ top: 0 })
+  })
+})
+
+describe('scrollBehavior with a hash', () => {
+  const hashed = { path: '/product/x', hash: '#reviews' } as RouteLocationNormalized
+
+  it('scrolls to the element once the lazy page has rendered it, clear of the navbar', async () => {
+    const pending = behave(hashed, at('/account'), null)
+    const section = document.createElement('section')
+    section.id = 'reviews'
+    setTimeout(() => document.body.append(section), 120)
+    expect(await pending).toEqual({ el: '#reviews', top: 80 })
+    section.remove()
+  })
+
+  it('reports false when the element never appears', async () => {
+    expect(await whenPresent('#nope', 100)).toBe(false)
   })
 })
