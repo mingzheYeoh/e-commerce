@@ -87,7 +87,7 @@ const day = (at: string) =>
 </script>
 
 <template>
-  <section class="mt-16 border-t border-border-hairline pt-10" aria-labelledby="reviews-heading">
+  <section id="reviews" class="mt-16 border-t border-border-hairline pt-10" aria-labelledby="reviews-heading">
     <div class="flex flex-wrap items-baseline gap-x-4 gap-y-1">
       <h2 id="reviews-heading" class="text-xl font-bold">Reviews</h2>
       <p v-if="data?.count" class="nums text-sm text-text-secondary">

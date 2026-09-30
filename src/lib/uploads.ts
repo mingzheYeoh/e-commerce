@@ -72,7 +72,32 @@ export interface ReviewPage {
 
 const productPath = (productId: string) => `/api/products/${encodeURIComponent(productId)}`
 
-export const fetchReviews = (productId: string, page = 0) => send<ReviewPage>(`${productPath(productId)}/reviews?page=${page}`)
+/* --------------------------------------------------------------- questions */
+
+export interface Question {
+  id: string
+  body: string
+  /** Null while it awaits the seller, which only the asker is ever shown. */
+  answer: string | null
+  seller: string
+  askedAt: string
+  answeredAt: string | null
+}
+
+export interface QuestionPage {
+  page: number
+  next: number | null
+  questions: Question[]
+  /** Null when signed out; `pending` is the viewer's own unanswered questions. */
+  viewer: { pending: Question[] } | null
+}
+
+export const fetchQuestions = (productId: string, page = 0) =>
+  send<QuestionPage>(`${productPath(productId)}/questions?page=${page}`)
+export const askQuestion = (productId: string, body: string) =>
+  send<{ ok: true }>(`${productPath(productId)}/questions`, withJson('POST', { body }))
+
+export const fetchReviews =(productId: string, page = 0) => send<ReviewPage>(`${productPath(productId)}/reviews?page=${page}`)
 export const saveReview = (productId: string, rating: number, body: string) =>
   send<Review>(`${productPath(productId)}/review`, withJson('POST', { rating, body }))
 export const deleteReview = (productId: string) => send<{ ok: true }>(`${productPath(productId)}/review`, { method: 'DELETE' })

@@ -72,6 +72,14 @@ const PART_BADGE: Record<OrderPart['status'], string> = {
             {{ PART_LABEL[line.status] ?? line.status }}
           </span>
         </p>
+        <!-- Delivered is the server's own eligibility rule for reviewing, so the link is offered exactly when the form will be. -->
+        <RouterLink
+          v-if="line.status === 'delivered' && findProduct(line.productId)"
+          :to="{ path: `/product/${line.productId}`, hash: '#reviews' }"
+          class="mt-1 inline-block text-xs font-medium text-accent hover:underline"
+        >
+          {{ line.reviewed ? 'Edit your review' : 'Write a review' }}
+        </RouterLink>
       </div>
     </li>
   </ul>

@@ -480,6 +480,10 @@ async function twoTenants() {
     .prepare(`INSERT INTO return_requests (id, order_id, merchant_id, reason, note)
               VALUES ('LEAK_ret_b', 'LEAK_o_b', 'mch_b', 'damaged', 'LEAK_NOTE')`)
     .run()
+  raw
+    .prepare(`INSERT INTO product_questions (id, product_id, merchant_id, user_id, body)
+              VALUES ('LEAK_qst_b', 'LEAK_p_b', 'mch_b', 'usr_ada', 'LEAK_QUESTION?')`)
+    .run()
   return { env: { ORDERS: db } as TenancyEnv, raw, rows }
 }
 
@@ -684,6 +688,10 @@ const CASES: Record<string, unknown[]> = {
   'returns.reject': ['LEAK_ret_b', { note: 'Sweep' }],
   'moderation.hide': ['LEAK_rev_b'],
   'moderation.unhide': ['LEAK_rev_b'],
+  'questions.list': [{}],
+  'questions.answer': ['LEAK_qst_b', 'Sweep'],
+  'moderation.hideQuestion': ['LEAK_qst_b'],
+  'moderation.unhideQuestion': ['LEAK_qst_b'],
   // Platform only: a merchant repository has no such groups, which the
   // completeness tests below pin. Suspend before restore, because the audit
   // sweep runs them in this order against an active mch_b.
@@ -723,6 +731,8 @@ const PLATFORM_ONLY = [
   'customers.get',
   'moderation.hide',
   'moderation.unhide',
+  'moderation.hideQuestion',
+  'moderation.unhideQuestion',
 ]
 
 /** Methods the platform repository carries and refuses: they act for one merchant, which the platform is not. */
@@ -734,6 +744,8 @@ const MERCHANT_ACTS = [
   // The platform reads returns; deciding one is the merchant's call.
   'returns.approve',
   'returns.reject',
+  // Answering is the seller's voice, not the platform's.
+  'questions.answer',
 ]
 
 const call = (repo: Repository, dotted: string, args: unknown[]) => {

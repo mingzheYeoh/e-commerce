@@ -725,8 +725,14 @@ describe('getOrder details', () => {
         finish: 'Silver',
         seller: 'Nexus',
         status: 'delivered',
+        reviewed: false,
       },
     ])
+    // One query answers "already reviewed" for the owner, and only for them.
+    raw.prepare('PRAGMA foreign_keys = OFF').run() // the seeded db has no users or catalogue rows to point at
+    raw.prepare(`INSERT INTO reviews (id, user_id, product_id, merchant_id, rating) VALUES ('r1', 'usr_owner', '${FLAGSHIP.id}', 'm', 5)`).run()
+    expect((await getOrder({ ORDERS: db }, 'NX-4K2P9', 'usr_owner'))!.lines[0]).toMatchObject({ reviewed: true })
+    expect((await getOrder({ ORDERS: db }, 'NX-4K2P9', 'usr_stranger'))!.lines[0]).not.toHaveProperty('reviewed')
     expect(owner!.payment).toEqual({ method: 'fpx', channel: 'Maybank2u', ref: expect.stringMatching(/^SIM-FPX-/) })
 
     for (const viewer of [null, 'usr_stranger']) {

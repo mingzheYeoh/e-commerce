@@ -368,6 +368,32 @@ export const setReviewHidden = (id: string, hidden: boolean) =>
     method: 'POST',
   })
 
+export type StaffQuestion = {
+  id: string
+  productId: string
+  productTitle: string
+  merchantId: string
+  body: string
+  answer: string | null
+  answeredAt: string | null
+  hidden: boolean
+  author: string
+  createdAt: string
+}
+
+export const listQuestions = (scope: Scope) => call<{ questions: StaffQuestion[] } | ErrorBody>(`/api/${scope}/questions`)
+
+export const answerQuestion = (id: string, answer: string) =>
+  call<StaffQuestion | ErrorBody>(`/api/merchant/questions/${encodeURIComponent(id)}/answer`, {
+    method: 'POST',
+    body: JSON.stringify({ answer }),
+  })
+
+export const setQuestionHidden = (id: string, hidden: boolean) =>
+  call<{ id: string; hidden: boolean } | ErrorBody>(`/api/platform/questions/${encodeURIComponent(id)}/${hidden ? 'hide' : 'unhide'}`, {
+    method: 'POST',
+  })
+
 export type ReportTotals = {
   currency: string
   gross: number

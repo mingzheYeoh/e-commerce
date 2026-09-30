@@ -27,6 +27,7 @@ import CustomerDetail from './pages/CustomerDetail.vue'
 import Returns from './pages/Returns.vue'
 import ReturnDetail from './pages/ReturnDetail.vue'
 import Reviews from './pages/Reviews.vue'
+import Questions from './pages/Questions.vue'
 
 /** Which dashboard frame a page sits in. Pages without one (sign-in, enrol) stand alone. */
 declare module 'vue-router' {
@@ -61,6 +62,7 @@ export const routes = [
     meta: merchant,
   },
   { path: '/reviews', name: 'reviews', component: Reviews, props: { scope: 'merchant' }, meta: merchant },
+  { path: '/questions', name: 'questions', component: Questions, props: { scope: 'merchant' }, meta: merchant },
   { path: '/platform', name: 'platform', component: PlatformOverview, meta: platform },
   { path: '/platform/merchants', name: 'merchants', component: Merchants, meta: platform },
   { path: '/platform/merchants/:id', name: 'merchant', component: MerchantDetail, props: true, meta: platform },
@@ -81,6 +83,7 @@ export const routes = [
     meta: platform,
   },
   { path: '/platform/reviews', name: 'platform-reviews', component: Reviews, props: { scope: 'platform' }, meta: platform },
+  { path: '/platform/questions', name: 'platform-questions', component: Questions, props: { scope: 'platform' }, meta: platform },
   // Neither is a real destination: the guard below redirects away from both
   // for every `me` shape, so the component here is never actually shown.
   { path: '/', name: 'root', component: SignIn },
@@ -88,7 +91,7 @@ export const routes = [
 ]
 
 /** A merchant's pages: each of these and anything beneath it (/products/new, /orders/:id). */
-const MERCHANT_PAGES = ['/overview', '/products', '/orders', '/reports', '/inventory', '/finance', '/returns', '/reviews']
+const MERCHANT_PAGES = ['/overview', '/products', '/orders', '/reports', '/inventory', '/finance', '/returns', '/reviews', '/questions']
 
 /** `to` is `base` itself or anywhere beneath it. */
 const within = (to: string, base: string) => to === base || to.startsWith(`${base}/`)

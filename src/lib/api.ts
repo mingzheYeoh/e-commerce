@@ -243,6 +243,8 @@ export interface RemoteOrder {
     seller?: string
     /** That seller's part of the order. Null unless this account placed it. */
     status?: OrderPart['status'] | null
+    /** Whether this account has reviewed the product. Sent only to the account that placed it. */
+    reviewed?: boolean
   }[]
   /** Present only when the signed-in account placed this order. */
   parts?: OrderPart[]
