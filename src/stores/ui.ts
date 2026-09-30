@@ -1,4 +1,5 @@
 import { defineStore } from 'pinia'
+import type { Product } from '@/types'
 
 export type CurrencyCode = 'USD' | 'EUR' | 'GBP' | 'SGD' | 'MYR'
 
@@ -36,6 +37,11 @@ export const useUiStore = defineStore('ui', {
     searchOpen: false,
     /** Brand id whose hover portal is showing, or null. */
     activeBrand: null as string | null,
+    /**
+     * What a signed-out shopper tried to put in the bag. SignInPrompt asks them
+     * to sign in, and adds it the moment they do.
+     */
+    signInFor: null as { product: Product; qty: number; finish?: string } | null,
   }),
 
   actions: {

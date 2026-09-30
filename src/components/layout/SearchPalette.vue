@@ -453,7 +453,7 @@ const resultCount = computed(() => flat.value.filter((r) => r.kind !== 'ask').le
                       class="shrink-0 rounded-md border border-white/[0.08] bg-surface-2 px-2.5 py-1 text-xs font-medium text-text-secondary transition-[opacity,background-color,color] hover:border-accent hover:bg-accent hover:text-white focus-visible:opacity-100 group-hover:opacity-100 [@media(hover:none)]:opacity-100"
                       :class="group.start + i === cursor ? 'opacity-100' : 'opacity-0'"
                       :aria-label="`Add ${row.product.title} to cart`"
-                      @click="cart.add(row.product)"
+                      @click="cart.add(row.product) || ui.closeSearch()"
                     >
                       Add
                     </button>

@@ -332,6 +332,8 @@ export const useCheckoutStore = defineStore('checkout', {
           // server's own words name the product.
           this.setAttempt(null)
           this.error = saved.error || 'Some items are no longer available. Review your cart to continue.'
+        } else if (saved.status === 401) {
+          this.error = 'Your session has ended. Sign in again to place this order: your cart is saved.'
         } else if (saved.status === 429) {
           this.error = saved.error || 'Too many orders from this connection. Try again in a minute.'
         } else {

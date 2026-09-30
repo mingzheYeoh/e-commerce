@@ -23,7 +23,8 @@ const route = useRoute()
 const router = useRouter()
 const { format, formatAmount } = useCurrency()
 
-const mode = ref<'in' | 'up' | 'forgot'>('in')
+// ?mode=up arrives from the sign-in prompt's "Create an account".
+const mode = ref<'in' | 'up' | 'forgot'>(route.query.mode === 'up' ? 'up' : 'in')
 const name = ref('')
 const email = ref('')
 const password = ref('')

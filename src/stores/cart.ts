@@ -1,6 +1,8 @@
 import { defineStore } from 'pinia'
 import type { Product } from '@/types'
 import { catalogue, catalogueStatus, findProduct } from './catalog'
+import { useAuthStore } from './auth'
+import { useUiStore } from './ui'
 
 export interface CartLine {
   /**
@@ -169,8 +171,19 @@ export const useCartStore = defineStore('cart', {
   },
 
   actions: {
-    add(product: Product, qty = 1, finish?: string) {
-      if (!product.inStock || product.stockCount < 1) return
+    /**
+     * Puts a product in the bag, and says whether it did. A signed-out shopper
+     * is asked to sign in instead: every order belongs to an account, so the
+     * bag does too. 'unknown' (the first moments of a page load, before the
+     * server has answered) is let through rather than prompting someone who is
+     * in fact signed in; checkout checks again.
+     */
+    add(product: Product, qty = 1, finish?: string): boolean {
+      if (!product.inStock || product.stockCount < 1) return false
+      if (useAuthStore().status === 'out') {
+        useUiStore().signInFor = { product, qty, finish }
+        return false
+      }
 
       // Only a finish the product actually offers. Anything else would travel
       // to the order endpoint and be refused there instead.
@@ -193,6 +206,7 @@ export const useCartStore = defineStore('cart', {
           finish: chosen,
         })
       }
+      return true
     },
 
     setQty(key: string, qty: number) {

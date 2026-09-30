@@ -267,10 +267,12 @@ export default {
             headers: { ...headers, 'retry-after': String(limited.retryAfter) },
           })
         }
-        // Signing in is optional at checkout. When there is a session the order
-        // is filed to it, which is the only way it ever joins an account.
+        // Every order belongs to an account: the storefront asks shoppers to
+        // sign in before anything goes in the bag, and this is where that holds.
+        // Guest orders placed before this rule stay readable by id.
         const user = await sessionUser(env, request)
-        const result = await placeOrder(env, await request.json(), user?.id ?? null)
+        if (!user) return json({ error: 'Sign in to place an order.', code: 'signin' }, { status: 401, headers })
+        const result = await placeOrder(env, await request.json(), user.id)
         return json(result.body, { status: result.status, headers })
       }
 

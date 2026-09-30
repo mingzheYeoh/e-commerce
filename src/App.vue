@@ -2,6 +2,7 @@
 import NavBar from '@/components/layout/NavBar.vue'
 import CartDrawer from '@/components/layout/CartDrawer.vue'
 import SearchPalette from '@/components/layout/SearchPalette.vue'
+import SignInPrompt from '@/components/layout/SignInPrompt.vue'
 import CompareTray from '@/components/commerce/CompareTray.vue'
 import SiteFooter from '@/components/layout/SiteFooter.vue'
 import { onMounted } from 'vue'
@@ -38,6 +39,7 @@ const compare = useCompareStore()
   <NavBar />
   <SearchPalette />
   <CartDrawer />
+  <SignInPrompt />
 
   <main id="main" class="min-h-screen bg-void">
     <RouterView />
