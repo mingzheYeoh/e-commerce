@@ -1058,7 +1058,7 @@ async function route(request: Request, env: ConsoleEnv, url: URL, ctx: Execution
     if (repo instanceof Response) return repo
     const q = await repo.stats.queue()
     return json(
-      { toShip: q.to_ship, lowStock: q.low_stock, outOfStock: q.out_of_stock, lowStockAt: LOW_STOCK, returnsOpen: q.returns_open },
+      { toShip: q.to_ship, lowStock: q.low_stock, outOfStock: q.out_of_stock, lowStockAt: LOW_STOCK, returnsOpen: q.returns_open, questionsOpen: q.questions_open },
       200,
       PRIVATE,
     )
