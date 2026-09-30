@@ -42,6 +42,8 @@ export const useUiStore = defineStore('ui', {
      * to sign in, and adds it the moment they do.
      */
     signInFor: null as { product: Product; qty: number; finish?: string } | null,
+    /** Set on signing in: WelcomeTransition greets them and takes them to `to`. */
+    welcome: null as { message: string; to: string } | null,
   }),
 
   actions: {
