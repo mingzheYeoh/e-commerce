@@ -8,9 +8,10 @@
  * already been typed, which is the actual complaint about separate pages.
  */
 import { computed, onMounted, ref } from 'vue'
-import { RouterLink, useRoute, useRouter } from 'vue-router'
+import { RouterLink, useRoute } from 'vue-router'
 import { User, LogOut, Package, AlertCircle, MailCheck, ChevronDown } from 'lucide-vue-next'
 import { useAuthStore } from '@/stores/auth'
+import { useUiStore } from '@/stores/ui'
 import { useCurrency } from '@/composables/useCurrency'
 import { myOrders, fetchOrder, type AccountOrder } from '@/lib/api'
 import { fromRemote, type Order } from '@/stores/checkout'
@@ -19,8 +20,8 @@ import AvatarEditor from '@/components/account/AvatarEditor.vue'
 import OrderLines from '@/components/checkout/OrderLines.vue'
 
 const auth = useAuthStore()
+const ui = useUiStore()
 const route = useRoute()
-const router = useRouter()
 const { format, formatAmount } = useCurrency()
 
 // ?mode=up arrives from the sign-in prompt's "Create an account".
@@ -88,11 +89,9 @@ async function submit() {
   // until the emailed link is clicked — so there is nowhere to go yet.
   if (!auth.signedIn) return
 
-  if (next.value) {
-    router.replace(next.value)
-    return
-  }
-  void loadOrders()
+  // Signed in: greeted on the way to where they were going — back to the
+  // product or the checkout that sent them here, otherwise the home page.
+  ui.welcome = { message: `Welcome back, ${auth.firstName}`, to: next.value || '/' }
 }
 
 async function leave() {
@@ -245,7 +244,7 @@ const when = (iso: string) =>
           {{
             mode === 'forgot'
               ? 'Tell us the address on the account and we will send a link to choose a new password.'
-              : 'An account keeps your orders together and readable from any device. Checkout works perfectly well without one.'
+              : 'Sign in to shop: your orders stay with your account, readable from any device.'
           }}
         </p>
 
