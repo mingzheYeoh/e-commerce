@@ -52,7 +52,7 @@ let resetTimer: number | undefined
 
 function addToCart() {
   if (!props.product.inStock) return
-  cart.add(props.product)
+  if (!cart.add(props.product)) return
 
   // Confirm in place. The header counter also pulses, but the feedback has to
   // land where the click happened or the button reads as dead.

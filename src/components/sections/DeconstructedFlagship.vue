@@ -72,7 +72,7 @@ const variants = computed(() =>
 
 function preorder() {
   if (!product.value) return
-  cart.add(product.value, 1, variant.value.name)
+  if (!cart.add(product.value, 1, variant.value.name)) return
   added.value = true
   window.setTimeout(() => (added.value = false), 1200)
 }
