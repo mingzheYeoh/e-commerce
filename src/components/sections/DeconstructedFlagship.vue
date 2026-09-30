@@ -112,6 +112,7 @@ function preorder() {
         :progress="progress"
         :image="flagship.image"
         :parts="flagship.parts"
+        :title="flagship.title"
         :variant="variant"
       />
     </div>

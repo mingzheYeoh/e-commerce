@@ -72,7 +72,7 @@ describe('extractFacts — numbers read out of real spec prose', () => {
     // pattern is free to start after the decimal point. The graph then answered
     // "largest screen" with a phone.
     expect(extractFacts(find('oneplus-15')).screenInches).toBe(6.78)
-    expect(extractFacts(find('fx3-cinema')).megapixels).toBe(10.2)
+    expect(extractFacts(find('fx3-cinema')).megapixels).toBe(12.1)
   })
 
   it('does not mistake a sensor size for a screen size', () => {

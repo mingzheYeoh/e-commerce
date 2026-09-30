@@ -50,7 +50,8 @@ Verified against `sqlite_master` on 2026-09-21; production caught up on 2026-09-
 | `0015` payment method | ✅ 2026-09-26 | ✅ 2026-09-26 |
 | `0016` customer uploads | ✅ 2026-09-26 | ✅ 2026-09-26 |
 | `0017` catalogue media on R2 (data only) | ✅ 2026-09-26 | ✅ 2026-09-26 |
-| `0018` product questions | not yet | not yet |
+| `0018` product questions | ✅ 2026-09-30 | ✅ 2026-09-30 |
+| `0019` official specs (data only) | not yet | not yet |
 
 Until 2026-09-24 production held only `orders`, `order_lines` and the four
 tables from `0006`; the accounts tables (`users`, `sessions`, `email_tokens`,

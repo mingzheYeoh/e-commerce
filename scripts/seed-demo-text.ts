@@ -12,7 +12,9 @@
 export type Kind =
   | 'phone'
   | 'earbuds'
+  | 'open-ear'
   | 'headphones'
+  | 'wired-headphones'
   | 'speaker'
   | 'music'
   | 'laptop'
@@ -20,25 +22,28 @@ export type Kind =
   | 'powerbank'
   | 'watch'
   | 'webcam'
-  | 'stabiliser'
+  | 'pocket-camera'
+  | 'gimbal'
   | 'drone'
   | 'camera'
   | 'keyboard'
-  | 'switches'
+  | 'wired-keyboard'
+  | 'magnetic-switches'
   | 'mouse'
+  | 'gaming-mouse'
   | 'monitor'
 
 const BY_ID: Record<string, Kind> = {
   'cmf-buds': 'earbuds',
   'soundcore-liberty': 'earbuds',
-  'ear-open': 'earbuds',
+  'ear-open': 'open-ear',
   'galaxy-buds': 'earbuds',
-  'open-earbuds': 'earbuds',
+  'open-earbuds': 'open-ear',
   'momentum-4': 'headphones',
   'qc-ultra': 'headphones',
   wh1000xm6: 'headphones',
   'airpods-max': 'headphones',
-  hd900s: 'headphones',
+  hd900s: 'wired-headphones',
   'soundlink-max': 'speaker',
   'ob4-speaker': 'speaker',
   'tp7-recorder': 'music',
@@ -47,13 +52,14 @@ const BY_ID: Record<string, Kind> = {
   'prime-powerbank': 'powerbank',
   'watch-ultra': 'watch',
   'brio-webcam': 'webcam',
-  'osmo-pocket': 'stabiliser',
-  'rs4-gimbal': 'stabiliser',
+  'osmo-pocket': 'pocket-camera',
+  'rs4-gimbal': 'gimbal',
   'mavic-4-pro': 'drone',
-  'switch-set': 'switches',
+  'switch-set': 'magnetic-switches',
+  blackwidow: 'wired-keyboard',
   'k-pro-mouse': 'mouse',
   'mx-master': 'mouse',
-  'viper-v3': 'mouse',
+  'viper-v3': 'gaming-mouse',
   'odyssey-oled': 'monitor',
 }
 
@@ -71,7 +77,9 @@ export const kindOf = (id: string, category: string): Kind => BY_ID[id] ?? BY_CA
 export const POPULARITY: Record<Kind, number> = {
   phone: 3,
   earbuds: 3,
+  'open-ear': 1.2,
   headphones: 2.2,
+  'wired-headphones': 0.3,
   speaker: 1.2,
   music: 0.5,
   laptop: 1.6,
@@ -79,12 +87,15 @@ export const POPULARITY: Record<Kind, number> = {
   powerbank: 1.5,
   watch: 1,
   webcam: 1,
-  stabiliser: 0.9,
+  'pocket-camera': 0.9,
+  gimbal: 0.5,
   drone: 0.7,
   camera: 0.7,
   keyboard: 1.8,
-  switches: 1,
+  'wired-keyboard': 0.8,
+  'magnetic-switches': 0.6,
   mouse: 2,
+  'gaming-mouse': 1,
   monitor: 0.8,
 }
 
@@ -92,8 +103,9 @@ export const POPULARITY: Record<Kind, number> = {
 export const GOES_WITH: Partial<Record<Kind, Kind[]>> = {
   phone: ['earbuds', 'charger', 'powerbank', 'watch'],
   laptop: ['mouse', 'charger', 'keyboard'],
-  camera: ['stabiliser'],
-  keyboard: ['mouse', 'switches'],
+  camera: ['gimbal'],
+  keyboard: ['mouse'],
+  'wired-keyboard': ['gaming-mouse'],
   monitor: ['keyboard', 'mouse', 'webcam'],
   drone: ['powerbank'],
 }
@@ -260,7 +272,7 @@ const ASPECTS: Record<Kind, Aspects> = {
       'The camera is excellent, night shots at a pasar malam came out sharp and natural.',
       'Battery easily lasts a full day with heavy use, usually 30% left at night.',
       'The screen is bright enough to read outdoors at noon.',
-      'Fast charging is genuinely fast, 50% in about twenty minutes.',
+      'Fast charging is genuinely quick.',
       'Feels premium in the hand and the speakers are loud and clear.',
       'Smooth and quick, no lag even with lots of apps open.',
     ],
@@ -268,7 +280,7 @@ const ASPECTS: Record<Kind, Aspects> = {
       'It gets a little warm when gaming for a long time.',
       'A bit heavy, took a week to get used to it.',
       'Portrait mode sometimes cuts around hair badly.',
-      'No charger in the box, so budget for one.',
+      'I wish it came in more colours.',
     ],
     bad: [
       'Battery drains much faster than advertised.',
@@ -282,7 +294,7 @@ const ASPECTS: Record<Kind, Aspects> = {
       'Noise cancelling is great on the LRT, the rumble just disappears.',
       'Very comfortable, I can wear them for hours at work.',
       'Sound is clear with punchy bass without being muddy.',
-      'Pairing with my phone and laptop at the same time works perfectly.',
+      'Pairing was instant and the connection is rock solid.',
       'Calls are clear, colleagues say they cannot tell I am on earbuds.',
       'Battery easily lasts my commute for the whole week.',
       'They sit flush in the ear and I forget I am wearing them.',
@@ -299,12 +311,32 @@ const ASPECTS: Record<Kind, Aspects> = {
       'Microphone picks up a lot of wind noise.',
     ],
   },
+  'open-ear': {
+    good: [
+      'I can hear traffic and announcements while still enjoying music.',
+      'Comfortable for hours, nothing pressing into my ears.',
+      'They stay put on runs around the park.',
+      'Calls are clear enough for work.',
+    ],
+    mixed: ['Bass is lighter than in-ear buds.', 'People nearby can hear a bit at high volume.'],
+    bad: ['Too quiet on a noisy bus.', 'The fit is loose on smaller ears.'],
+  },
+  'wired-headphones': {
+    good: [
+      'The soundstage is enormous, instruments sit all around my head.',
+      'Detail is incredible, I hear things in old recordings I never noticed.',
+      'Very comfortable for long listening sessions.',
+      'Sounds fantastic from my amp with the balanced cable.',
+    ],
+    mixed: ['They need a good amp to shine.', 'Open-back, so everyone in the room hears them too.'],
+    bad: ['Too revealing of badly recorded music.', 'Not practical outside a quiet room.'],
+  },
   headphones: {
     good: [
       'The noise cancelling is superb on flights, I slept through most of KL to Tokyo.',
       'Comfortable for long sessions, no pressure on the head even with glasses.',
       'Sound is detailed and wide, I keep rediscovering old albums.',
-      'Battery life is ridiculous, I charge them maybe once a week.',
+      'Battery easily lasts a week of commuting.',
       'Build quality feels solid and the carry case is well made.',
     ],
     mixed: [
@@ -385,7 +417,7 @@ const ASPECTS: Record<Kind, Aspects> = {
   },
   watch: {
     good: [
-      'Battery lasts about three days, much better than my old watch.',
+      'Battery comfortably lasts two days, much better than my old watch.',
       'GPS tracking on runs around Taman Tasik Titiwangsa is spot on.',
       'The screen is very bright and easy to read in the sun.',
       'Comfortable to sleep with, sleep tracking is useful.',
@@ -402,15 +434,25 @@ const ASPECTS: Record<Kind, Aspects> = {
     mixed: ['The clip is a bit fiddly on thin monitors.', 'Autofocus hunts now and then.'],
     bad: ['Image is grainy in the evening.', 'Disconnects randomly on my laptop.'],
   },
-  stabiliser: {
+  'pocket-camera': {
     good: [
       'Footage is buttery smooth, even walking through a busy market.',
-      'Tiny and quick to set up, I actually take it out now.',
+      'Tiny enough to live in my pocket, so I actually take it out now.',
       'Tracking keeps my kids in frame while they run around.',
-      'Battery lasts through a full day of shooting.',
+      'Low light video looks far better than my phone.',
     ],
-    mixed: ['The app asks to update often.', 'Balancing takes a few tries at first.'],
-    bad: ['Motors jitter with a heavier lens.', 'Overheated during a long shoot.'],
+    mixed: ['The app asks to update often.', 'Battery is fine for an outing, bring a power bank for a whole day.'],
+    bad: ['The screen is hard to see in bright sun.', 'Froze once and needed a restart.'],
+  },
+  gimbal: {
+    good: [
+      'Handles my full-frame camera and a zoom lens without complaint.',
+      'The automatic axis locks make setup and packing much faster.',
+      'Battery lasts a full shoot day with plenty to spare.',
+      'Moves are smooth and the screen makes settings easy to reach.',
+    ],
+    mixed: ['Balancing takes a few tries at first.', 'Heavy after an hour of handheld work.'],
+    bad: ['Motors jitter with a heavier lens.', 'The app disconnects now and then.'],
   },
   drone: {
     good: [
@@ -430,7 +472,7 @@ const ASPECTS: Record<Kind, Aspects> = {
       'Compact for a full-frame body, easy to take travelling.',
     ],
     mixed: ['Battery drains quickly when shooting video.', 'Menus take time to learn.'],
-    bad: ['Overheats when recording long 4K clips.', 'Grip is too small for my hands.'],
+    bad: ['Battery life is short for a full day of shooting.', 'Grip is too small for my hands.'],
   },
   keyboard: {
     good: [
@@ -444,21 +486,39 @@ const ASPECTS: Record<Kind, Aspects> = {
     mixed: ['It is loud, my housemate noticed.', 'The software is basic.', 'Quite tall, a wrist rest helps.'],
     bad: ['A couple of keys started double typing.', 'Stabilisers rattle on the space bar.'],
   },
-  switches: {
+  'magnetic-switches': {
     good: [
       'Smooth and consistent, every switch feels the same.',
-      'Fit my hot-swap board perfectly.',
-      'The sound is deep and satisfying after lubing a few.',
+      'Dropped straight into my Keychron HE board.',
+      'Being able to set the actuation point per key is brilliant for games.',
     ],
-    mixed: ['A few pins arrived slightly bent, easy to straighten.', 'Heavier than I expected.'],
-    bad: ['Several switches were scratchy out of the box.', 'Two were dead on arrival.'],
+    mixed: ['They only work in HE boards, so check yours first.', 'A little lighter than I expected.'],
+    bad: ['A couple of switches felt scratchy out of the box.', 'One needed recalibrating in the software.'],
+  },
+  'wired-keyboard': {
+    good: [
+      'The clicky switches are loud and satisfying.',
+      'The command dial is handy for volume and scrubbing video.',
+      'The magnetic wrist rest is genuinely comfortable.',
+      'Build feels solid and the lighting is bright.',
+    ],
+    mixed: ['It is big, it takes over the desk.', 'The software is needed for macros.'],
+    bad: ['A key started chattering after a few weeks.', 'The cable is thick and stiff.'],
+  },
+  'gaming-mouse': {
+    good: [
+      'So light it almost disappears under my hand.',
+      'Tracking is precise and the clicks are crisp.',
+      'Battery lasts well over a week of daily gaming.',
+    ],
+    mixed: ['The side buttons are only on the left.', 'Needs the software to change the polling rate.'],
+    bad: ['Started double clicking after a few weeks.', 'Too small for my hand.'],
   },
   mouse: {
     good: [
       'Very comfortable for long workdays, my wrist feels better.',
       'The scroll wheel is addictive, great for long spreadsheets.',
       'Tracking is precise and the buttons are easy to reach.',
-      'Light and fast, perfect for games.',
       'Battery lasts for ages between charges.',
       'Clicks feel crisp and satisfying.',
       'Switching between my laptop and desktop is seamless.',
@@ -573,7 +633,7 @@ export interface QA {
 
 const QUESTIONS: Record<Kind, QA[]> = {
   phone: [
-    { q: 'Does it support dual SIM on Malaysian networks?', a: 'Yes, one nano-SIM plus eSIM, and it works on all the major Malaysian networks including 5G.' },
+    { q: 'Does it support dual SIM on Malaysian networks?', a: 'Yes, it supports dual SIM and works on all the major Malaysian networks, including 5G.' },
     { q: 'Is a charger included in the box?', a: 'Only a USB-C cable is in the box. Any USB-C PD charger works; the Anker GaN charger we list charges it at full speed.' },
     { q: 'Is this the Malaysian set? Will the warranty work here?', a: 'It is the Malaysian set with a 2-year warranty, claimable at authorised service centres in Malaysia and Singapore.' },
     { q: 'How long does delivery to Sabah usually take?', a: 'Usually 4 to 6 working days to East Malaysia with standard shipping, or 2 to 3 with express.' },
@@ -582,19 +642,24 @@ const QUESTIONS: Record<Kind, QA[]> = {
   earbuds: [
     { q: 'Can I use just one earbud at a time?', a: 'Yes, either earbud works on its own for music and calls.' },
     { q: 'Will they stay in while running?', a: 'Three tip sizes are included; most customers find the medium tips secure for running.' },
-    { q: 'Can they connect to my phone and laptop at the same time?', a: 'Yes, multipoint is supported, so they stay connected to two devices at once.' },
-    { q: 'Does the case support wireless charging?', a: 'Yes, the case charges on any Qi pad as well as over USB-C.' },
+    { q: 'Do they have noise cancelling?', a: 'Yes, active noise cancelling, adjustable in the app.' },
   ],
   headphones: [
     { q: 'Can I use these with a wire on a plane?', a: 'Yes, a 3.5 mm cable is in the box and works even when the battery is flat.' },
-    { q: 'Do they come with a hard case?', a: 'Yes, a hard carry case is included.' },
+    { q: 'Do they come with a case?', a: 'Yes, a carry case is included.' },
     { q: 'Are these comfortable with glasses?', a: 'Most customers who wear glasses find them comfortable; the pads are soft and the clamp eases after a few days.' },
-    { q: 'How many hours does the battery last with noise cancelling on?', a: 'About 30 hours with noise cancelling on, and a 10 minute charge gives several hours.' },
   ],
-  speaker: [
-    { q: 'Can I pair two of these for stereo?', a: 'Yes, two units pair as a left and right stereo set in the app.' },
-    { q: 'Is it waterproof?', a: 'It is rated for splashes and rain, fine by the pool, but please do not submerge it.' },
+  'open-ear': [
+    { q: 'Can I hear traffic while wearing these?', a: 'Yes. The open-ear design leaves your ear canal open, so you still hear what is around you.' },
+    { q: 'Do they have noise cancelling?', a: 'No. They are open-ear on purpose, so outside sound comes through.' },
+    { q: 'Will they stay on while running?', a: 'Yes, they are designed to stay put during workouts.' },
   ],
+  'wired-headphones': [
+    { q: 'Do I need a headphone amplifier?', a: 'At 300 Ω they sound their best from a headphone amplifier; the 4.4mm balanced cable in the box suits one.' },
+    { q: 'Do they block outside noise?', a: 'No, they are open-back, so sound passes both ways. They suit a quiet room rather than a commute.' },
+    { q: 'Which cables come in the box?', a: 'Two 3m cables, one with a 6.35mm plug and one with a 4.4mm balanced plug.' },
+  ],
+  speaker: [],
   music: [
     { q: 'Does it work as a USB audio interface?', a: 'Yes, it shows up as a class-compliant audio device on Mac, Windows and iPad.' },
     { q: 'Is the battery replaceable?', a: 'Not by the user, but it is covered by the 2-year warranty and our service centre can replace it.' },
@@ -621,9 +686,13 @@ const QUESTIONS: Record<Kind, QA[]> = {
     { q: 'Does it work with Zoom and Teams without drivers?', a: 'Yes, it is plug and play on Windows and macOS; the app is optional.' },
     { q: 'Is there a privacy shutter?', a: 'Yes, a built-in shutter slides over the lens.' },
   ],
-  stabiliser: [
-    { q: 'How long does the battery last?', a: 'Around 12 hours of continuous use in our testing, depending on the load.' },
-    { q: 'Does it work with Android phones?', a: 'Yes, the app is on both Android and iOS.' },
+  'pocket-camera': [
+    { q: 'How long does it record on a charge?', a: 'Up to 240 minutes at 1080p/24fps, and it charges to 80% in about 18 minutes.' },
+    { q: 'Does it have built-in storage?', a: 'Yes, 107GB built in.' },
+  ],
+  gimbal: [
+    { q: 'Can it carry a full-frame camera with a zoom lens?', a: 'Yes, it is rated for payloads up to 4.5 kg.' },
+    { q: 'How long does the battery last?', a: 'About 13 hours with the included grip, and up to 29 hours with the BG70 battery grip.' },
   ],
   drone: [
     { q: 'Do I need to register this drone in Malaysia?', a: 'Drones over 250 g need a permit from CAAM before flying. We include a guide in the box.' },
@@ -638,9 +707,19 @@ const QUESTIONS: Record<Kind, QA[]> = {
     { q: 'Is it US ANSI layout?', a: 'Yes, US ANSI layout.' },
     { q: 'Can it connect by Bluetooth and by cable?', a: 'Yes, Bluetooth, the 2.4 GHz receiver or a USB-C cable.' },
   ],
-  switches: [
-    { q: 'Are these 5-pin switches?', a: 'Yes, 5-pin, so they fit both 3-pin and 5-pin hot-swap boards.' },
-    { q: 'How many switches are in a set?', a: 'Enough for a full-size board, plus a few spares.' },
+  'magnetic-switches': [
+    { q: 'Will these fit my regular mechanical keyboard?', a: 'No. They are magnetic (Hall effect) switches for Keychron Q HE, K HE and Lemokey P HE keyboards.' },
+    { q: 'Can I change the actuation point?', a: 'Yes, from 0.2 to 3.8 mm in 0.1 mm steps, set in the keyboard software.' },
+    { q: 'How many switches are in the set?', a: '110.' },
+  ],
+  'wired-keyboard': [
+    { q: 'Is it wireless?', a: 'No, it connects over a detachable USB-C cable and has a USB passthrough.' },
+    { q: 'Which switches can I choose?', a: 'Razer Green (clicky) or Razer Yellow (linear).' },
+    { q: 'Is the wrist rest included?', a: 'Yes, the magnetic leatherette wrist rest comes in the box.' },
+  ],
+  'gaming-mouse': [
+    { q: 'Is it suitable for left-handed users?', a: 'The shape is symmetrical, but the side buttons are on the left, so it suits right-handed use best.' },
+    { q: 'What polling rate does it support?', a: 'Up to 8,000Hz with the included HyperPolling dongle.' },
   ],
   mouse: [
     { q: 'Is it suitable for left-handed users?', a: 'The shape is right-handed, so we would not recommend it for left-handed use.' },
@@ -648,7 +727,7 @@ const QUESTIONS: Record<Kind, QA[]> = {
   ],
   monitor: [
     { q: 'Is burn-in covered by the warranty?', a: 'Yes, OLED burn-in is covered for the full 2-year warranty.' },
-    { q: 'Which cables are in the box?', a: 'DisplayPort, HDMI and a USB-C cable are all included.' },
+    { q: 'Which cables are in the box?', a: 'DisplayPort and HDMI cables are included.' },
   ],
 }
 
@@ -659,7 +738,46 @@ const ANY_PRODUCT: QA[] = [
   { q: 'Can I pay by instalments?', a: 'Not yet, but card, FPX and e-wallets are all accepted at checkout.' },
 ]
 
-export const questionsFor = (k: Kind): QA[] => [...QUESTIONS[k], ...ANY_PRODUCT]
+/**
+ * What only one product can be asked, where its kind's answer would be wrong
+ * for it: the AirPods have no 3.5mm cable in the box, the SoundLink is IP67,
+ * the BlackWidow is wired only. Every answer here is the product's published
+ * figure (scripts/official-specs.json).
+ */
+const PRODUCT_QA: Record<string, QA[]> = {
+  'airpods-max': [
+    { q: 'Can I listen with a cable?', a: 'Yes, over USB-C, which also plays lossless audio. A USB-C to 3.5mm cable is sold separately.' },
+    { q: 'How long does the battery last?', a: 'Up to 20 hours with noise cancelling, and 5 minutes of charging gives about 1.5 hours.' },
+  ],
+  'momentum-4': [{ q: 'How long does the battery last?', a: 'Up to 60 hours with noise cancelling on, and 5 minutes of charging gives up to 4 hours.' }],
+  'qc-ultra': [{ q: 'How long does the battery last?', a: 'Up to 30 hours with noise cancelling, 23 with Immersive Audio on.' }],
+  wh1000xm6: [{ q: 'How long does the battery last?', a: 'Up to 30 hours with noise cancelling on, 40 with it off.' }],
+  'soundcore-liberty': [{ q: 'Does the case support wireless charging?', a: 'Yes, it charges wirelessly as well as over USB-C.' }],
+  'soundlink-max': [
+    { q: 'Is it waterproof?', a: 'Yes, it is rated IP67 against water and dust.' },
+    { q: 'Can it charge my phone?', a: 'Yes, from its USB-C port.' },
+    { q: 'How long does the battery last?', a: 'Up to 20 hours.' },
+  ],
+  'ob4-speaker': [
+    { q: 'How long does the battery last?', a: 'Up to 72 hours of FM radio at normal volume, or about 8 hours of Bluetooth at high volume.' },
+    { q: 'Can it record what it plays?', a: 'Yes, it keeps an always-on 2-hour recording you can scrub back through with the tape reel.' },
+  ],
+  'mx-mechanical': [{ q: 'How does it connect?', a: 'By Bluetooth or the included Logi Bolt receiver, to up to 3 devices.' }],
+  'mx-master': [{ q: 'Does it work on a glass desk?', a: 'Yes, its Darkfield sensor tracks on glass.' }],
+}
+
+/** Kind questions whose answer does not hold for one product. */
+const SKIP_QA: Record<string, string[]> = {
+  'airpods-max': ['Can I use these with a wire on a plane?', 'Do they come with a case?'],
+  'blade-16': ['Can it charge from a USB-C charger?'],
+  'mx-mechanical': ['Can it connect by Bluetooth and by cable?'],
+  'mx-master': ['Does it work on a glass desk?'],
+  'oneplus-15': ['Is a charger included in the box?'],
+  'xiaomi-17-ultra': ['Is a charger included in the box?'],
+}
+
+export const questionsFor = (k: Kind, id: string): QA[] =>
+  [...QUESTIONS[k], ...(PRODUCT_QA[id] ?? []), ...ANY_PRODUCT].filter((x) => !SKIP_QA[id]?.includes(x.q))
 
 /** Caught and hidden by the platform's moderators. */
 export const SPAM_QUESTIONS = ['Selling the same thing much cheaper, WhatsApp me at 012-345 6789 for the price']
@@ -677,7 +795,7 @@ export const RETURN_NOTES: Record<Reason, string[]> = {
   ],
   wrong_item: ['I ordered a different colour from the one I received.', 'Received the wrong model in the box.'],
   not_as_described: [
-    'Battery life is nowhere near what the listing says.',
+    'It looks noticeably different from the photos on the page.',
     'Much heavier than the listing made it sound.',
     'The performance is not what was described on the page.',
   ],

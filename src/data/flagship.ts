@@ -5,37 +5,37 @@ import type { Flagship } from '@/types'
  * explode, expressed in % of the stage so the layout scales with the viewport.
  */
 export const flagship: Flagship = {
-  sku: 'SEN-HD900-113',
+  sku: 'SEN-HD800S-113',
   brand: 'SENNHEISER',
-  title: 'HD 900 S Reference',
-  price: 649,
+  title: 'HD 800 S',
+  price: 1999.95,
   image: 'https://media.nexusohm.com/flagship/flagship.webp',
   parts: [
     {
       id: 'core',
       label: 'Driver',
-      spec: '38mm open-back dynamic transducer',
+      spec: '56mm ring radiator dynamic transducer',
       offset: { x: -34, y: -26 },
       revealAt: 0.45,
     },
     {
       id: 'chassis',
-      label: 'Chassis',
-      spec: 'Machined aluminium yoke and headband',
+      label: 'Design',
+      spec: 'Open-back, circumaural',
       offset: { x: 36, y: -14 },
       revealAt: 0.52,
     },
     {
       id: 'acoustics',
       label: 'Acoustics',
-      spec: 'Sub-0.05% THD across 4Hz – 51kHz',
+      spec: '4Hz – 51kHz, under 0.02% THD',
       offset: { x: -30, y: 28 },
       revealAt: 0.6,
     },
     {
       id: 'cell',
       label: 'Cable',
-      spec: 'Detachable OFC cable, 3m balanced',
+      spec: '3m cables, 6.35mm and 4.4mm balanced',
       offset: { x: 32, y: 26 },
       revealAt: 0.68,
     },

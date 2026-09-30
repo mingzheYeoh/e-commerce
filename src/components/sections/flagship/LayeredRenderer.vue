@@ -9,6 +9,8 @@ const props = defineProps<{
   parts: FlagshipPart[]
   /** Selected finish. Tints the product so switching it is actually visible. */
   variant: Colorway
+  /** The product's name, for the image's alt text. */
+  title: string
 }>()
 
 /**
@@ -102,7 +104,7 @@ const labelOpacity = (part: FlagshipPart) =>
       >
         <img
           :src="image"
-          :alt="`HD 900 S reference headphones in ${variant.name}`"
+          :alt="`${title} headphones in ${variant.name}`"
           width="480"
           height="360"
           loading="lazy"

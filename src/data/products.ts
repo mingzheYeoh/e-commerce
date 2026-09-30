@@ -21,30 +21,30 @@ export const products: Product[] = [
     "rating": 0,
     "reviewCount": 0,
     "specsSummary": [
-      "A20 Pro, 2nm",
-      "48MP variable aperture",
-      "36-hour video playback"
+      "48MP triple Fusion camera",
+      "A20 Pro chip",
+      "Up to 36h video playback"
     ],
     "specs": [
       {
+        "label": "Display",
+        "value": "6.3in Super Retina XDR OLED, 2622×1206, ProMotion up to 120Hz, 3,000 nits outdoor"
+      },
+      {
         "label": "Chip",
-        "value": "Apple A20 Pro, 2nm, 6-core CPU / 7-core GPU"
+        "value": "A20 Pro, 6-core CPU (2 super + 4 efficiency), 7-core GPU"
       },
       {
         "label": "Neural Engine",
         "value": "Dual 16-core"
       },
       {
-        "label": "Display",
-        "value": "6.3in Super Retina XDR, ProMotion 120Hz"
+        "label": "Rear cameras",
+        "value": "48MP Fusion main f/1.48–f/4.0, 48MP ultra wide f/2.2, 48MP 4× telephoto f/2.8"
       },
       {
-        "label": "Main camera",
-        "value": "48MP Fusion with variable aperture"
-      },
-      {
-        "label": "Aperture",
-        "value": "Six laser-cut blades, f/1.48 to f/4"
+        "label": "Front camera",
+        "value": "18MP Center Stage f/1.9"
       },
       {
         "label": "Battery",
@@ -52,7 +52,7 @@ export const products: Product[] = [
       },
       {
         "label": "Charging",
-        "value": "50% in 15 min wired, 30 min wireless"
+        "value": "Up to 50% in about 15 min with a 60W adapter; MagSafe and Qi2 up to 25W"
       },
       {
         "label": "Storage",
@@ -60,7 +60,15 @@ export const products: Product[] = [
       },
       {
         "label": "SIM",
-        "value": "eSIM only"
+        "value": "Nano-SIM and eSIM (Malaysian model)"
+      },
+      {
+        "label": "Build",
+        "value": "Aluminium unibody, IP68 (6 m for 30 min)"
+      },
+      {
+        "label": "Size and weight",
+        "value": "150.0 × 71.9 × 8.75 mm, 211 g"
       }
     ],
     "media": {
@@ -107,30 +115,30 @@ export const products: Product[] = [
     "rating": 0,
     "reviewCount": 0,
     "specsSummary": [
-      "A20 Pro, 2nm",
-      "Longest battery in an iPhone",
-      "45-hour video playback"
+      "48MP triple Fusion camera",
+      "6.9\" ProMotion display",
+      "Up to 45h video playback"
     ],
     "specs": [
       {
+        "label": "Display",
+        "value": "6.9in Super Retina XDR OLED, 2868×1320, ProMotion up to 120Hz, 3,000 nits outdoor"
+      },
+      {
         "label": "Chip",
-        "value": "Apple A20 Pro, 2nm, 6-core CPU / 7-core GPU"
+        "value": "A20 Pro, 6-core CPU (2 super + 4 efficiency), 7-core GPU"
       },
       {
         "label": "Neural Engine",
         "value": "Dual 16-core"
       },
       {
-        "label": "Display",
-        "value": "6.9in Super Retina XDR, ProMotion 120Hz"
+        "label": "Rear cameras",
+        "value": "48MP Fusion main f/1.48–f/4.0, 48MP ultra wide f/2.2, 48MP 4× telephoto f/2.8"
       },
       {
-        "label": "Main camera",
-        "value": "48MP Fusion with variable aperture"
-      },
-      {
-        "label": "Aperture",
-        "value": "Six laser-cut blades, f/1.48 to f/4"
+        "label": "Front camera",
+        "value": "18MP Center Stage f/1.9"
       },
       {
         "label": "Battery",
@@ -138,7 +146,7 @@ export const products: Product[] = [
       },
       {
         "label": "Charging",
-        "value": "50% in 15 min wired, 30 min wireless"
+        "value": "Up to 50% in about 15 min with a 60W adapter; MagSafe and Qi2 up to 25W"
       },
       {
         "label": "Storage",
@@ -146,7 +154,15 @@ export const products: Product[] = [
       },
       {
         "label": "SIM",
-        "value": "eSIM only"
+        "value": "Nano-SIM and eSIM (Malaysian model)"
+      },
+      {
+        "label": "Build",
+        "value": "Aluminium unibody, IP68 (6 m for 30 min)"
+      },
+      {
+        "label": "Size and weight",
+        "value": "163.4 × 78.0 × 8.75 mm, 249 g"
       }
     ],
     "media": {
@@ -192,42 +208,62 @@ export const products: Product[] = [
     "rating": 0,
     "reviewCount": 0,
     "specsSummary": [
+      "6.9\" QHD+ 120Hz display",
       "200MP f/1.4 main camera",
-      "Snapdragon 8 Elite Gen 5",
-      "60W wired charging"
+      "60W wired, 25W wireless"
     ],
     "specs": [
+      {
+        "label": "Display",
+        "value": "6.9in QHD+ Dynamic AMOLED 2X, 3120×1440, 1–120Hz adaptive, 2,600 nits"
+      },
+      {
+        "label": "Privacy",
+        "value": "Built-in Privacy Display"
+      },
       {
         "label": "Chip",
         "value": "Snapdragon 8 Elite Gen 5 for Galaxy"
       },
       {
-        "label": "Display",
-        "value": "6.9in anti-reflective, pixel-level Privacy Display"
+        "label": "Memory",
+        "value": "12GB RAM with 256GB or 512GB, 16GB RAM with 1TB"
       },
       {
-        "label": "Frame",
-        "value": "Armor Aluminium, rounded corners"
+        "label": "Rear cameras",
+        "value": "200MP wide f/1.4, 50MP ultrawide f/1.9, 50MP 5× telephoto f/2.9, 10MP 3× telephoto f/2.4"
       },
       {
-        "label": "Main camera",
-        "value": "200MP, f/1.4"
+        "label": "Zoom",
+        "value": "Up to 100× Space Zoom"
+      },
+      {
+        "label": "Front camera",
+        "value": "12MP f/2.2"
       },
       {
         "label": "Battery",
-        "value": "5,000mAh"
+        "value": "5,000mAh, up to 31 hours video playback"
       },
       {
         "label": "Charging",
-        "value": "60W wired, 15W wireless"
+        "value": "60W wired (up to 75% in about 30 min), 25W wireless"
       },
       {
-        "label": "Storage",
-        "value": "256GB / 512GB / 1TB"
+        "label": "Build",
+        "value": "Armor Aluminum frame, Corning Gorilla Armor 2, IP68"
+      },
+      {
+        "label": "Size and weight",
+        "value": "163.6 × 78.1 × 7.9 mm, 214 g"
       },
       {
         "label": "S Pen",
-        "value": "Included, in-body silo"
+        "value": "Built in"
+      },
+      {
+        "label": "Software",
+        "value": "Android 16, One UI 8.5"
       }
     ],
     "media": {
@@ -274,46 +310,54 @@ export const products: Product[] = [
     "rating": 0,
     "reviewCount": 0,
     "specsSummary": [
-      "Google G6, 2nm",
-      "Triple 50MP-class cameras",
-      "Android 17"
+      "Google Tensor G6",
+      "50MP + 48MP 5× telephoto",
+      "7 years of updates"
     ],
     "specs": [
       {
+        "label": "Display",
+        "value": "6.3in Super Actua LTPO OLED, 2856×1280, 1–120Hz, 3,600 nits peak"
+      },
+      {
         "label": "Chip",
-        "value": "Google G6, 2nm"
+        "value": "Google Tensor G6, Titan M3 security"
       },
       {
         "label": "Memory",
-        "value": "12GB LPDDR5X"
-      },
-      {
-        "label": "Display",
-        "value": "6.3in LTPO OLED, 120Hz"
+        "value": "12GB RAM with 256GB, 16GB RAM with 512GB or 1TB"
       },
       {
         "label": "Rear cameras",
-        "value": "50MP main + 48MP ultrawide + 48MP telephoto"
+        "value": "50MP wide f/1.68, 48MP ultrawide f/1.7, 48MP 5× telephoto f/2.8"
+      },
+      {
+        "label": "Zoom",
+        "value": "Pro Zoom up to 120×"
       },
       {
         "label": "Front camera",
-        "value": "42MP"
+        "value": "42MP with autofocus, f/2.2"
       },
       {
         "label": "Battery",
-        "value": "4,850mAh"
+        "value": "4,850mAh typical"
       },
       {
-        "label": "Storage",
-        "value": "256GB (128GB discontinued)"
+        "label": "Charging",
+        "value": "30W wired (up to 55% in about 30 min), 25W wireless"
       },
       {
-        "label": "Rating",
+        "label": "Durability",
         "value": "IP68"
       },
       {
+        "label": "Size and weight",
+        "value": "152.7 × 71.9 × 8.4 mm, 204 g"
+      },
+      {
         "label": "Software",
-        "value": "Android 17"
+        "value": "Android 17, 7 years of OS and security updates"
       }
     ],
     "media": {
@@ -356,25 +400,29 @@ export const products: Product[] = [
     "reviewCount": 0,
     "specsSummary": [
       "7,300mAh battery",
-      "165Hz LTPO AMOLED",
-      "120W wired charging"
+      "165Hz 1.5K LTPO display",
+      "120W wired, 50W wireless"
     ],
     "specs": [
+      {
+        "label": "Display",
+        "value": "6.78in 1.5K LTPO AMOLED, 2772×1272, up to 165Hz in games (1–120Hz otherwise), 1,800 nits"
+      },
+      {
+        "label": "Glass",
+        "value": "Corning Gorilla Glass Victus 2"
+      },
       {
         "label": "Chip",
         "value": "Snapdragon 8 Elite Gen 5"
       },
       {
         "label": "Memory",
-        "value": "12GB LPDDR5X"
-      },
-      {
-        "label": "Display",
-        "value": "6.78in LTPO AMOLED, 165Hz"
+        "value": "12GB RAM with 256GB, 16GB RAM with 512GB"
       },
       {
         "label": "Rear cameras",
-        "value": "50MP + 50MP + 50MP triple"
+        "value": "50MP main with OIS, 50MP ultrawide with autofocus, 50MP 3.5× periscope telephoto"
       },
       {
         "label": "Front camera",
@@ -382,19 +430,23 @@ export const products: Product[] = [
       },
       {
         "label": "Battery",
-        "value": "7,300mAh"
+        "value": "7,300mAh Silicon NanoStack"
       },
       {
         "label": "Charging",
-        "value": "120W wired"
+        "value": "120W wired (80W in the US and Canada), 50W wireless"
       },
       {
-        "label": "Rating",
-        "value": "IP66 / IP68 / IP69K"
+        "label": "Durability",
+        "value": "IP66, IP68, IP69 and IP69K"
+      },
+      {
+        "label": "Weight",
+        "value": "211–215 g, by colour"
       },
       {
         "label": "Software",
-        "value": "Android 16"
+        "value": "OxygenOS 16, Android 16"
       }
     ],
     "media": {
@@ -436,42 +488,42 @@ export const products: Product[] = [
     "rating": 0,
     "reviewCount": 0,
     "specsSummary": [
-      "1-inch Leica main sensor",
-      "200MP periscope telephoto",
-      "90W wired charging"
+      "1-inch Leica main camera",
+      "200MP 75–100mm telephoto",
+      "6,000mAh, 90W charging"
     ],
     "specs": [
       {
-        "label": "Camera system",
-        "value": "Leica, triple rear"
+        "label": "Display",
+        "value": "6.9in HyperRGB OLED, 2608×1200, 1–120Hz, 3,500 nits peak"
+      },
+      {
+        "label": "Chip",
+        "value": "Snapdragon 8 Elite Gen 5"
       },
       {
         "label": "Main camera",
-        "value": "50MP 1in Light Fusion 1050L"
+        "value": "Leica 23mm, 50MP Light Fusion 1050L 1in sensor, f/1.67"
       },
       {
         "label": "Telephoto",
-        "value": "200MP Samsung HPE 1/1.4in periscope, continuous zoom"
+        "value": "Leica 200MP, 75–100mm continuous optical zoom, APO lens"
       },
       {
         "label": "Ultrawide",
-        "value": "50MP with autofocus"
-      },
-      {
-        "label": "Display",
-        "value": "6.9in M10 AMOLED LTPO, 2608x1200, 120Hz"
-      },
-      {
-        "label": "Brightness",
-        "value": "Up to 3,500 nits peak"
+        "value": "Leica 14mm"
       },
       {
         "label": "Battery",
-        "value": "6,000mAh"
+        "value": "6,000mAh typical"
       },
       {
         "label": "Charging",
         "value": "90W wired, 50W wireless"
+      },
+      {
+        "label": "Weight",
+        "value": "From 218.4 g"
       }
     ],
     "media": {
@@ -514,42 +566,42 @@ export const products: Product[] = [
     "rating": 0,
     "reviewCount": 0,
     "specsSummary": [
-      "16in tandem OLED",
-      "Intel Panther Lake",
-      "CNC aluminium chassis"
+      "3.2K 120Hz OLED option",
+      "Intel Core Ultra Series 3",
+      "From 1.65 kg"
     ],
     "specs": [
       {
-        "label": "Chip",
-        "value": "Intel Core Ultra, Panther Lake"
+        "label": "Processor",
+        "value": "Intel Core Ultra 7 355, Core Ultra X7 358H or Core Ultra X9 388H"
+      },
+      {
+        "label": "Graphics",
+        "value": "Intel integrated"
       },
       {
         "label": "Display",
-        "value": "16in InfinityEdge tandem OLED, 2880x1800, touch"
-      },
-      {
-        "label": "Chassis",
-        "value": "CNC-machined aluminium, rounded corners"
+        "value": "16in 3.2K OLED touch, 20–120Hz, 400 nits; or 2K LCD, 1–120Hz, 500 nits"
       },
       {
         "label": "Memory",
-        "value": "16GB LPDDR5X, up to 64GB"
+        "value": "16GB LPDDR5x, 7467 MT/s"
       },
       {
         "label": "Storage",
-        "value": "512GB SSD, up to 4TB"
-      },
-      {
-        "label": "Keyboard",
-        "value": "Physical function row, haptic touchpad"
+        "value": "512GB to 4TB SSD"
       },
       {
         "label": "Ports",
-        "value": "3x Thunderbolt 4 USB-C with DisplayPort 2.1 and power delivery, 3.5mm combo"
+        "value": "3× Thunderbolt 4 (USB-C) with DisplayPort 2.1 and power delivery, 3.5mm jack"
       },
       {
-        "label": "Top configuration",
-        "value": "Core Ultra X7 / 64GB / 4TB at $3,449"
+        "label": "Battery",
+        "value": "70Wh"
+      },
+      {
+        "label": "Weight",
+        "value": "From 1.65 kg (OLED)"
       }
     ],
     "media": {
@@ -587,46 +639,46 @@ export const products: Product[] = [
     "rating": 0,
     "reviewCount": 0,
     "specsSummary": [
-      "Intel Arc B390 graphics",
-      "Serviceable chassis",
-      "Windows 11 Pro"
+      "Business ultralight, from 0.977 kg",
+      "2.8K 120Hz OLED option",
+      "Intel Core Ultra Series 3"
     ],
     "specs": [
       {
-        "label": "Chip",
-        "value": "Intel Core Ultra X7 358H, Panther Lake"
+        "label": "Processor",
+        "value": "Intel Core Ultra Series 3, up to Core Ultra X7 368H"
       },
       {
         "label": "Graphics",
-        "value": "Intel Arc B390"
+        "value": "Intel Graphics or Intel Arc B390"
       },
       {
         "label": "Display",
-        "value": "14in WUXGA 1920x1200 IPS, matte OLED optional"
+        "value": "14in WUXGA IPS, 500 nits; or 2.8K (2880×1800) OLED, 120Hz, DisplayHDR True Black 500"
       },
       {
         "label": "Memory",
-        "value": "Up to 64GB"
+        "value": "16GB to 64GB LPDDR5X, soldered"
       },
       {
         "label": "Storage",
-        "value": "Up to 2TB SSD"
-      },
-      {
-        "label": "Operating system",
-        "value": "Windows 11 Pro"
+        "value": "Up to 2TB PCIe SSD"
       },
       {
         "label": "Ports",
-        "value": "3x Thunderbolt 4 USB-C at 40Gbps with 65W power delivery, HDMI 2.1, USB-A, 3.5mm combo"
+        "value": "3× Thunderbolt 4, USB-A 5Gbps, HDMI, 3.5mm combo jack"
       },
       {
         "label": "Battery",
-        "value": "Close to 24 hours in review testing"
+        "value": "58Wh, up to 19.2 hours (MobileMark 30)"
+      },
+      {
+        "label": "Wireless",
+        "value": "Wi-Fi 7, Bluetooth 5.4"
       },
       {
         "label": "Weight",
-        "value": "2.15 lb"
+        "value": "From 0.977 kg (2.15 lb)"
       }
     ],
     "media": {
@@ -666,41 +718,37 @@ export const products: Product[] = [
     "reviewCount": 0,
     "specsSummary": [
       "50 TOPS NPU",
-      "14in 3K OLED touch",
-      "32GB / 1TB"
+      "14\" 3K 120Hz OLED",
+      "77Wh, up to 27h"
     ],
     "specs": [
       {
-        "label": "Chip",
-        "value": "Intel Core Ultra 9 386H, 16-core, 2.1GHz"
+        "label": "Processor",
+        "value": "Intel Core Ultra 9 386H, 16 cores"
       },
       {
         "label": "NPU",
-        "value": "Up to 50 TOPS, Copilot+ certified"
-      },
-      {
-        "label": "Graphics",
-        "value": "Intel Arc integrated"
+        "value": "Up to 50 TOPS, Copilot+ PC"
       },
       {
         "label": "Display",
-        "value": "14in OLED 3K touchscreen"
+        "value": "14in 3K Lumina OLED, 120Hz, 1,100 nits"
       },
       {
         "label": "Memory",
-        "value": "32GB LPDDR5X, soldered"
+        "value": "32GB RAM"
       },
       {
         "label": "Storage",
-        "value": "1TB PCIe Gen 4 SSD"
+        "value": "1TB SSD"
       },
       {
-        "label": "Finish",
-        "value": "Scandinavian White, ceraluminium lid"
+        "label": "Battery",
+        "value": "77Wh, up to 27 hours"
       },
       {
-        "label": "Class",
-        "value": "Copilot+ PC"
+        "label": "Thickness and weight",
+        "value": "1.1 cm, 1.2 kg"
       }
     ],
     "media": {
@@ -739,42 +787,46 @@ export const products: Product[] = [
     "rating": 0,
     "reviewCount": 0,
     "specsSummary": [
-      "Two OLED screens",
-      "Detachable keyboard",
-      "Intel Core Ultra Series 3"
+      "Two 14\" 3K 144Hz OLEDs",
+      "Up to Core Ultra X9 388H",
+      "99Wh battery"
     ],
     "specs": [
       {
-        "label": "Chip",
-        "value": "Intel Core Ultra Series 3, X9 388H on the top trim"
-      },
-      {
-        "label": "Displays",
-        "value": "Two full-size OLED panels"
-      },
-      {
-        "label": "Graphics",
-        "value": "Intel Arc integrated"
+        "label": "Processor",
+        "value": "Up to Intel Core Ultra X9 388H, 16 cores, up to 5.1GHz"
       },
       {
         "label": "NPU",
-        "value": "Copilot+ class"
+        "value": "Up to 50 TOPS"
+      },
+      {
+        "label": "Displays",
+        "value": "Two 14in 3K (2880×1800) Lumina Pro OLED touchscreens, 144Hz, 500 nits (1,000 HDR)"
       },
       {
         "label": "Keyboard",
-        "value": "Detachable Bluetooth, stows between the screens"
+        "value": "Detachable, magnetic"
       },
       {
         "label": "Stand",
-        "value": "Built-in kickstand for stacked or side-by-side use"
+        "value": "Built-in kickstand"
       },
       {
-        "label": "Top configuration",
-        "value": "Core Ultra X9 388H at $2,699.99"
+        "label": "Battery",
+        "value": "99Wh"
       },
       {
-        "label": "Announced",
-        "value": "CES 2026"
+        "label": "Ports",
+        "value": "2× Thunderbolt 4, USB-A 10Gbps, HDMI 2.1"
+      },
+      {
+        "label": "Wireless",
+        "value": "Wi-Fi 7, Bluetooth 5.4"
+      },
+      {
+        "label": "Chassis",
+        "value": "Ceraluminum"
       }
     ],
     "media": {
@@ -803,7 +855,7 @@ export const products: Product[] = [
     "id": "airpods-max",
     "sku": "APL-APM2-101",
     "brand": "APPLE",
-    "title": "AirPods Max (2nd gen)",
+    "title": "AirPods Max 2",
     "category": "audio",
     "priceMinor": 54900,
     "currency": "USD",
@@ -813,42 +865,42 @@ export const products: Product[] = [
     "rating": 0,
     "reviewCount": 0,
     "specsSummary": [
-      "Adaptive noise cancellation",
-      "Spatial audio",
-      "20-hour battery"
+      "H2 chip in each ear cup",
+      "Lossless audio over USB-C",
+      "20 hours with ANC"
     ],
     "specs": [
       {
+        "label": "Chip",
+        "value": "Apple H2 headphone chip in each ear cup"
+      },
+      {
         "label": "Driver",
-        "value": "40mm dynamic, custom Apple"
+        "value": "Apple-designed dynamic driver"
       },
       {
         "label": "Noise control",
-        "value": "Active ANC with Transparency"
-      },
-      {
-        "label": "Battery",
-        "value": "20 hours with ANC on"
-      },
-      {
-        "label": "Chip",
-        "value": "Apple H2, one per cup"
+        "value": "Active Noise Cancellation, Transparency, Conversation Awareness, Voice Isolation, Loud Sound Reduction"
       },
       {
         "label": "Audio",
-        "value": "Personalised Spatial Audio, head tracking"
+        "value": "Personalized Spatial Audio with dynamic head tracking, Adaptive Audio, Adaptive EQ"
       },
       {
-        "label": "Connectivity",
-        "value": "Bluetooth 5.3, USB-C"
+        "label": "Wired audio",
+        "value": "Lossless and ultra-low-latency audio over USB-C"
+      },
+      {
+        "label": "Battery",
+        "value": "Up to 20 hours with ANC; 5 min charge for about 1.5 hours"
       },
       {
         "label": "Weight",
-        "value": "384.8 g"
+        "value": "386.2 g"
       },
       {
         "label": "In the box",
-        "value": "Smart Case, USB-C cable"
+        "value": "Smart Case, USB-C charge cable"
       }
     ],
     "media": {
@@ -890,34 +942,34 @@ export const products: Product[] = [
     "rating": 0,
     "reviewCount": 0,
     "specsSummary": [
-      "M5 Pro, 14-core",
-      "Liquid Retina XDR",
-      "24-hour battery"
+      "M5 Pro, 18-core CPU",
+      "16.2\" Liquid Retina XDR",
+      "Up to 24h battery"
     ],
     "specs": [
       {
         "label": "Chip",
-        "value": "Apple M5 Pro, 14-core CPU / 20-core GPU"
+        "value": "Apple M5 Pro, 18-core CPU (6 super + 12 performance), 20-core GPU"
       },
       {
         "label": "Memory",
-        "value": "24GB unified, up to 128GB"
+        "value": "24GB unified, up to 128GB with M5 Max"
       },
       {
         "label": "Storage",
-        "value": "512GB SSD, up to 8TB"
+        "value": "1TB SSD, configurable to 2TB or 4TB"
       },
       {
         "label": "Display",
-        "value": "16.2in Liquid Retina XDR, 3456×2234, 120Hz"
+        "value": "16.2in Liquid Retina XDR, 3456×2234, up to 120Hz"
       },
       {
         "label": "Brightness",
-        "value": "1000 nits sustained, 1600 nits peak HDR"
+        "value": "1,000 nits sustained full screen"
       },
       {
         "label": "Battery",
-        "value": "Up to 24 hours video playback"
+        "value": "Up to 24 hours video streaming"
       },
       {
         "label": "Ports",
@@ -952,9 +1004,9 @@ export const products: Product[] = [
   },
   {
     "id": "watch-ultra",
-    "sku": "APL-AWU3-103",
+    "sku": "APL-AWU4-103",
     "brand": "APPLE",
-    "title": "Apple Watch Ultra 3",
+    "title": "Apple Watch Ultra 4",
     "category": "computing",
     "priceMinor": 79900,
     "currency": "USD",
@@ -963,42 +1015,50 @@ export const products: Product[] = [
     "rating": 0,
     "reviewCount": 0,
     "specsSummary": [
-      "49mm titanium",
-      "Dual-frequency GPS",
-      "100m water resistance"
+      "49mm Grade 5 titanium",
+      "Up to 50h battery",
+      "100m water, 40m dive"
     ],
     "specs": [
       {
         "label": "Case",
-        "value": "49mm aerospace-grade titanium"
+        "value": "49mm Grade 5 titanium"
       },
       {
         "label": "Display",
-        "value": "LTPO3 OLED, 3000 nits peak"
+        "value": "Always-On Retina, wide-angle OLED, LTPO3, 3,000 nits"
       },
       {
-        "label": "Water resistance",
-        "value": "100m, EN13319 dive certified"
-      },
-      {
-        "label": "GPS",
-        "value": "Precision dual-frequency L1 + L5"
+        "label": "Chip",
+        "value": "S11 SiP, 4-core Neural Engine, 64GB"
       },
       {
         "label": "Battery",
-        "value": "36 hours normal, 72 hours low power"
+        "value": "Up to 50 hours, 84 hours in Low Power Mode"
+      },
+      {
+        "label": "Water",
+        "value": "100m; recreational scuba diving to 40m"
+      },
+      {
+        "label": "GPS",
+        "value": "Precision dual-frequency (GPS, Galileo, QZSS, BeiDou)"
       },
       {
         "label": "Sensors",
-        "value": "ECG, blood oxygen, temperature, depth"
-      },
-      {
-        "label": "Durability",
-        "value": "MIL-STD-810H"
+        "value": "Electrical and optical heart, blood oxygen, temperature, depth gauge, water temperature"
       },
       {
         "label": "Connectivity",
-        "value": "5G cellular, Wi-Fi 6, Bluetooth 5.3"
+        "value": "5G and LTE (cellular model), Wi-Fi 4, Bluetooth 5.3, second-generation Ultra Wideband"
+      },
+      {
+        "label": "Durability",
+        "value": "MIL-STD 810H, IP6X dust"
+      },
+      {
+        "label": "Weight",
+        "value": "63.0 g (Natural)"
       }
     ],
     "media": {
@@ -1025,7 +1085,7 @@ export const products: Product[] = [
   },
   {
     "id": "galaxy-s26",
-    "sku": "SAM-S26U-104",
+    "sku": "SAM-S26-104",
     "brand": "SAMSUNG",
     "title": "Galaxy S26",
     "category": "phones",
@@ -1037,42 +1097,54 @@ export const products: Product[] = [
     "rating": 0,
     "reviewCount": 0,
     "specsSummary": [
-      "200MP main camera",
-      "6.9\" QHD+ AMOLED",
-      "Titanium frame"
+      "6.3\" 120Hz AMOLED",
+      "50MP triple camera, 3× zoom",
+      "4,300mAh battery"
     ],
     "specs": [
       {
         "label": "Display",
-        "value": "6.9in QHD+ Dynamic AMOLED 2X, 1–120Hz"
+        "value": "6.3in FHD+ Dynamic AMOLED 2X, 1–120Hz adaptive"
       },
       {
-        "label": "Processor",
-        "value": "Snapdragon 8 Elite for Galaxy"
-      },
-      {
-        "label": "Main camera",
-        "value": "200MP wide, f/1.7, OIS"
-      },
-      {
-        "label": "Zoom",
-        "value": "5× optical periscope, 100× Space Zoom"
+        "label": "Chip",
+        "value": "Exynos 2600 in Malaysia; Snapdragon 8 Elite Gen 5 for Galaxy in some markets"
       },
       {
         "label": "Memory",
-        "value": "12GB RAM, 256GB–1TB storage"
+        "value": "12GB RAM with 256GB or 512GB"
+      },
+      {
+        "label": "Rear cameras",
+        "value": "50MP wide f/1.8, 12MP ultrawide f/2.2, 10MP 3× telephoto f/2.4"
+      },
+      {
+        "label": "Zoom",
+        "value": "Up to 30× Space Zoom"
+      },
+      {
+        "label": "Front camera",
+        "value": "12MP f/2.2"
       },
       {
         "label": "Battery",
-        "value": "5000mAh, 45W wired, 15W wireless"
+        "value": "4,300mAh"
       },
       {
-        "label": "Build",
-        "value": "Titanium frame, Gorilla Armor 2"
+        "label": "Charging",
+        "value": "25W wired (up to 55% in about 30 min), 15W wireless"
       },
       {
-        "label": "Water resistance",
+        "label": "Durability",
         "value": "IP68"
+      },
+      {
+        "label": "Size and weight",
+        "value": "149.6 × 71.5 × 7.2 mm, 167 g"
+      },
+      {
+        "label": "Software",
+        "value": "Android 16, One UI 8.5"
       }
     ],
     "media": {
@@ -1114,42 +1186,30 @@ export const products: Product[] = [
     "rating": 0,
     "reviewCount": 0,
     "specsSummary": [
-      "24-bit Hi-Fi",
-      "Adaptive ANC",
-      "IPX7"
+      "Adaptive ANC 2.0",
+      "24-bit/96kHz Hi-Fi audio",
+      "IP57 rated"
     ],
     "specs": [
       {
-        "label": "Driver",
-        "value": "2-way, 10.5mm woofer + 6.1mm tweeter"
-      },
-      {
-        "label": "Codec",
-        "value": "24-bit Hi-Fi, SSC UHQ, AAC, SBC"
+        "label": "Drivers",
+        "value": "2-way woofer and tweeter, each with its own amplifier"
       },
       {
         "label": "Noise control",
-        "value": "Adaptive ANC with voice detect"
+        "value": "Adaptive ANC 2.0"
+      },
+      {
+        "label": "Hi-Fi audio",
+        "value": "24-bit/96kHz with SSC UHQ on eligible Galaxy devices; LC3 over LE Audio"
       },
       {
         "label": "Battery",
-        "value": "6h buds, 30h with case"
+        "value": "About 6 hours with ANC, 30 hours with case"
       },
       {
         "label": "Water resistance",
-        "value": "IPX7"
-      },
-      {
-        "label": "Microphones",
-        "value": "3 mics per bud with VPU"
-      },
-      {
-        "label": "Charging",
-        "value": "USB-C, Qi wireless"
-      },
-      {
-        "label": "Weight",
-        "value": "5.5 g per bud"
+        "value": "IP57"
       }
     ],
     "media": {
@@ -1256,42 +1316,46 @@ export const products: Product[] = [
     "rating": 0,
     "reviewCount": 0,
     "specsSummary": [
-      "Industry-leading ANC",
-      "30-hour playback",
-      "LDAC Hi-Res"
+      "QN3 processor, 12 mics",
+      "30-hour battery with NC",
+      "LDAC Hi-Res audio"
     ],
     "specs": [
       {
-        "label": "Driver",
-        "value": "30mm carbon fibre composite"
-      },
-      {
         "label": "Processor",
-        "value": "HD Noise Cancelling QN3"
-      },
-      {
-        "label": "Battery",
-        "value": "30 hours ANC on, 3 min quick charge = 3h"
-      },
-      {
-        "label": "Codec",
-        "value": "LDAC, AAC, SBC, Hi-Res Wireless"
-      },
-      {
-        "label": "Frequency",
-        "value": "4Hz – 40,000Hz"
+        "value": "HD Noise Cancelling Processor QN3"
       },
       {
         "label": "Microphones",
-        "value": "8 mics for calls and ANC"
+        "value": "12"
       },
       {
-        "label": "Features",
-        "value": "Speak-to-Chat, adaptive sound control"
+        "label": "Driver",
+        "value": "Carbon fibre composite dome"
+      },
+      {
+        "label": "Battery",
+        "value": "Up to 30 hours with NC, 40 with NC off"
+      },
+      {
+        "label": "Charging time",
+        "value": "About 3.5 hours"
+      },
+      {
+        "label": "Codec",
+        "value": "LDAC, AAC, SBC, LC3"
+      },
+      {
+        "label": "Frequency",
+        "value": "4Hz – 40,000Hz (wired)"
+      },
+      {
+        "label": "Bluetooth",
+        "value": "5.3, multipoint with 2 devices"
       },
       {
         "label": "Weight",
-        "value": "250 g"
+        "value": "254 g"
       }
     ],
     "media": {
@@ -1329,22 +1393,18 @@ export const products: Product[] = [
     "rating": 0,
     "reviewCount": 0,
     "specsSummary": [
-      "61MP full-frame",
-      "8-stop stabilisation",
-      "AI subject tracking"
+      "61MP full-frame camera",
+      "7-stop in-body stabilisation",
+      "AI subject-tracking autofocus"
     ],
     "specs": [
       {
         "label": "Sensor",
-        "value": "61MP full-frame Exmor R BSI CMOS"
-      },
-      {
-        "label": "Processor",
-        "value": "BIONZ XR with AI unit"
+        "value": "61MP full-frame back-illuminated CMOS"
       },
       {
         "label": "Stabilisation",
-        "value": "5-axis in-body, 8 stops"
+        "value": "5-axis in-body, 7.0 stops (CIPA)"
       },
       {
         "label": "Autofocus",
@@ -1352,19 +1412,19 @@ export const products: Product[] = [
       },
       {
         "label": "ISO",
-        "value": "100–32000, expandable 50–102400"
+        "value": "100–32,000, expandable 50–102,400"
       },
       {
         "label": "Video",
-        "value": "4K60 with Super35 crop, 10-bit 4:2:2"
+        "value": "4K, oversampled from 6K"
       },
       {
         "label": "Viewfinder",
-        "value": "2.36M-dot OLED"
+        "value": "2.36M-dot OLED, 0.70×"
       },
       {
         "label": "Weight",
-        "value": "515 g with battery"
+        "value": "515 g with battery and card, 430 g body only"
       }
     ],
     "media": {
@@ -1403,18 +1463,18 @@ export const products: Product[] = [
     "rating": 0,
     "reviewCount": 0,
     "specsSummary": [
-      "4K 120p",
-      "Dual base ISO",
-      "Active cooling"
+      "Full-frame cinema camera",
+      "4K 120p video",
+      "15+ stops dynamic range"
     ],
     "specs": [
       {
         "label": "Sensor",
-        "value": "10.2MP full-frame back-illuminated CMOS"
+        "value": "Full-frame back-illuminated CMOS, 12.1MP stills"
       },
       {
         "label": "Video",
-        "value": "4K 120p, 10-bit 4:2:2 All-Intra"
+        "value": "4K up to 120p"
       },
       {
         "label": "Dynamic range",
@@ -1422,23 +1482,19 @@ export const products: Product[] = [
       },
       {
         "label": "ISO",
-        "value": "Dual base ISO 800 / 12800"
-      },
-      {
-        "label": "Cooling",
-        "value": "Active fan for unlimited recording"
+        "value": "80–102,400 for movies, expandable to 409,600"
       },
       {
         "label": "Audio",
-        "value": "XLR handle, 4-channel 24-bit"
+        "value": "XLR handle: 2 × XLR/TRS inputs plus 3.5mm"
       },
       {
         "label": "Mount",
         "value": "Sony E-mount"
       },
       {
-        "label": "Weight",
-        "value": "715 g body only"
+        "label": "Size and weight",
+        "value": "129.7 × 77.8 × 84.5 mm, 715 g with battery and card"
       }
     ],
     "media": {
@@ -1463,51 +1519,39 @@ export const products: Product[] = [
     "id": "qc-ultra",
     "sku": "BSE-QCU-110",
     "brand": "BOSE",
-    "title": "QuietComfort Ultra",
+    "title": "QuietComfort Ultra Headphones (2nd Gen)",
     "category": "audio",
-    "priceMinor": 42900,
+    "priceMinor": 44900,
     "currency": "USD",
     "inStock": true,
     "stockCount": 27,
     "rating": 0,
     "reviewCount": 0,
     "specsSummary": [
-      "Immersive audio",
-      "CustomTune calibration",
-      "24-hour battery"
+      "30-hour battery with ANC",
+      "Lossless USB-C audio",
+      "CustomTune, Cinema Mode"
     ],
     "specs": [
       {
         "label": "Noise control",
-        "value": "CustomTune adaptive ANC"
+        "value": "CustomTune noise cancelling"
       },
       {
         "label": "Audio",
-        "value": "Bose Immersive Audio with head tracking"
+        "value": "Immersive Audio with Cinema Mode"
       },
       {
         "label": "Battery",
-        "value": "24 hours, 30 without Immersive"
+        "value": "Up to 30 hours with ANC, 23 with Immersive Audio, 45 with ANC off"
+      },
+      {
+        "label": "Wired audio",
+        "value": "Lossless over USB-C (16-bit, 44.1/48kHz)"
       },
       {
         "label": "Codec",
         "value": "aptX Adaptive, AAC, SBC"
-      },
-      {
-        "label": "Microphones",
-        "value": "6-mic array with rejection"
-      },
-      {
-        "label": "Controls",
-        "value": "Capacitive strip plus buttons"
-      },
-      {
-        "label": "Folding",
-        "value": "Flat-fold with carry case"
-      },
-      {
-        "label": "Weight",
-        "value": "250 g"
       }
     ],
     "media": {
@@ -1545,22 +1589,22 @@ export const products: Product[] = [
     "rating": 0,
     "reviewCount": 0,
     "specsSummary": [
-      "Open-ear clip design",
-      "OpenAudio technology",
-      "IPX4"
+      "Open-ear: hear what's around you",
+      "Up to 7h, 19.5h more in case",
+      "IPX4 sweat resistant"
     ],
     "specs": [
       {
         "label": "Design",
-        "value": "Open-ear cuff, nothing in the canal"
-      },
-      {
-        "label": "Audio",
-        "value": "Bose OpenAudio dipole transducer"
+        "value": "Open-ear cuff, nothing in the ear canal"
       },
       {
         "label": "Battery",
-        "value": "7.5 hours, 27 with case"
+        "value": "Up to 7 hours, 4 hours with Immersive Audio"
+      },
+      {
+        "label": "Case",
+        "value": "Up to 19.5 extra hours"
       },
       {
         "label": "Water resistance",
@@ -1568,19 +1612,15 @@ export const products: Product[] = [
       },
       {
         "label": "Codec",
-        "value": "aptX Adaptive, AAC, SBC"
+        "value": "AAC, SBC"
       },
       {
         "label": "Controls",
-        "value": "Multifunction button per bud"
-      },
-      {
-        "label": "Fit",
-        "value": "Rotating barrel, one size"
+        "value": "Buttons, customisable in the Bose app"
       },
       {
         "label": "Weight",
-        "value": "6.5 g per bud"
+        "value": "About 6.4 g (0.014 lb) per earbud"
       }
     ],
     "media": {
@@ -1620,16 +1660,16 @@ export const products: Product[] = [
     "specsSummary": [
       "20-hour battery",
       "IP67 rated",
-      "Custom transducers"
+      "aptX Adaptive"
     ],
     "specs": [
       {
         "label": "Drivers",
-        "value": "Custom transducer array with two radiators"
+        "value": "3 transducers, 2 passive radiators"
       },
       {
         "label": "Battery",
-        "value": "20 hours"
+        "value": "Up to 20 hours"
       },
       {
         "label": "Durability",
@@ -1637,23 +1677,23 @@ export const products: Product[] = [
       },
       {
         "label": "Codec",
-        "value": "aptX Adaptive, AAC, SBC"
+        "value": "aptX Adaptive (Snapdragon Sound), AAC, SBC"
       },
       {
-        "label": "Inputs",
-        "value": "Bluetooth 5.4, 3.5mm aux, USB-C"
+        "label": "Connectivity",
+        "value": "Bluetooth 5.3, 3.5mm aux in"
       },
       {
-        "label": "Features",
-        "value": "Party and stereo pairing"
+        "label": "Power out",
+        "value": "USB-C charges a phone"
       },
       {
-        "label": "Extras",
-        "value": "Removable rope handle, powerbank out"
+        "label": "Handle",
+        "value": "Removable rope handle"
       },
       {
-        "label": "Weight",
-        "value": "2.1 kg"
+        "label": "Size and weight",
+        "value": "265 × 120 × 105 mm, just under 5 lb"
       }
     ],
     "media": {
@@ -1680,11 +1720,11 @@ export const products: Product[] = [
   },
   {
     "id": "hd900s",
-    "sku": "SEN-HD900-113",
+    "sku": "SEN-HD800S-113",
     "brand": "SENNHEISER",
-    "title": "HD 900 S Reference",
+    "title": "HD 800 S",
     "category": "audio",
-    "priceMinor": 64900,
+    "priceMinor": 199995,
     "currency": "USD",
     "inStock": true,
     "stockCount": 14,
@@ -1692,42 +1732,42 @@ export const products: Product[] = [
     "rating": 0,
     "reviewCount": 0,
     "specsSummary": [
-      "Open-back dynamic",
+      "56mm ring radiator drivers",
       "4Hz – 51kHz response",
-      "Detachable OFC cable"
+      "Open-back, 300 Ω"
     ],
     "specs": [
       {
         "label": "Transducer",
-        "value": "38mm open-back dynamic"
+        "value": "56mm ring radiator dynamic"
       },
       {
-        "label": "Frequency",
+        "label": "Design",
+        "value": "Open-back, circumaural"
+      },
+      {
+        "label": "Frequency response",
         "value": "4Hz – 51,000Hz"
       },
       {
         "label": "Impedance",
-        "value": "300 ohms"
+        "value": "300 Ω"
+      },
+      {
+        "label": "Sound pressure level",
+        "value": "102 dB (1 V)"
       },
       {
         "label": "THD",
-        "value": "Below 0.05% at 1kHz"
+        "value": "Under 0.02% (1 kHz, 1 Vrms)"
       },
       {
-        "label": "Cable",
-        "value": "Detachable 3m OFC, balanced and 6.3mm"
-      },
-      {
-        "label": "Earpads",
-        "value": "Replaceable velour"
-      },
-      {
-        "label": "Build",
-        "value": "Machined aluminium yoke and headband"
+        "label": "Cables",
+        "value": "3m with 6.35mm plug, 3m with 4.4mm balanced plug"
       },
       {
         "label": "Weight",
-        "value": "260 g without cable"
+        "value": "330 g"
       }
     ],
     "media": {
@@ -1758,7 +1798,7 @@ export const products: Product[] = [
     "brand": "SENNHEISER",
     "title": "Momentum 4 Wireless",
     "category": "audio",
-    "priceMinor": 34995,
+    "priceMinor": 29995,
     "currency": "USD",
     "inStock": true,
     "stockCount": 22,
@@ -1767,7 +1807,7 @@ export const products: Product[] = [
     "reviewCount": 0,
     "specsSummary": [
       "60-hour battery",
-      "Adaptive ANC",
+      "Hybrid adaptive ANC",
       "aptX Adaptive"
     ],
     "specs": [
@@ -1777,31 +1817,31 @@ export const products: Product[] = [
       },
       {
         "label": "Battery",
-        "value": "60 hours"
+        "value": "Up to 60 hours with ANC; 5 min charge for up to 4 hours"
       },
       {
         "label": "Noise control",
-        "value": "Adaptive hybrid ANC"
+        "value": "Hybrid adaptive ANC"
       },
       {
         "label": "Codec",
-        "value": "aptX Adaptive, AAC, SBC"
+        "value": "aptX Adaptive, aptX, AAC, SBC"
       },
       {
         "label": "Frequency",
-        "value": "6Hz – 22,000Hz"
+        "value": "6Hz – 22kHz"
       },
       {
         "label": "Microphones",
-        "value": "4-mic beamforming"
+        "value": "4, beamforming (2 per side)"
       },
       {
-        "label": "App",
-        "value": "Smart Control with parametric EQ"
+        "label": "Bluetooth",
+        "value": "5.2"
       },
       {
-        "label": "Weight",
-        "value": "293 g"
+        "label": "In the box",
+        "value": "Carry case, USB-C cable, audio cable"
       }
     ],
     "media": {
@@ -1830,7 +1870,7 @@ export const products: Product[] = [
     "id": "mavic-4-pro",
     "sku": "DJI-MV4-115",
     "brand": "DJI",
-    "title": "Mavic 4 Pro Cine",
+    "title": "Mavic 4 Pro",
     "category": "imaging",
     "priceMinor": 269900,
     "currency": "USD",
@@ -1840,42 +1880,38 @@ export const products: Product[] = [
     "rating": 0,
     "reviewCount": 0,
     "specsSummary": [
-      "4/3 Hasselblad CMOS",
-      "6K/60 ProRes",
-      "43-minute flight"
+      "100MP 4/3 Hasselblad camera",
+      "6K/60fps video",
+      "51-minute flight"
     ],
     "specs": [
       {
-        "label": "Main camera",
-        "value": "4/3 CMOS Hasselblad, 100MP"
+        "label": "Cameras",
+        "value": "100MP 4/3 Hasselblad, 48MP 1/1.3in medium tele, 50MP 1/1.5in tele"
       },
       {
         "label": "Video",
-        "value": "6K/60fps ProRes, 4K/120fps"
-      },
-      {
-        "label": "Gimbal",
-        "value": "3-axis with 360° infinity rotation"
+        "value": "6K up to 60fps, 4K up to 120fps"
       },
       {
         "label": "Flight time",
-        "value": "Up to 43 minutes"
+        "value": "Up to 51 minutes"
       },
       {
-        "label": "Range",
-        "value": "30km O4+ transmission"
+        "label": "Transmission",
+        "value": "O4+, up to 30 km (FCC), 15 km (CE)"
       },
       {
         "label": "Obstacle sensing",
-        "value": "Omnidirectional with LiDAR"
+        "value": "Omnidirectional vision, forward LiDAR, downward infrared"
       },
       {
         "label": "Storage",
-        "value": "64GB internal plus microSD"
+        "value": "64GB internal (512GB in the Creator Combo)"
       },
       {
         "label": "Weight",
-        "value": "1063 g"
+        "value": "About 1,063 g"
       }
     ],
     "media": {
@@ -1898,9 +1934,9 @@ export const products: Product[] = [
   },
   {
     "id": "osmo-pocket",
-    "sku": "DJI-OP3-116",
+    "sku": "DJI-OP4-116",
     "brand": "DJI",
-    "title": "Osmo Pocket 3 Creator",
+    "title": "Osmo Pocket 4",
     "category": "imaging",
     "priceMinor": 79900,
     "currency": "USD",
@@ -1909,42 +1945,46 @@ export const products: Product[] = [
     "rating": 0,
     "reviewCount": 0,
     "specsSummary": [
-      "1\" CMOS sensor",
-      "3-axis gimbal",
-      "2\" rotating screen"
+      "1-inch CMOS sensor",
+      "4K/60fps, 4K/240fps slow-mo",
+      "107GB built-in storage"
     ],
     "specs": [
       {
         "label": "Sensor",
-        "value": "1in CMOS, f/2.0"
+        "value": "1in CMOS"
+      },
+      {
+        "label": "Lens",
+        "value": "20mm equivalent, f/2.0"
       },
       {
         "label": "Video",
-        "value": "4K/120fps, 10-bit D-Log M"
+        "value": "4K up to 60fps; slow motion up to 4K/240fps"
       },
       {
         "label": "Gimbal",
-        "value": "3-axis mechanical stabilisation"
+        "value": "3-axis mechanical"
       },
       {
         "label": "Screen",
-        "value": "2in rotatable OLED touchscreen"
+        "value": "2.0in, 556×314, 1,000 nits"
       },
       {
-        "label": "Tracking",
-        "value": "ActiveTrack 6.0 with face detection"
-      },
-      {
-        "label": "Audio",
-        "value": "3-mic array, DJI Mic 2 direct connect"
+        "label": "Storage",
+        "value": "107GB built in"
       },
       {
         "label": "Battery",
-        "value": "166 minutes at 1080p/24"
+        "value": "240 min at 1080p/24fps; 80% in 18 min"
       },
       {
-        "label": "Weight",
-        "value": "179 g"
+        "label": "Audio",
+        "value": "3 microphones"
+      },
+      {
+        "label": "Size and weight",
+        "value": "144.2 × 44.4 × 33.5 mm, 190.5 g"
       }
     ],
     "media": {
@@ -1979,41 +2019,37 @@ export const products: Product[] = [
     "reviewCount": 0,
     "specsSummary": [
       "4.5kg payload",
-      "LiDAR focusing",
-      "29-hour runtime"
+      "LiDAR autofocus with Focus Pro",
+      "Up to 29h with BG70 grip"
     ],
     "specs": [
       {
         "label": "Payload",
-        "value": "4.5 kg tested"
-      },
-      {
-        "label": "Focus",
-        "value": "LiDAR rangefinder with 21-point ToF"
-      },
-      {
-        "label": "Axis",
-        "value": "3-axis with automated locks"
+        "value": "4.5 kg"
       },
       {
         "label": "Battery",
-        "value": "29 hours, 1.5h full charge"
+        "value": "13 hours (BG30 grip), up to 29 hours with the BG70 grip"
+      },
+      {
+        "label": "Charging",
+        "value": "About 1.5 hours"
+      },
+      {
+        "label": "Axes",
+        "value": "3-axis with automatic locks"
       },
       {
         "label": "Screen",
-        "value": "1.8in full-colour touchscreen"
+        "value": "OLED touchscreen"
       },
       {
-        "label": "Modes",
-        "value": "PF, PTF, FPV, 3D Roll 360"
-      },
-      {
-        "label": "Mount",
-        "value": "Dual-layer quick release plate"
+        "label": "Focus",
+        "value": "Autofocus for manual lenses with DJI Focus Pro LiDAR"
       },
       {
         "label": "Weight",
-        "value": "1.2 kg"
+        "value": "Gimbal 1,242 g, grip 265 g"
       }
     ],
     "media": {
@@ -2047,42 +2083,38 @@ export const products: Product[] = [
     "rating": 0,
     "reviewCount": 0,
     "specsSummary": [
-      "8000 DPI Darkfield",
-      "MagSpeed scrolling",
+      "Haptic Sense Panel",
+      "8,000 DPI, tracks on glass",
       "70-day battery"
     ],
     "specs": [
       {
         "label": "Sensor",
-        "value": "8000 DPI Darkfield, tracks on glass"
+        "value": "Darkfield, 200–8,000 DPI, tracks on glass"
+      },
+      {
+        "label": "Haptics",
+        "value": "Haptic Sense Panel with Actions Ring"
       },
       {
         "label": "Scrolling",
-        "value": "MagSpeed electromagnetic, 1000 lines/sec"
+        "value": "MagSpeed, up to 1,000 lines per second"
       },
       {
         "label": "Buttons",
-        "value": "7 customisable, thumb wheel"
+        "value": "8"
       },
       {
         "label": "Battery",
-        "value": "70 days, 1 min charge = 3 hours"
+        "value": "70 days; 1 min charge for 3 hours"
       },
       {
         "label": "Connectivity",
-        "value": "Bolt USB receiver, Bluetooth, 3 devices"
-      },
-      {
-        "label": "Software",
-        "value": "Logi Options+ with per-app profiles"
-      },
-      {
-        "label": "Flow",
-        "value": "Cross-computer copy and paste"
+        "value": "Logi Bolt receiver, Bluetooth Low Energy"
       },
       {
         "label": "Weight",
-        "value": "141 g"
+        "value": "150 g"
       }
     ],
     "media": {
@@ -2120,14 +2152,18 @@ export const products: Product[] = [
     "rating": 0,
     "reviewCount": 0,
     "specsSummary": [
-      "Low-profile tactile",
+      "Low-profile mechanical",
       "Smart backlighting",
-      "Multi-device Flow"
+      "15 days lit, 10 months unlit"
     ],
     "specs": [
       {
         "label": "Switches",
-        "value": "Low-profile tactile quiet"
+        "value": "Low-profile tactile, clicky or linear"
+      },
+      {
+        "label": "Key travel",
+        "value": "1.3 mm actuation, 3.2 mm total"
       },
       {
         "label": "Layout",
@@ -2135,23 +2171,23 @@ export const products: Product[] = [
       },
       {
         "label": "Backlight",
-        "value": "6 patterns, proximity activated"
+        "value": "Smart illumination"
       },
       {
         "label": "Battery",
-        "value": "15 days lit, 10 months unlit"
+        "value": "15 days with backlight, 10 months without; 4 h full charge"
       },
       {
         "label": "Connectivity",
-        "value": "Bolt receiver, Bluetooth, 3 devices"
+        "value": "Logi Bolt, Bluetooth 5.2, up to 3 devices"
       },
       {
         "label": "Compatibility",
-        "value": "Windows, macOS, Linux, iPadOS, Android"
+        "value": "Windows, macOS, Linux, ChromeOS, iPadOS, Android"
       },
       {
         "label": "Build",
-        "value": "Aluminium top case"
+        "value": "Low-carbon aluminium and plastic"
       },
       {
         "label": "Weight",
@@ -2180,7 +2216,7 @@ export const products: Product[] = [
     "id": "brio-webcam",
     "sku": "LOG-BRIO-120",
     "brand": "LOGITECH",
-    "title": "Brio 4K Pro Webcam",
+    "title": "Brio 4K Webcam",
     "category": "imaging",
     "priceMinor": 19900,
     "currency": "USD",
@@ -2189,42 +2225,34 @@ export const products: Product[] = [
     "rating": 0,
     "reviewCount": 0,
     "specsSummary": [
-      "4K HDR at 30fps",
-      "RightLight 5",
-      "Windows Hello"
+      "4K at 30fps with HDR",
+      "Windows Hello IR sign-in",
+      "65°, 78° or 90° view"
     ],
     "specs": [
       {
         "label": "Resolution",
-        "value": "4K UHD 30fps, 1080p 60fps"
+        "value": "4K at 30fps, 1080p at 60fps, 720p at 90fps"
       },
       {
         "label": "Field of view",
-        "value": "Adjustable 65°, 78°, 90°"
+        "value": "65°, 78° or 90°"
       },
       {
         "label": "HDR",
-        "value": "RightLight 5 with HDR"
+        "value": "RightLight 3 with HDR"
       },
       {
         "label": "Zoom",
         "value": "5× digital"
       },
       {
-        "label": "Autofocus",
-        "value": "Continuous with face priority"
-      },
-      {
-        "label": "Microphones",
-        "value": "Dual omnidirectional with noise reduction"
-      },
-      {
         "label": "Security",
-        "value": "Windows Hello IR facial recognition"
+        "value": "Windows Hello IR face recognition"
       },
       {
-        "label": "Mount",
-        "value": "Clip plus tripod thread"
+        "label": "Privacy",
+        "value": "Flip-down privacy shutter"
       }
     ],
     "media": {
@@ -2258,42 +2286,46 @@ export const products: Product[] = [
     "rating": 0,
     "reviewCount": 0,
     "specsSummary": [
-      "Green mechanical switches",
-      "Command dial",
-      "Chroma RGB"
+      "8000Hz polling",
+      "Command Dial, 8 macro keys",
+      "Magnetic wrist rest"
     ],
     "specs": [
       {
         "label": "Switches",
-        "value": "Razer Green mechanical, 80M keystrokes"
+        "value": "Razer Green (clicky) or Yellow (linear), up to 100 million keystrokes"
       },
       {
-        "label": "Actuation",
-        "value": "1.9mm, clicky tactile"
-      },
-      {
-        "label": "Lighting",
-        "value": "Per-key Chroma RGB, underglow"
+        "label": "Polling",
+        "value": "Up to 8,000Hz"
       },
       {
         "label": "Controls",
-        "value": "Command dial, 4 media keys"
+        "value": "Razer Command Dial, media roller with 4 media keys"
+      },
+      {
+        "label": "Macros",
+        "value": "8 dedicated macro keys (5 on the left, 3 on the side)"
+      },
+      {
+        "label": "Lighting",
+        "value": "Per-key Chroma RGB, 38-zone underglow"
       },
       {
         "label": "Wrist rest",
         "value": "Magnetic plush leatherette"
       },
       {
-        "label": "Polling",
-        "value": "1000Hz"
-      },
-      {
         "label": "Build",
-        "value": "5052 aluminium alloy top"
+        "value": "5052 aluminium alloy top case"
       },
       {
-        "label": "Extras",
-        "value": "8 dedicated macro keys"
+        "label": "Keycaps",
+        "value": "Doubleshot ABS"
+      },
+      {
+        "label": "Connection",
+        "value": "Wired, detachable USB-C, USB 2.0 passthrough"
       }
     ],
     "media": {
@@ -2327,38 +2359,34 @@ export const products: Product[] = [
     "rating": 0,
     "reviewCount": 0,
     "specsSummary": [
-      "35K DPI Focus Pro",
-      "54g chassis",
-      "8000Hz polling"
+      "Focus Pro 35K Gen-2 sensor",
+      "54 g",
+      "8000Hz HyperPolling"
     ],
     "specs": [
       {
         "label": "Sensor",
-        "value": "Focus Pro 35K optical"
+        "value": "Focus Pro 35K Optical Gen-2, 99.8% resolution accuracy"
       },
       {
         "label": "DPI",
-        "value": "35,000 with 750 IPS tracking"
+        "value": "Up to 35,000"
       },
       {
         "label": "Polling",
-        "value": "8000Hz with HyperPolling dongle"
+        "value": "Up to 8,000Hz with the HyperPolling dongle"
       },
       {
         "label": "Switches",
-        "value": "Gen-3 optical, 90M clicks"
+        "value": "Optical Gen-3"
       },
       {
         "label": "Battery",
-        "value": "95 hours at 1000Hz"
+        "value": "Up to 95 hours at 1000Hz"
       },
       {
         "label": "Shape",
-        "value": "Symmetrical right-handed"
-      },
-      {
-        "label": "Feet",
-        "value": "100% PTFE"
+        "value": "Symmetrical, buttons for the right hand"
       },
       {
         "label": "Weight",
@@ -2391,7 +2419,7 @@ export const products: Product[] = [
     "id": "blade-16",
     "sku": "RZR-BL16-123",
     "brand": "RAZER",
-    "title": "Blade 16 Creator",
+    "title": "Blade 16 (2026)",
     "category": "computing",
     "priceMinor": 329900,
     "currency": "USD",
@@ -2400,42 +2428,30 @@ export const products: Product[] = [
     "rating": 0,
     "reviewCount": 0,
     "specsSummary": [
-      "RTX 5090 Laptop",
-      "16\" OLED 240Hz",
-      "CNC aluminium unibody"
+      "Up to RTX 5090 Laptop GPU",
+      "16\" QHD+ 240Hz OLED",
+      "Intel Core Ultra 9 386H"
     ],
     "specs": [
       {
-        "label": "GPU",
-        "value": "NVIDIA GeForce RTX 5090 Laptop, 24GB"
+        "label": "CPU",
+        "value": "Intel Core Ultra 9 386H, 16 cores, up to 4.9GHz"
       },
       {
-        "label": "CPU",
-        "value": "Intel Core Ultra 9 275HX"
+        "label": "GPU",
+        "value": "Up to NVIDIA GeForce RTX 5090 Laptop, up to 165 watts TGP"
       },
       {
         "label": "Display",
-        "value": "16in OLED 2560×1600, 240Hz, 0.2ms"
+        "value": "16in QHD+ OLED, up to 240Hz, DisplayHDR True Black 1000, up to 1,100 nits"
       },
       {
         "label": "Memory",
-        "value": "32GB DDR5-6400, up to 96GB"
+        "value": "Up to 64GB LPDDR5-9600"
       },
       {
-        "label": "Storage",
-        "value": "2TB PCIe Gen4 NVMe"
-      },
-      {
-        "label": "Cooling",
-        "value": "Vapour chamber with liquid metal"
-      },
-      {
-        "label": "Build",
-        "value": "CNC aluminium unibody"
-      },
-      {
-        "label": "Weight",
-        "value": "2.14 kg"
+        "label": "Thickness and weight",
+        "value": "14.9 mm, about 2.14 kg"
       }
     ],
     "media": {
@@ -2458,53 +2474,53 @@ export const products: Product[] = [
   },
   {
     "id": "prime-powerbank",
-    "sku": "ANK-P27-124",
+    "sku": "ANK-P26-124",
     "brand": "ANKER",
-    "title": "Prime 27,650mAh Bank",
+    "title": "Prime Power Bank (26K, 300W)",
     "category": "computing",
-    "priceMinor": 17900,
+    "priceMinor": 22999,
     "currency": "USD",
     "inStock": true,
     "stockCount": 96,
     "rating": 0,
     "reviewCount": 0,
     "specsSummary": [
-      "250W total output",
-      "Smart display",
-      "Three-device charging"
+      "300W total output",
+      "26,250mAh, 99.75Wh",
+      "250W fast recharge"
     ],
     "specs": [
       {
         "label": "Capacity",
-        "value": "27,650mAh / 99.54Wh"
+        "value": "26,250mAh (99.75Wh)"
       },
       {
         "label": "Output",
-        "value": "250W total across three ports"
+        "value": "300W total"
       },
       {
         "label": "Ports",
-        "value": "2× USB-C 140W, 1× USB-A 65W"
+        "value": "2× USB-C up to 140W each, 1× USB-A up to 22.5W"
       },
       {
         "label": "Recharge",
-        "value": "Full in 70 minutes at 170W"
+        "value": "250W over both USB-C ports; 50% in 13 min, 80% in 40 min"
       },
       {
         "label": "Display",
-        "value": "Smart LCD with per-port wattage"
+        "value": "Smart display, app control over Bluetooth"
       },
       {
         "label": "Safety",
-        "value": "ActiveShield 3.0 temperature monitoring"
+        "value": "ActiveShield 4.0"
       },
       {
         "label": "Airline",
         "value": "Under the 100Wh carry-on limit"
       },
       {
-        "label": "Weight",
-        "value": "1.4 kg"
+        "label": "Size and weight",
+        "value": "159.9 × 38 × 62.7 mm, 600 g"
       }
     ],
     "media": {
@@ -2544,41 +2560,45 @@ export const products: Product[] = [
     "reviewCount": 0,
     "specsSummary": [
       "Adaptive ANC 3.0",
-      "48-hour total",
-      "LDAC Hi-Res"
+      "48 hours with case",
+      "LDAC Hi-Res audio"
     ],
     "specs": [
       {
-        "label": "Driver",
-        "value": "10mm dual dynamic with dual chamber"
+        "label": "Drivers",
+        "value": "9.2mm wool-paper diaphragm"
       },
       {
         "label": "Noise control",
-        "value": "Adaptive ANC 3.0, 98.5% reduction"
+        "value": "Adaptive ANC 3.0, adjusts every 0.3 s"
       },
       {
         "label": "Battery",
-        "value": "8h buds, 48h with case"
+        "value": "12 hours buds, 48 with case; 8 and 32 with ANC"
+      },
+      {
+        "label": "Quick charge",
+        "value": "10 min for 5 hours"
       },
       {
         "label": "Codec",
-        "value": "LDAC Hi-Res Wireless, AAC, SBC"
+        "value": "LDAC Hi-Res"
       },
       {
         "label": "Microphones",
-        "value": "6 mics with AI wind reduction"
+        "value": "6, with AI wind reduction"
       },
       {
         "label": "Water resistance",
-        "value": "IPX4"
+        "value": "IP55"
+      },
+      {
+        "label": "Bluetooth",
+        "value": "5.4"
       },
       {
         "label": "Charging",
         "value": "USB-C and wireless"
-      },
-      {
-        "label": "App",
-        "value": "HearID personalised EQ"
       }
     ],
     "media": {
@@ -2607,7 +2627,7 @@ export const products: Product[] = [
     "id": "gan-charger",
     "sku": "ANK-747-126",
     "brand": "ANKER",
-    "title": "Prime 250W GaN Charger",
+    "title": "Prime Charger (250W, 6 Ports)",
     "category": "computing",
     "priceMinor": 14900,
     "currency": "USD",
@@ -2616,9 +2636,9 @@ export const products: Product[] = [
     "rating": 0,
     "reviewCount": 0,
     "specsSummary": [
-      "Six ports, 250W",
-      "ActiveShield 3.0",
-      "Desktop form factor"
+      "250W across six ports",
+      "140W from a single USB-C",
+      "LCD with control dial"
     ],
     "specs": [
       {
@@ -2631,27 +2651,19 @@ export const products: Product[] = [
       },
       {
         "label": "Fast charge",
-        "value": "140W single port PD 3.1"
-      },
-      {
-        "label": "Technology",
-        "value": "GaN III, 40% smaller than silicon"
+        "value": "Up to 140W from USB-C 1"
       },
       {
         "label": "Display",
-        "value": "Power distribution readout"
+        "value": "2.26in LCD with smart control dial"
       },
       {
         "label": "Safety",
         "value": "ActiveShield 3.0"
       },
       {
-        "label": "Input",
-        "value": "100–240V worldwide"
-      },
-      {
-        "label": "Form",
-        "value": "Desktop with detachable cord"
+        "label": "Technology",
+        "value": "GaNPrime, PowerIQ 4.0"
       }
     ],
     "media": {
@@ -2689,42 +2701,46 @@ export const products: Product[] = [
     "rating": 0,
     "reviewCount": 0,
     "specsSummary": [
-      "6.7\" LTPO AMOLED",
-      "Glyph interface",
-      "5000mAh"
+      "50MP 3× periscope camera",
+      "6.77\" 120Hz AMOLED",
+      "5,000mAh, 50W charging"
     ],
     "specs": [
       {
         "label": "Display",
-        "value": "6.7in LTPO AMOLED, 1–120Hz, 3000 nits"
+        "value": "6.77in AMOLED, 120Hz adaptive, 3,000 nits peak"
       },
       {
-        "label": "Processor",
+        "label": "Chip",
         "value": "Snapdragon 7s Gen 3"
-      },
-      {
-        "label": "Camera",
-        "value": "50MP main + 50MP periscope + 8MP ultrawide"
-      },
-      {
-        "label": "Glyph",
-        "value": "Glyph Matrix rear LED interface"
       },
       {
         "label": "Memory",
         "value": "12GB RAM, 256GB storage"
       },
       {
+        "label": "Rear cameras",
+        "value": "50MP main, 50MP periscope (Sony LYTIA 600, OIS), 8MP ultrawide"
+      },
+      {
+        "label": "Zoom",
+        "value": "3× optical, 6× lossless, up to 60× ultra zoom"
+      },
+      {
         "label": "Battery",
-        "value": "5000mAh, 50W wired"
+        "value": "5,000mAh"
       },
       {
-        "label": "Software",
-        "value": "Nothing OS 3, 3 years of upgrades"
+        "label": "Charging",
+        "value": "50W wired"
       },
       {
-        "label": "Build",
-        "value": "Transparent back, IP64"
+        "label": "Glyph",
+        "value": "Glyph Interface light strips"
+      },
+      {
+        "label": "Durability",
+        "value": "IP64"
       }
     ],
     "media": {
@@ -2762,9 +2778,9 @@ export const products: Product[] = [
     "rating": 0,
     "reviewCount": 0,
     "specsSummary": [
-      "Open-ear driver",
+      "Open-ear: hear what's around you",
       "IP54 rated",
-      "38-hour case"
+      "30 hours with case"
     ],
     "specs": [
       {
@@ -2773,11 +2789,15 @@ export const products: Product[] = [
       },
       {
         "label": "Driver",
-        "value": "14.2mm custom dynamic"
+        "value": "14.2mm dynamic"
       },
       {
         "label": "Battery",
-        "value": "8h buds, 30h with case"
+        "value": "8 hours buds, 30 hours with case"
+      },
+      {
+        "label": "Battery capacity",
+        "value": "64mAh per bud, 635mAh case"
       },
       {
         "label": "Water resistance",
@@ -2786,14 +2806,6 @@ export const products: Product[] = [
       {
         "label": "Codec",
         "value": "AAC, SBC"
-      },
-      {
-        "label": "Microphones",
-        "value": "3 mics with Clear Voice"
-      },
-      {
-        "label": "Controls",
-        "value": "Pinch and slide"
       },
       {
         "label": "Weight",
@@ -2826,7 +2838,7 @@ export const products: Product[] = [
     "id": "cmf-buds",
     "sku": "NTH-CMF-129",
     "brand": "NOTHING",
-    "title": "CMF Buds Pro 3",
+    "title": "CMF Buds Pro 2",
     "category": "audio",
     "priceMinor": 6900,
     "currency": "USD",
@@ -2836,41 +2848,37 @@ export const products: Product[] = [
     "reviewCount": 0,
     "specsSummary": [
       "50dB hybrid ANC",
-      "Smart dial case",
-      "43-hour total"
+      "11mm + 6mm dual drivers",
+      "Up to 43h with case"
     ],
     "specs": [
-      {
-        "label": "Driver",
-        "value": "11mm bio-fibre dynamic"
-      },
       {
         "label": "Noise control",
         "value": "Hybrid ANC up to 50dB"
       },
       {
-        "label": "Battery",
-        "value": "10h buds, 43h with case"
+        "label": "Drivers",
+        "value": "11mm + 6mm dual drivers"
       },
       {
-        "label": "Case",
-        "value": "Smart Dial for volume and tracks"
+        "label": "Microphones",
+        "value": "6 HD mics"
       },
       {
         "label": "Codec",
-        "value": "LDAC, AAC, SBC"
+        "value": "LDAC, AAC"
+      },
+      {
+        "label": "Battery",
+        "value": "Up to 43 hours with case (ANC off), 26 hours with ANC on"
+      },
+      {
+        "label": "Case",
+        "value": "Smart Dial controls"
       },
       {
         "label": "Water resistance",
         "value": "IP55"
-      },
-      {
-        "label": "Microphones",
-        "value": "6 mics with Clear Voice"
-      },
-      {
-        "label": "Weight",
-        "value": "4.9 g per bud"
       }
     ],
     "media": {
@@ -2901,7 +2909,7 @@ export const products: Product[] = [
     "brand": "KEYCHRON",
     "title": "Q3 Max QMK Custom",
     "category": "peripherals",
-    "priceMinor": 21900,
+    "priceMinor": 22999,
     "currency": "USD",
     "inStock": true,
     "stockCount": 34,
@@ -2909,34 +2917,38 @@ export const products: Product[] = [
     "rating": 0,
     "reviewCount": 0,
     "specsSummary": [
-      "Gasket mount",
+      "Double-gasket mount",
       "QMK / VIA",
-      "2.4G and Bluetooth"
+      "Up to 180h battery"
     ],
     "specs": [
       {
+        "label": "Layout",
+        "value": "80% (tenkeyless)"
+      },
+      {
         "label": "Mount",
-        "value": "Double gasket with silicone pads"
+        "value": "Double gasket"
       },
       {
         "label": "Switches",
-        "value": "Hot-swappable, 3-pin and 5-pin"
+        "value": "Hot-swappable"
       },
       {
         "label": "Firmware",
-        "value": "QMK and VIA, fully remappable"
+        "value": "QMK and VIA"
       },
       {
         "label": "Connectivity",
-        "value": "2.4GHz, Bluetooth 5.1, USB-C"
+        "value": "2.4GHz, Bluetooth 5.1 (3 devices), USB-C wired; 1000Hz"
       },
       {
         "label": "Battery",
-        "value": "4000mAh, up to 100 hours"
+        "value": "4000mAh, up to 180 hours"
       },
       {
         "label": "Case",
-        "value": "CNC machined 6063 aluminium"
+        "value": "CNC-machined 6063 aluminium"
       },
       {
         "label": "Keycaps",
@@ -2944,7 +2956,7 @@ export const products: Product[] = [
       },
       {
         "label": "Weight",
-        "value": "1.9 kg"
+        "value": "2,045 g fully assembled"
       }
     ],
     "media": {
@@ -2973,7 +2985,7 @@ export const products: Product[] = [
     "id": "switch-set",
     "sku": "KEY-NBS-131",
     "brand": "KEYCHRON",
-    "title": "Nebula Switch Set ×110",
+    "title": "Nebula Magnetic Switch Set ×110",
     "category": "peripherals",
     "priceMinor": 6900,
     "currency": "USD",
@@ -2982,38 +2994,26 @@ export const products: Product[] = [
     "rating": 0,
     "reviewCount": 0,
     "specsSummary": [
-      "45gf linear",
-      "Factory lubed",
-      "1.9mm pre-travel"
+      "Gateron double-rail magnetic",
+      "0.2–3.8mm adjustable actuation",
+      "For Keychron HE keyboards"
     ],
     "specs": [
       {
         "label": "Type",
-        "value": "Linear"
+        "value": "Gateron double-rail magnetic (Hall effect), linear"
       },
       {
-        "label": "Actuation force",
-        "value": "45 gf"
-      },
-      {
-        "label": "Pre-travel",
-        "value": "1.9 mm"
-      },
-      {
-        "label": "Total travel",
-        "value": "3.5 mm"
+        "label": "Actuation",
+        "value": "Adjustable from 0.2 to 3.8 mm in 0.1 mm steps"
       },
       {
         "label": "Lubrication",
-        "value": "Factory lubed stem and spring"
+        "value": "Factory pre-lubed"
       },
       {
-        "label": "Housing",
-        "value": "Polycarbonate top, nylon bottom"
-      },
-      {
-        "label": "Pins",
-        "value": "5-pin PCB mount"
+        "label": "Compatibility",
+        "value": "Keychron Q HE and K HE, Lemokey P HE keyboards"
       },
       {
         "label": "Quantity",
@@ -3051,42 +3051,38 @@ export const products: Product[] = [
     "rating": 0,
     "reviewCount": 0,
     "specsSummary": [
-      "26K DPI PixArt",
-      "1000Hz polling",
-      "70g chassis"
+      "26K DPI PixArt PAW3395",
+      "Ergonomic right-hand shape",
+      "Up to 120h battery"
     ],
     "specs": [
       {
         "label": "Sensor",
-        "value": "PixArt PAW3395 optical"
-      },
-      {
-        "label": "DPI",
-        "value": "26,000 adjustable in 50 steps"
+        "value": "PixArt PAW3395, up to 26,000 DPI"
       },
       {
         "label": "Polling",
-        "value": "1000Hz wired, 1000Hz 2.4GHz"
+        "value": "1000Hz (4000Hz version available)"
+      },
+      {
+        "label": "Shape",
+        "value": "Ergonomic, right-handed, with thumb scroll wheel"
       },
       {
         "label": "Switches",
-        "value": "Optical, 80M clicks"
+        "value": "Huano, 80 million clicks"
       },
       {
         "label": "Connectivity",
-        "value": "2.4GHz, Bluetooth 5.1, USB-C"
+        "value": "2.4GHz, Bluetooth 5.1, USB-C wired"
       },
       {
         "label": "Battery",
-        "value": "500mAh, up to 70 hours"
+        "value": "800mAh, up to 120 hours at 1000Hz"
       },
       {
         "label": "Software",
-        "value": "Keychron Launcher, browser based"
-      },
-      {
-        "label": "Weight",
-        "value": "70 g"
+        "value": "Keychron Launcher (web)"
       }
     ],
     "media": {
@@ -3127,7 +3123,7 @@ export const products: Product[] = [
     "specsSummary": [
       "32-bit audio engine",
       "24-hour battery",
-      "Bluetooth MIDI"
+      "Bluetooth MIDI, FM radio"
     ],
     "specs": [
       {
@@ -3136,31 +3132,31 @@ export const products: Product[] = [
       },
       {
         "label": "Battery",
-        "value": "16 hours continuous"
-      },
-      {
-        "label": "Connectivity",
-        "value": "Bluetooth MIDI, USB-C audio interface"
-      },
-      {
-        "label": "Keys",
-        "value": "24 keys, velocity sensitive"
+        "value": "24 hours"
       },
       {
         "label": "Synthesis",
-        "value": "12 engines including Dimension and Digital"
-      },
-      {
-        "label": "Effects",
-        "value": "8 effects, 2 send slots"
+        "value": "8 stereo engines: Cluster, Digital, FM, Phase, Pulse, String, Voltage, Dimension"
       },
       {
         "label": "Tape",
-        "value": "4-track tape with 6 reels"
+        "value": "Up to 8 swappable stereo tapes"
       },
       {
-        "label": "Build",
-        "value": "Aluminium unibody, 1.1 kg"
+        "label": "Sampling",
+        "value": "Up to 20 seconds per sample"
+      },
+      {
+        "label": "Connectivity",
+        "value": "Bluetooth MIDI, USB-C audio interface, FM radio (receive and transmit)"
+      },
+      {
+        "label": "Display",
+        "value": "High-resolution, under hardened glass"
+      },
+      {
+        "label": "Size and weight",
+        "value": "300 × 120 × 20 mm, 590 g"
       }
     ],
     "media": {
@@ -3198,42 +3194,42 @@ export const products: Product[] = [
     "rating": 0,
     "reviewCount": 0,
     "specsSummary": [
-      "96kHz / 32-bit",
-      "Motorised reel",
-      "Three USB-C inputs"
+      "128GB internal storage",
+      "Motorised tape reel",
+      "7-hour battery"
     ],
     "specs": [
-      {
-        "label": "Recording",
-        "value": "96kHz / 32-bit float"
-      },
       {
         "label": "Storage",
         "value": "128GB internal"
       },
       {
-        "label": "Reel",
-        "value": "Motorised tape reel for scrubbing"
+        "label": "Battery",
+        "value": "7 hours, rechargeable"
       },
       {
-        "label": "Inputs",
-        "value": "3× USB-C, 3.5mm mic in"
+        "label": "Reel",
+        "value": "Motorised tape reel with a brushless motor"
+      },
+      {
+        "label": "Jacks",
+        "value": "3 × 3.5mm stereo in/out (TRRS), 3.5mm headphone out"
+      },
+      {
+        "label": "USB-C",
+        "value": "Multichannel audio interface, MIDI, data and charging"
       },
       {
         "label": "Microphone",
-        "value": "Built-in omnidirectional"
-      },
-      {
-        "label": "Battery",
-        "value": "7 hours continuous"
+        "value": "Built in"
       },
       {
         "label": "Transcription",
-        "value": "Via field companion app"
+        "value": "In the TP–7 app"
       },
       {
-        "label": "Build",
-        "value": "Machined aluminium, 90 g"
+        "label": "Size and weight",
+        "value": "96 × 68 × 16 mm, 170 g"
       }
     ],
     "media": {
@@ -3267,14 +3263,18 @@ export const products: Product[] = [
     "rating": 0,
     "reviewCount": 0,
     "specsSummary": [
-      "Always-on recording",
-      "4\" bass drivers",
-      "20-hour battery"
+      "Two 38-watt class-D amps",
+      "2-hour rolling recording",
+      "Up to 72h on FM radio"
     ],
     "specs": [
       {
         "label": "Drivers",
-        "value": "2× 4in bass, 2× tweeters"
+        "value": "Long-throw neodymium woofers, ferrofluid-cooled neodymium tweeters"
+      },
+      {
+        "label": "Amplifier",
+        "value": "2 × 38 watts, class D"
       },
       {
         "label": "Recording",
@@ -3282,27 +3282,23 @@ export const products: Product[] = [
       },
       {
         "label": "Sources",
-        "value": "FM radio, Bluetooth, aux"
+        "value": "FM radio, Bluetooth (AAC), 3.5mm line in, disk modes"
       },
       {
         "label": "Battery",
-        "value": "Up to 20 hours"
+        "value": "Up to 72 hours (FM, normal volume), 8 hours (Bluetooth, high volume)"
       },
       {
         "label": "Controls",
-        "value": "Motorised tape wheel for scrubbing"
-      },
-      {
-        "label": "Display",
-        "value": "Dot-matrix LED"
+        "value": "Motorised tape reel and volume knob"
       },
       {
         "label": "Build",
-        "value": "Aluminium with rubber bumpers"
+        "value": "Glass-fibre reinforced PC and milled aluminium"
       },
       {
-        "label": "Weight",
-        "value": "3.2 kg"
+        "label": "Size and weight",
+        "value": "232.5 × 284 × 57.5 mm, 1.7 kg"
       }
     ],
     "media": {
