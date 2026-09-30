@@ -182,8 +182,8 @@ const related = computed(() =>
         </dl>
       </section>
 
-      <ProductReviews :product-id="product.id" />
-      <ProductQuestions :product-id="product.id" />
+      <ProductReviews :key="`r-${product.id}`" :product-id="product.id" />
+      <ProductQuestions :key="`q-${product.id}`" :product-id="product.id" />
     </div>
 
     <!-- Teardown, for the one product that has it -->
