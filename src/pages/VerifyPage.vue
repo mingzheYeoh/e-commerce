@@ -16,8 +16,10 @@ import { onMounted, ref } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { CheckCircle2, AlertCircle } from 'lucide-vue-next'
 import { useAuthStore } from '@/stores/auth'
+import { useUiStore } from '@/stores/ui'
 
 const auth = useAuthStore()
+const ui = useUiStore()
 const route = useRoute()
 const router = useRouter()
 
@@ -33,6 +35,8 @@ onMounted(async () => {
 
   router.replace({ path: '/verify' })
   state.value = (await auth.confirm(token)) ? 'done' : 'failed'
+  // A confirmed address is a new account signed in: welcome them to the store.
+  if (state.value === 'done') ui.welcome = { message: `Welcome to NEXUSOHM, ${auth.firstName}`, to: '/' }
 })
 </script>
 

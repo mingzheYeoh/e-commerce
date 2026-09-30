@@ -3,6 +3,7 @@ import NavBar from '@/components/layout/NavBar.vue'
 import CartDrawer from '@/components/layout/CartDrawer.vue'
 import SearchPalette from '@/components/layout/SearchPalette.vue'
 import SignInPrompt from '@/components/layout/SignInPrompt.vue'
+import WelcomeTransition from '@/components/layout/WelcomeTransition.vue'
 import CompareTray from '@/components/commerce/CompareTray.vue'
 import SiteFooter from '@/components/layout/SiteFooter.vue'
 import { onMounted } from 'vue'
@@ -49,4 +50,5 @@ const compare = useCompareStore()
 
   <!-- Docked last so it sits above the footer on a short page. -->
   <CompareTray />
+  <WelcomeTransition />
 </template>
