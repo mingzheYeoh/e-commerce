@@ -287,7 +287,7 @@ export const listOrders = (filter: OrderFilter) =>
     `/api/merchant/orders?${query(filter)}`,
   )
 
-export type Queue = { toShip: number; lowStock: number; outOfStock: number; lowStockAt: number; returnsOpen: number }
+export type Queue = { toShip: number; lowStock: number; outOfStock: number; lowStockAt: number; returnsOpen: number; questionsOpen: number }
 
 export const merchantQueue = () => call<Queue | ErrorBody>('/api/merchant/queue')
 

@@ -32,7 +32,7 @@ const router = useRouter()
 const name = ref(props.scope === 'platform' ? 'NEXUSOHM Platform' : '')
 const open = ref(false)
 
-type NavItem = { to: string; label: string; icon: unknown; exact?: boolean; badge?: 'toShip' | 'returnsOpen' }
+type NavItem = { to: string; label: string; icon: unknown; exact?: boolean; badge?: 'toShip' | 'returnsOpen' | 'questionsOpen' }
 
 const NAV: Record<'merchant' | 'platform', NavItem[]> = {
   merchant: [
@@ -44,7 +44,7 @@ const NAV: Record<'merchant' | 'platform', NavItem[]> = {
     { to: '/finance', label: 'Finance', icon: Wallet },
     { to: '/returns', label: 'Returns', icon: RotateCcw, badge: 'returnsOpen' },
     { to: '/reviews', label: 'Reviews', icon: Star },
-    { to: '/questions', label: 'Questions', icon: MessageSquare },
+    { to: '/questions', label: 'Questions', icon: MessageSquare, badge: 'questionsOpen' },
   ],
   platform: [
     { to: '/platform', label: 'Overview', icon: LayoutDashboard, exact: true },
@@ -68,16 +68,23 @@ const active = (item: { to: string; exact?: boolean }) =>
   route.path === item.to || (!item.exact && route.path.startsWith(`${item.to}/`))
 
 /**
- * Parts still to ship, beside Orders, and open returns, beside Returns.
+ * Parts still to ship, beside Orders, open returns, beside Returns, and
+ * unanswered questions, beside Questions.
  * Re-read on every page change, so each
  * drops as soon as the order page marks one shipped and the merchant moves on.
  * A failed read shows no badge rather than a wrong number.
  */
-const counts = ref({ toShip: 0, returnsOpen: 0 })
+/** What each badge counts, for screen readers. */
+const BADGE_LABEL = { toShip: 'to ship', returnsOpen: 'open', questionsOpen: 'unanswered' } as const
+const NONE = { toShip: 0, returnsOpen: 0, questionsOpen: 0 }
+const counts = ref({ ...NONE })
 async function refreshQueue() {
   if (props.scope !== 'merchant') return
   const { body } = await merchantQueue().catch(() => ({ body: { error: 'offline' } }))
-  counts.value = 'toShip' in body ? { toShip: body.toShip, returnsOpen: body.returnsOpen ?? 0 } : { toShip: 0, returnsOpen: 0 }
+  counts.value =
+    'toShip' in body
+      ? { toShip: body.toShip, returnsOpen: body.returnsOpen ?? 0, questionsOpen: body.questionsOpen ?? 0 }
+      : { ...NONE }
 }
 
 // A tap on a link closes the mobile menu by way of the route change.
@@ -124,7 +131,7 @@ async function logout() {
           <span
             v-if="item.badge && counts[item.badge]"
             class="nums ml-auto rounded-full border border-accent-amber/40 px-1.5 text-[11px] text-accent-amber"
-            :aria-label="`${counts[item.badge]} ${item.badge === 'toShip' ? 'to ship' : 'open'}`"
+            :aria-label="`${counts[item.badge]} ${BADGE_LABEL[item.badge]}`"
           >{{ counts[item.badge] }}</span>
         </router-link>
       </nav>
@@ -167,7 +174,7 @@ async function logout() {
           <span
             v-if="item.badge && counts[item.badge]"
             class="nums ml-auto rounded-full border border-accent-amber/40 px-1.5 text-[11px] text-accent-amber"
-            :aria-label="`${counts[item.badge]} ${item.badge === 'toShip' ? 'to ship' : 'open'}`"
+            :aria-label="`${counts[item.badge]} ${BADGE_LABEL[item.badge]}`"
           >{{ counts[item.badge] }}</span>
         </router-link>
       </nav>

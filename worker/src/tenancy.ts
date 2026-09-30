@@ -477,6 +477,8 @@ export interface Queue {
   out_of_stock: number
   /** Return requests still waiting for a decision. */
   returns_open: number
+  /** Visible product questions still waiting for an answer. */
+  questions_open: number
 }
 
 export type ReturnStatus = 'open' | 'approved' | 'rejected'
@@ -2910,15 +2912,18 @@ function build(env: TenancyEnv, scope: Scope): Repository {
         const out = where([['status = ?', 'published'], ['stock_count = ?', 0], tenant(scope)])
         // A seek on return_requests_merchant_idx (merchant_id, status).
         const open = where([['status = ?', 'open'], tenant(scope)])
+        // Scans the merchant's slice of product_questions_merchant_idx.
+        const asked = where([['answer IS NULL'], ['hidden = ?', 0], tenant(scope)])
         const row = await env.ORDERS.prepare(
           `SELECT (SELECT COUNT(*) FROM order_fulfilments f JOIN orders o ON o.id = f.order_id${parts.sql}) AS to_ship,
                   (SELECT COUNT(*) FROM products${low.sql}) AS low_stock,
                   (SELECT COUNT(*) FROM products${out.sql}) AS out_of_stock,
-                  (SELECT COUNT(*) FROM return_requests${open.sql}) AS returns_open`,
+                  (SELECT COUNT(*) FROM return_requests${open.sql}) AS returns_open,
+                  (SELECT COUNT(*) FROM product_questions${asked.sql}) AS questions_open`,
         )
-          .bind(...parts.args, ...low.args, ...out.args, ...open.args)
+          .bind(...parts.args, ...low.args, ...out.args, ...open.args, ...asked.args)
           .first<Queue>()
-        return row ?? { to_ship: 0, low_stock: 0, out_of_stock: 0, returns_open: 0 }
+        return row ?? { to_ship: 0, low_stock: 0, out_of_stock: 0, returns_open: 0, questions_open: 0 }
       },
 
       sales: (range: OrderRange) => salesReport(env, scope, range),

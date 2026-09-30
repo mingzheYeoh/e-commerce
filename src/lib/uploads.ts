@@ -96,6 +96,11 @@ export const fetchQuestions = (productId: string, page = 0) =>
   send<QuestionPage>(`${productPath(productId)}/questions?page=${page}`)
 export const askQuestion = (productId: string, body: string) =>
   send<{ ok: true }>(`${productPath(productId)}/questions`, withJson('POST', { body }))
+/** The asker's own question, while it waits for an answer. */
+export const editQuestion = (questionId: string, body: string) =>
+  send<{ ok: true }>(`/api/questions/${encodeURIComponent(questionId)}`, withJson('POST', { body }))
+export const deleteQuestion = (questionId: string) =>
+  send<{ ok: true }>(`/api/questions/${encodeURIComponent(questionId)}`, { method: 'DELETE' })
 
 export const fetchReviews =(productId: string, page = 0) => send<ReviewPage>(`${productPath(productId)}/reviews?page=${page}`)
 export const saveReview = (productId: string, rating: number, body: string) =>

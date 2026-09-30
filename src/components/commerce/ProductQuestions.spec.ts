@@ -1,16 +1,18 @@
 import { beforeEach, describe, it, expect, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import ProductQuestions from './ProductQuestions.vue'
-import { fetchQuestions, askQuestion, type Question, type QuestionPage } from '@/lib/uploads'
+import { fetchQuestions, askQuestion, editQuestion, deleteQuestion, type Question, type QuestionPage } from '@/lib/uploads'
 
 vi.mock('@/lib/uploads', async (actual) => ({
   ...(await actual<typeof import('@/lib/uploads')>()),
   fetchQuestions: vi.fn(),
   askQuestion: vi.fn(),
+  editQuestion: vi.fn(),
+  deleteQuestion: vi.fn(),
 }))
 vi.mock('vue-router', async (actual) => ({
   ...(await actual<typeof import('vue-router')>()),
-  useRoute: () => ({ fullPath: '/products/prd_1' }),
+  useRoute: () => ({ fullPath: '/product/prd_1' }),
 }))
 
 const answered: Question = {
@@ -46,7 +48,7 @@ describe('product questions', () => {
     expect(w.text()).toContain('Yes, a hard case is in the box.')
     expect(w.text()).toContain('Answered by Acme')
     expect(w.find('form').exists()).toBe(false)
-    expect(JSON.parse(w.find('a').attributes('data-to')!)).toEqual({ path: '/account', query: { next: '/products/prd_1' } })
+    expect(JSON.parse(w.find('a').attributes('data-to')!)).toEqual({ path: '/account', query: { next: '/product/prd_1' } })
   })
 
   it("marks the viewer's own unanswered question as waiting, and asks a new one", async () => {
@@ -70,5 +72,27 @@ describe('product questions', () => {
     await flushPromises()
     expect(askQuestion).not.toHaveBeenCalled()
     expect(w.text()).toContain('at least 10 characters')
+  })
+
+  it('rewrites a waiting question, and withdraws one only after a second click', async () => {
+    vi.mocked(fetchQuestions).mockResolvedValue({ ok: true, data: page({ pending: [waiting] }) })
+    vi.mocked(editQuestion).mockResolvedValue({ ok: true, data: { ok: true } })
+    vi.mocked(deleteQuestion).mockResolvedValue({ ok: true, data: { ok: true } })
+    const w = await render()
+    const button = (label: string) => w.findAll('button').find((b) => b.text() === label)!
+
+    await button('Edit').trigger('click')
+    await w.find('textarea[aria-label="Edit your question"]').setValue('Can I pair it with two phones at once?')
+    await w.findAll('form').at(-1)!.trigger('submit')
+    await flushPromises()
+    expect(editQuestion).toHaveBeenCalledOnce()
+    expect(editQuestion).toHaveBeenCalledWith('qst_2', 'Can I pair it with two phones at once?')
+
+    await button('Withdraw').trigger('click')
+    expect(deleteQuestion).not.toHaveBeenCalled()
+    expect(w.text()).toContain('Withdraw this question?')
+    await button('Withdraw').trigger('click')
+    await flushPromises()
+    expect(deleteQuestion).toHaveBeenCalledWith('qst_2')
   })
 })
