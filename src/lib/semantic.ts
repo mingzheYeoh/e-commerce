@@ -11,18 +11,24 @@
  * model is cached, and no shopper's query is sent anywhere.
  *
  * Measured on the 22-query evaluation set in search-eval.json
- * (`node scripts/eval-search.mjs`):
+ * (`node scripts/eval-search.mjs`), after 0019 replaced every product's specs
+ * with the manufacturers' figures (2026-09-30):
  *
  *   strategy   precision@3   recall@5     MRR
- *   keyword        33.3%       65.0%     58.6%
- *   semantic       40.9%       79.8%     73.3%
- *   hybrid         40.9%       70.7%     72.7%
+ *   keyword        28.8%       57.8%     44.2%
+ *   semantic       42.4%       73.6%     77.3%
+ *   hybrid         43.9%       70.9%     71.4%
  *
- * Hybrid no longer earns its place on these numbers. It was added when fusion
- * beat semantic alone; re-measured after the catalogue grew to 45 products it
- * costs 9 points of recall@5 and matches on MRR within the noise of a 22-query
- * set (repeat runs move MRR by ~1 point on identical inputs, because q8
- * quantisation is not bit-identical between runs).
+ * Longer, figure-heavy spec tables cost the keyword engine and semantic
+ * recall; hybrid, which is what the palette settles on, held level. Before
+ * 0019: keyword 30.3 / 63.1 / 53.3, semantic 40.9 / 79.8 / 73.3, hybrid
+ * 39.4 / 70.7 / 71.0.
+ *
+ * Hybrid does not win on the means. It was added when fusion beat semantic
+ * alone; now it trails by 3 points of recall@5 and 6 of MRR while leading on
+ * precision@3, differences near the noise of a 22-query set (repeat runs move
+ * MRR by ~1 point on identical inputs, because q8 quantisation is not
+ * bit-identical between runs).
  *
  * It is still here because the aggregate hides the shape: on 7 of 22 queries
  * the keyword engine outranks the embeddings outright — it knows a wedding

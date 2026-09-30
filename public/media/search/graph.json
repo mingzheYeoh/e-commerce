@@ -5,9 +5,10 @@
     "id": "iphone-18-pro",
     "title": "iPhone 18 Pro",
     "price": 1199,
-    "rating": 4.8,
+    "rating": 0,
     "inStock": true,
     "batteryHours": 36,
+    "chargeWatts": 60,
     "screenInches": 6.3,
     "refreshHz": 120,
     "megapixels": 48,
@@ -17,9 +18,10 @@
     "id": "iphone-18-pro-max",
     "title": "iPhone 18 Pro Max",
     "price": 1299,
-    "rating": 4.9,
+    "rating": 0,
     "inStock": true,
     "batteryHours": 45,
+    "chargeWatts": 60,
     "screenInches": 6.9,
     "refreshHz": 120,
     "megapixels": 48,
@@ -29,45 +31,50 @@
     "id": "galaxy-s26-ultra",
     "title": "Galaxy S26 Ultra",
     "price": 1299.99,
-    "rating": 4.7,
+    "rating": 0,
     "inStock": true,
+    "batteryHours": 31,
     "batteryMah": 5000,
     "chargeWatts": 60,
     "screenInches": 6.9,
+    "refreshHz": 120,
     "megapixels": 200,
-    "storageGb": 1024
+    "storageGb": 1024,
+    "memoryGb": 12
    },
    {
     "id": "pixel-11-pro",
     "title": "Pixel 11 Pro",
     "price": 1099,
-    "rating": 4.6,
+    "rating": 0,
     "inStock": true,
     "batteryMah": 4850,
+    "chargeWatts": 30,
     "screenInches": 6.3,
     "refreshHz": 120,
     "megapixels": 50,
-    "storageGb": 256,
+    "storageGb": 1024,
     "memoryGb": 12
    },
    {
     "id": "oneplus-15",
     "title": "OnePlus 15",
     "price": 899.99,
-    "rating": 4.5,
+    "rating": 0,
     "inStock": true,
     "batteryMah": 7300,
     "chargeWatts": 120,
     "screenInches": 6.78,
     "refreshHz": 165,
     "megapixels": 50,
+    "storageGb": 256,
     "memoryGb": 12
    },
    {
     "id": "xiaomi-17-ultra",
     "title": "Xiaomi 17 Ultra",
     "price": 1299,
-    "rating": 4.6,
+    "rating": 0,
     "inStock": true,
     "batteryMah": 6000,
     "chargeWatts": 90,
@@ -79,9 +86,10 @@
     "id": "xps-16",
     "title": "XPS 16 (2026)",
     "price": 1749,
-    "rating": 4.5,
+    "rating": 0,
     "inStock": true,
     "screenInches": 16,
+    "refreshHz": 120,
     "storageGb": 4096,
     "memoryGb": 16
    },
@@ -89,20 +97,23 @@
     "id": "thinkpad-x1-carbon",
     "title": "ThinkPad X1 Carbon Gen 14",
     "price": 1999,
-    "rating": 4.7,
+    "rating": 0,
     "inStock": true,
-    "batteryHours": 24,
-    "chargeWatts": 65,
+    "batteryHours": 19.2,
     "screenInches": 14,
-    "storageGb": 2048
+    "refreshHz": 120,
+    "storageGb": 2048,
+    "memoryGb": 64
    },
    {
     "id": "zenbook-s14",
     "title": "Zenbook S14 (2026)",
     "price": 1899,
-    "rating": 4.6,
+    "rating": 0,
     "inStock": true,
+    "batteryHours": 27,
     "screenInches": 14,
+    "refreshHz": 120,
     "storageGb": 1024,
     "memoryGb": 32
    },
@@ -110,14 +121,16 @@
     "id": "zenbook-duo",
     "title": "Zenbook Duo (2026)",
     "price": 2499.99,
-    "rating": 4.4,
-    "inStock": true
+    "rating": 0,
+    "inStock": true,
+    "screenInches": 14,
+    "refreshHz": 144
    },
    {
     "id": "airpods-max",
-    "title": "AirPods Max (2nd gen)",
+    "title": "AirPods Max 2",
     "price": 549,
-    "rating": 4.7,
+    "rating": 0,
     "inStock": true,
     "batteryHours": 20
    },
@@ -125,48 +138,49 @@
     "id": "macbook-pro",
     "title": "MacBook Pro 16\" M5 Pro",
     "price": 2499,
-    "rating": 4.9,
+    "rating": 0,
     "inStock": true,
     "batteryHours": 24,
     "screenInches": 16.2,
     "refreshHz": 120,
-    "storageGb": 8192,
+    "storageGb": 1024,
     "memoryGb": 24
    },
    {
     "id": "watch-ultra",
-    "title": "Apple Watch Ultra 3",
+    "title": "Apple Watch Ultra 4",
     "price": 799,
-    "rating": 4.8,
+    "rating": 0,
     "inStock": true,
-    "batteryHours": 36
+    "batteryHours": 50
    },
    {
     "id": "galaxy-s26",
     "title": "Galaxy S26",
     "price": 899.99,
-    "rating": 4.6,
+    "rating": 0,
     "inStock": true,
-    "batteryMah": 5000,
-    "chargeWatts": 45,
-    "screenInches": 6.9,
+    "batteryMah": 4300,
+    "chargeWatts": 25,
+    "screenInches": 6.3,
     "refreshHz": 120,
-    "megapixels": 200,
-    "storageGb": 1024,
+    "megapixels": 50,
+    "storageGb": 256,
     "memoryGb": 12
    },
    {
     "id": "galaxy-buds",
     "title": "Galaxy Buds4 Pro",
     "price": 249,
-    "rating": 4.4,
-    "inStock": true
+    "rating": 0,
+    "inStock": true,
+    "batteryHours": 6
    },
    {
     "id": "odyssey-oled",
     "title": "Odyssey OLED G9 49\"",
     "price": 1599,
-    "rating": 4.7,
+    "rating": 0,
     "inStock": true,
     "screenInches": 49,
     "refreshHz": 240
@@ -175,7 +189,7 @@
     "id": "wh1000xm6",
     "title": "WH-1000XM6 Wireless",
     "price": 449,
-    "rating": 4.8,
+    "rating": 0,
     "inStock": true,
     "batteryHours": 30
    },
@@ -183,7 +197,7 @@
     "id": "alpha-7cr",
     "title": "Alpha 7CR Full-Frame",
     "price": 2899,
-    "rating": 4.8,
+    "rating": 0,
     "inStock": true,
     "megapixels": 61
    },
@@ -191,79 +205,80 @@
     "id": "fx3-cinema",
     "title": "FX3 Cinema Line",
     "price": 3899,
-    "rating": 4.9,
+    "rating": 0,
     "inStock": true,
-    "megapixels": 10.2
+    "megapixels": 12.1
    },
    {
     "id": "qc-ultra",
-    "title": "QuietComfort Ultra",
-    "price": 429,
-    "rating": 4.6,
+    "title": "QuietComfort Ultra Headphones (2nd Gen)",
+    "price": 449,
+    "rating": 0,
     "inStock": true,
-    "batteryHours": 24
+    "batteryHours": 30
    },
    {
     "id": "open-earbuds",
     "title": "Ultra Open Earbuds",
     "price": 299,
-    "rating": 4.3,
+    "rating": 0,
     "inStock": true,
-    "batteryHours": 7.5
+    "batteryHours": 7
    },
    {
     "id": "soundlink-max",
     "title": "SoundLink Max Portable",
     "price": 399,
-    "rating": 4.7,
+    "rating": 0,
     "inStock": true,
     "batteryHours": 20
    },
    {
     "id": "hd900s",
-    "title": "HD 900 S Reference",
-    "price": 649,
-    "rating": 4.9,
+    "title": "HD 800 S",
+    "price": 1999.95,
+    "rating": 0,
     "inStock": true
    },
    {
     "id": "momentum-4",
     "title": "Momentum 4 Wireless",
-    "price": 349.95,
-    "rating": 4.5,
+    "price": 299.95,
+    "rating": 0,
     "inStock": true,
     "batteryHours": 60
    },
    {
     "id": "mavic-4-pro",
-    "title": "Mavic 4 Pro Cine",
+    "title": "Mavic 4 Pro",
     "price": 2699,
-    "rating": 4.9,
+    "rating": 0,
     "inStock": true,
-    "megapixels": 100
+    "megapixels": 100,
+    "storageGb": 512
    },
    {
     "id": "osmo-pocket",
-    "title": "Osmo Pocket 3 Creator",
+    "title": "Osmo Pocket 4",
     "price": 799,
-    "rating": 4.7,
+    "rating": 0,
     "inStock": true,
-    "screenInches": 2
+    "screenInches": 2,
+    "storageGb": 107
    },
    {
     "id": "rs4-gimbal",
     "title": "RS 4 Pro Gimbal",
     "price": 869,
-    "rating": 4.6,
+    "rating": 0,
     "inStock": true,
-    "batteryHours": 29,
-    "screenInches": 1.8
+    "batteryHours": 13
    },
    {
     "id": "mx-master",
     "title": "MX Master 4",
     "price": 119,
-    "rating": 4.8,
+    "rating": 0,
     "inStock": true,
     "batteryHours": 1680
    },
@@ -271,75 +286,77 @@
     "id": "mx-mechanical",
     "title": "MX Mechanical Keyboard",
     "price": 169,
-    "rating": 4.6,
+    "rating": 0,
     "inStock": true,
     "batteryHours": 360
    },
    {
     "id": "brio-webcam",
-    "title": "Brio 4K Pro Webcam",
+    "title": "Brio 4K Webcam",
     "price": 199,
-    "rating": 4.4,
+    "rating": 0,
     "inStock": true
    },
    {
     "id": "blackwidow",
     "title": "BlackWidow V4 Pro",
     "price": 229,
-    "rating": 4.5,
+    "rating": 0,
     "inStock": true
    },
    {
     "id": "viper-v3",
     "title": "Viper V3 Pro",
     "price": 159,
-    "rating": 4.7,
+    "rating": 0,
     "inStock": true,
     "batteryHours": 95
    },
    {
     "id": "blade-16",
-    "title": "Blade 16 Creator",
+    "title": "Blade 16 (2026)",
     "price": 3299,
-    "rating": 4.4,
+    "rating": 0,
     "inStock": true,
     "screenInches": 16,
     "refreshHz": 240,
-    "storageGb": 2048
+    "memoryGb": 64
    },
    {
     "id": "prime-powerbank",
-    "title": "Prime 27,650mAh Bank",
-    "price": 179,
-    "rating": 4.6,
+    "title": "Prime Power Bank (26K, 300W)",
+    "price": 229.99,
+    "rating": 0,
     "inStock": true,
-    "batteryMah": 27650,
-    "chargeWatts": 250
+    "batteryMah": 26250,
+    "chargeWatts": 300
    },
    {
     "id": "soundcore-liberty",
     "title": "Soundcore Liberty 5",
     "price": 129.99,
-    "rating": 4.3,
-    "inStock": true
+    "rating": 0,
+    "inStock": true,
+    "batteryHours": 12
    },
    {
     "id": "gan-charger",
-    "title": "Prime 250W GaN Charger",
+    "title": "Prime Charger (250W, 6 Ports)",
     "price": 149,
-    "rating": 4.7,
+    "rating": 0,
     "inStock": true,
-    "chargeWatts": 250
+    "chargeWatts": 250,
+    "screenInches": 2.26
    },
    {
     "id": "phone-3a",
     "title": "Phone (3a) Pro",
     "price": 479,
-    "rating": 4.5,
+    "rating": 0,
     "inStock": true,
     "batteryMah": 5000,
     "chargeWatts": 50,
-    "screenInches": 6.7,
+    "screenInches": 6.77,
     "refreshHz": 120,
     "megapixels": 50,
     "storageGb": 256,
@@ -349,54 +366,57 @@
     "id": "ear-open",
     "title": "Ear (Open)",
     "price": 149,
-    "rating": 4.4,
-    "inStock": true
+    "rating": 0,
+    "inStock": true,
+    "batteryHours": 8,
+    "batteryMah": 635
    },
    {
     "id": "cmf-buds",
-    "title": "CMF Buds Pro 3",
+    "title": "CMF Buds Pro 2",
     "price": 69,
-    "rating": 4.1,
-    "inStock": false
+    "rating": 0,
+    "inStock": false,
+    "batteryHours": 43
    },
    {
     "id": "q3-max",
     "title": "Q3 Max QMK Custom",
-    "price": 219,
-    "rating": 4.8,
+    "price": 229.99,
+    "rating": 0,
     "inStock": true,
-    "batteryHours": 100,
+    "batteryHours": 180,
     "batteryMah": 4000
    },
    {
     "id": "switch-set",
-    "title": "Nebula Switch Set ×110",
+    "title": "Nebula Magnetic Switch Set ×110",
     "price": 69,
-    "rating": 4.5,
+    "rating": 0,
     "inStock": true
    },
    {
     "id": "k-pro-mouse",
     "title": "M6 Wireless Mouse",
     "price": 89,
-    "rating": 4.2,
+    "rating": 0,
     "inStock": true,
-    "batteryHours": 70,
-    "batteryMah": 500
+    "batteryHours": 120,
+    "batteryMah": 800
    },
    {
     "id": "op1-field",
     "title": "OP-1 Field Synthesizer",
     "price": 1999,
-    "rating": 4.9,
+    "rating": 0,
     "inStock": true,
-    "batteryHours": 16
+    "batteryHours": 24
    },
    {
     "id": "tp7-recorder",
     "title": "TP-7 Field Recorder",
     "price": 1499,
-    "rating": 4.7,
+    "rating": 0,
     "inStock": true,
     "batteryHours": 7,
     "storageGb": 128
@@ -405,9 +425,9 @@
     "id": "ob4-speaker",
     "title": "OB-4 Magic Radio",
     "price": 649,
-    "rating": 4.6,
+    "rating": 0,
     "inStock": true,
-    "batteryHours": 20
+    "batteryHours": 72
    }
   ],
   "Brand": [
@@ -520,13 +540,7 @@
   ],
   "Feature": [
    {
-    "id": "On-device AI accelerator"
-   },
-   {
-    "id": "eSIM"
-   },
-   {
-    "id": "Fast charging"
+    "id": "Wireless charging"
    },
    {
     "id": "Water resistant"
@@ -535,7 +549,16 @@
     "id": "OLED display"
    },
    {
+    "id": "On-device AI accelerator"
+   },
+   {
     "id": "Optical zoom"
+   },
+   {
+    "id": "eSIM"
+   },
+   {
+    "id": "Fast charging"
    },
    {
     "id": "Active noise cancellation"
@@ -545,9 +568,6 @@
    },
    {
     "id": "Spatial audio"
-   },
-   {
-    "id": "Wireless charging"
    },
    {
     "id": "Stabilisation"
@@ -571,7 +591,27 @@
   {
    "from": "iphone-18-pro",
    "type": "HAS_FEATURE",
+   "to": "Wireless charging"
+  },
+  {
+   "from": "iphone-18-pro",
+   "type": "HAS_FEATURE",
+   "to": "Water resistant"
+  },
+  {
+   "from": "iphone-18-pro",
+   "type": "HAS_FEATURE",
+   "to": "OLED display"
+  },
+  {
+   "from": "iphone-18-pro",
+   "type": "HAS_FEATURE",
    "to": "On-device AI accelerator"
+  },
+  {
+   "from": "iphone-18-pro",
+   "type": "HAS_FEATURE",
+   "to": "Optical zoom"
   },
   {
    "from": "iphone-18-pro",
@@ -591,7 +631,27 @@
   {
    "from": "iphone-18-pro-max",
    "type": "HAS_FEATURE",
+   "to": "Wireless charging"
+  },
+  {
+   "from": "iphone-18-pro-max",
+   "type": "HAS_FEATURE",
+   "to": "Water resistant"
+  },
+  {
+   "from": "iphone-18-pro-max",
+   "type": "HAS_FEATURE",
+   "to": "OLED display"
+  },
+  {
+   "from": "iphone-18-pro-max",
+   "type": "HAS_FEATURE",
    "to": "On-device AI accelerator"
+  },
+  {
+   "from": "iphone-18-pro-max",
+   "type": "HAS_FEATURE",
+   "to": "Optical zoom"
   },
   {
    "from": "iphone-18-pro-max",
@@ -607,6 +667,21 @@
    "from": "galaxy-s26-ultra",
    "type": "IN_CATEGORY",
    "to": "phones"
+  },
+  {
+   "from": "galaxy-s26-ultra",
+   "type": "HAS_FEATURE",
+   "to": "Water resistant"
+  },
+  {
+   "from": "galaxy-s26-ultra",
+   "type": "HAS_FEATURE",
+   "to": "OLED display"
+  },
+  {
+   "from": "galaxy-s26-ultra",
+   "type": "HAS_FEATURE",
+   "to": "Optical zoom"
   },
   {
    "from": "galaxy-s26-ultra",
@@ -639,6 +714,11 @@
    "to": "Optical zoom"
   },
   {
+   "from": "pixel-11-pro",
+   "type": "HAS_FEATURE",
+   "to": "Fast charging"
+  },
+  {
    "from": "oneplus-15",
    "type": "MADE_BY",
    "to": "ONEPLUS"
@@ -657,6 +737,11 @@
    "from": "oneplus-15",
    "type": "HAS_FEATURE",
    "to": "OLED display"
+  },
+  {
+   "from": "oneplus-15",
+   "type": "HAS_FEATURE",
+   "to": "Optical zoom"
   },
   {
    "from": "oneplus-15",
@@ -731,11 +816,6 @@
   {
    "from": "thinkpad-x1-carbon",
    "type": "HAS_PORT",
-   "to": "USB-C"
-  },
-  {
-   "from": "thinkpad-x1-carbon",
-   "type": "HAS_PORT",
    "to": "Thunderbolt"
   },
   {
@@ -747,6 +827,11 @@
    "from": "thinkpad-x1-carbon",
    "type": "HAS_PORT",
    "to": "3.5mm"
+  },
+  {
+   "from": "thinkpad-x1-carbon",
+   "type": "HAS_PORT",
+   "to": "USB-C"
   },
   {
    "from": "thinkpad-x1-carbon",
@@ -782,6 +867,21 @@
    "from": "zenbook-duo",
    "type": "IN_CATEGORY",
    "to": "computing"
+  },
+  {
+   "from": "zenbook-duo",
+   "type": "HAS_PORT",
+   "to": "Thunderbolt"
+  },
+  {
+   "from": "zenbook-duo",
+   "type": "HAS_PORT",
+   "to": "HDMI"
+  },
+  {
+   "from": "zenbook-duo",
+   "type": "HAS_PORT",
+   "to": "USB-C"
   },
   {
    "from": "zenbook-duo",
@@ -871,12 +971,12 @@
   {
    "from": "watch-ultra",
    "type": "HAS_FEATURE",
-   "to": "Water resistant"
+   "to": "OLED display"
   },
   {
    "from": "watch-ultra",
    "type": "HAS_FEATURE",
-   "to": "OLED display"
+   "to": "On-device AI accelerator"
   },
   {
    "from": "galaxy-s26",
@@ -920,18 +1020,8 @@
   },
   {
    "from": "galaxy-buds",
-   "type": "HAS_PORT",
-   "to": "USB-C"
-  },
-  {
-   "from": "galaxy-buds",
    "type": "HAS_FEATURE",
    "to": "Active noise cancellation"
-  },
-  {
-   "from": "galaxy-buds",
-   "type": "HAS_FEATURE",
-   "to": "Wireless charging"
   },
   {
    "from": "galaxy-buds",
@@ -1004,6 +1094,11 @@
    "to": "imaging"
   },
   {
+   "from": "fx3-cinema",
+   "type": "HAS_PORT",
+   "to": "3.5mm"
+  },
+  {
    "from": "qc-ultra",
    "type": "MADE_BY",
    "to": "BOSE"
@@ -1012,6 +1107,11 @@
    "from": "qc-ultra",
    "type": "IN_CATEGORY",
    "to": "audio"
+  },
+  {
+   "from": "qc-ultra",
+   "type": "HAS_PORT",
+   "to": "USB-C"
   },
   {
    "from": "qc-ultra",
@@ -1085,6 +1185,11 @@
   },
   {
    "from": "momentum-4",
+   "type": "HAS_PORT",
+   "to": "USB-C"
+  },
+  {
+   "from": "momentum-4",
    "type": "HAS_FEATURE",
    "to": "Active noise cancellation"
   },
@@ -1099,16 +1204,6 @@
    "to": "imaging"
   },
   {
-   "from": "mavic-4-pro",
-   "type": "HAS_PORT",
-   "to": "SD card"
-  },
-  {
-   "from": "mavic-4-pro",
-   "type": "HAS_FEATURE",
-   "to": "Stabilisation"
-  },
-  {
    "from": "osmo-pocket",
    "type": "MADE_BY",
    "to": "DJI"
@@ -1120,8 +1215,8 @@
   },
   {
    "from": "osmo-pocket",
-   "type": "HAS_FEATURE",
-   "to": "OLED display"
+   "type": "HAS_PORT",
+   "to": "3.5mm"
   },
   {
    "from": "osmo-pocket",
@@ -1144,6 +1239,16 @@
    "to": "imaging"
   },
   {
+   "from": "rs4-gimbal",
+   "type": "HAS_FEATURE",
+   "to": "OLED display"
+  },
+  {
+   "from": "rs4-gimbal",
+   "type": "HAS_FEATURE",
+   "to": "Stabilisation"
+  },
+  {
    "from": "mx-master",
    "type": "MADE_BY",
    "to": "LOGITECH"
@@ -1162,6 +1267,11 @@
    "from": "mx-mechanical",
    "type": "IN_CATEGORY",
    "to": "peripherals"
+  },
+  {
+   "from": "mx-mechanical",
+   "type": "HAS_FEATURE",
+   "to": "Mechanical switches"
   },
   {
    "from": "brio-webcam",
@@ -1185,8 +1295,8 @@
   },
   {
    "from": "blackwidow",
-   "type": "HAS_FEATURE",
-   "to": "Mechanical switches"
+   "type": "HAS_PORT",
+   "to": "USB-C"
   },
   {
    "from": "viper-v3",
@@ -1369,11 +1479,6 @@
    "to": "peripherals"
   },
   {
-   "from": "switch-set",
-   "type": "HAS_PORT",
-   "to": "3.5mm"
-  },
-  {
    "from": "k-pro-mouse",
    "type": "MADE_BY",
    "to": "KEYCHRON"
@@ -1432,6 +1537,16 @@
    "from": "ob4-speaker",
    "type": "IN_CATEGORY",
    "to": "audio"
+  },
+  {
+   "from": "ob4-speaker",
+   "type": "HAS_PORT",
+   "to": "3.5mm"
+  },
+  {
+   "from": "ob4-speaker",
+   "type": "HAS_FEATURE",
+   "to": "OLED display"
   },
   {
    "from": "iphone-18-pro",
@@ -1569,25 +1684,13 @@
    "from": "airpods-max",
    "type": "COMPETES_WITH",
    "to": "qc-ultra",
-   "priceRatio": 0.781
+   "priceRatio": 0.818
   },
   {
    "from": "airpods-max",
    "type": "COMPETES_WITH",
    "to": "soundlink-max",
    "priceRatio": 0.727
-  },
-  {
-   "from": "airpods-max",
-   "type": "COMPETES_WITH",
-   "to": "hd900s",
-   "priceRatio": 0.846
-  },
-  {
-   "from": "airpods-max",
-   "type": "COMPETES_WITH",
-   "to": "momentum-4",
-   "priceRatio": 0.637
   },
   {
    "from": "airpods-max",
@@ -1671,7 +1774,7 @@
    "from": "galaxy-buds",
    "type": "COMPETES_WITH",
    "to": "momentum-4",
-   "priceRatio": 0.712
+   "priceRatio": 0.83
   },
   {
    "from": "alpha-7cr",
@@ -1695,13 +1798,13 @@
    "from": "qc-ultra",
    "type": "COMPETES_WITH",
    "to": "wh1000xm6",
-   "priceRatio": 0.955
+   "priceRatio": 1
   },
   {
    "from": "qc-ultra",
    "type": "COMPETES_WITH",
    "to": "soundlink-max",
-   "priceRatio": 0.93
+   "priceRatio": 0.889
   },
   {
    "from": "open-earbuds",
@@ -1713,7 +1816,7 @@
    "from": "open-earbuds",
    "type": "COMPETES_WITH",
    "to": "qc-ultra",
-   "priceRatio": 0.697
+   "priceRatio": 0.666
   },
   {
    "from": "open-earbuds",
@@ -1730,50 +1833,38 @@
   {
    "from": "hd900s",
    "type": "COMPETES_WITH",
-   "to": "wh1000xm6",
-   "priceRatio": 0.692
-  },
-  {
-   "from": "hd900s",
-   "type": "COMPETES_WITH",
-   "to": "qc-ultra",
-   "priceRatio": 0.661
-  },
-  {
-   "from": "hd900s",
-   "type": "COMPETES_WITH",
-   "to": "soundlink-max",
-   "priceRatio": 0.615
-  },
-  {
-   "from": "hd900s",
-   "type": "COMPETES_WITH",
-   "to": "ob4-speaker",
+   "to": "op1-field",
    "priceRatio": 1
   },
   {
+   "from": "hd900s",
+   "type": "COMPETES_WITH",
+   "to": "tp7-recorder",
+   "priceRatio": 0.75
+  },
+  {
    "from": "momentum-4",
    "type": "COMPETES_WITH",
    "to": "wh1000xm6",
-   "priceRatio": 0.779
+   "priceRatio": 0.668
   },
   {
    "from": "momentum-4",
    "type": "COMPETES_WITH",
    "to": "qc-ultra",
-   "priceRatio": 0.816
+   "priceRatio": 0.668
   },
   {
    "from": "momentum-4",
    "type": "COMPETES_WITH",
    "to": "open-earbuds",
-   "priceRatio": 0.854
+   "priceRatio": 0.997
   },
   {
    "from": "momentum-4",
    "type": "COMPETES_WITH",
    "to": "soundlink-max",
-   "priceRatio": 0.877
+   "priceRatio": 0.752
   },
   {
    "from": "osmo-pocket",
@@ -1803,7 +1894,7 @@
    "from": "mx-mechanical",
    "type": "COMPETES_WITH",
    "to": "q3-max",
-   "priceRatio": 0.772
+   "priceRatio": 0.735
   },
   {
    "from": "blackwidow",
@@ -1821,7 +1912,7 @@
    "from": "blackwidow",
    "type": "COMPETES_WITH",
    "to": "q3-max",
-   "priceRatio": 0.956
+   "priceRatio": 0.996
   },
   {
    "from": "blade-16",
@@ -1845,7 +1936,7 @@
    "from": "gan-charger",
    "type": "COMPETES_WITH",
    "to": "prime-powerbank",
-   "priceRatio": 0.832
+   "priceRatio": 0.648
   },
   {
    "from": "ear-open",
@@ -1857,7 +1948,7 @@
    "from": "q3-max",
    "type": "COMPETES_WITH",
    "to": "viper-v3",
-   "priceRatio": 0.726
+   "priceRatio": 0.691
   },
   {
    "from": "k-pro-mouse",
@@ -1887,7 +1978,7 @@
    "from": "ob4-speaker",
    "type": "COMPETES_WITH",
    "to": "qc-ultra",
-   "priceRatio": 0.661
+   "priceRatio": 0.692
   },
   {
    "from": "ob4-speaker",
@@ -2588,6 +2679,11 @@
   {
    "from": "prime-powerbank",
    "type": "POWERS",
+   "to": "zenbook-duo"
+  },
+  {
+   "from": "prime-powerbank",
+   "type": "POWERS",
    "to": "airpods-max"
   },
   {
@@ -2598,12 +2694,22 @@
   {
    "from": "prime-powerbank",
    "type": "POWERS",
-   "to": "galaxy-buds"
+   "to": "qc-ultra"
   },
   {
    "from": "prime-powerbank",
    "type": "POWERS",
    "to": "soundlink-max"
+  },
+  {
+   "from": "prime-powerbank",
+   "type": "POWERS",
+   "to": "momentum-4"
+  },
+  {
+   "from": "prime-powerbank",
+   "type": "POWERS",
+   "to": "blackwidow"
   },
   {
    "from": "prime-powerbank",
@@ -2713,6 +2819,11 @@
   {
    "from": "gan-charger",
    "type": "POWERS",
+   "to": "zenbook-duo"
+  },
+  {
+   "from": "gan-charger",
+   "type": "POWERS",
    "to": "airpods-max"
   },
   {
@@ -2723,12 +2834,22 @@
   {
    "from": "gan-charger",
    "type": "POWERS",
-   "to": "galaxy-buds"
+   "to": "qc-ultra"
   },
   {
    "from": "gan-charger",
    "type": "POWERS",
    "to": "soundlink-max"
+  },
+  {
+   "from": "gan-charger",
+   "type": "POWERS",
+   "to": "momentum-4"
+  },
+  {
+   "from": "gan-charger",
+   "type": "POWERS",
+   "to": "blackwidow"
   },
   {
    "from": "gan-charger",
